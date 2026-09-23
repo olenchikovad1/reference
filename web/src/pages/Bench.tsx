@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
+import { DEFAULT_PARAMS, type RenderParams } from '../candidates/renderer'
 import { fetchProduct, frameUrl, type Product } from '../shared/api/products'
 import {
   EMPTY,
@@ -31,6 +32,9 @@ export function Bench() {
   const [overlay, setOverlay] = useState<Overlay>('zones')
   const [composition, setComposition] = useState<Composition>(EMPTY)
   const [dropHint, setDropHint] = useState<string | null>(null)
+  const [params, setParams] = useState<RenderParams>(DEFAULT_PARAMS)
+  const [renderScale, setRenderScale] = useState(2)
+  const [fps, setFps] = useState<number | null>(null)
   const seq = useRef(0)
 
   useEffect(() => {
@@ -140,6 +144,9 @@ export function Bench() {
               frameSrc={frameUrl(product.code, state.code)}
               calibration={calibration}
               composition={composition}
+              params={params}
+              renderScale={renderScale}
+              onFps={setFps}
               showZones={overlay === 'zones' || overlay === 'all'}
               showAnchors={overlay === 'anchors' || overlay === 'all'}
               onSelect={(id) => setComposition((c) => select(c, id))}
@@ -166,6 +173,69 @@ export function Bench() {
                 {s.kind === 'illustrative' && <em style={S.tag}> только показ</em>}
               </button>
             ))}
+          </Group>
+
+          <Group title="Эффекты">
+            <button
+              onClick={() => setParams((p) => ({ ...p, effects: !p.effects }))}
+              style={params.effects ? S.btnOn : S.btn}
+            >
+              {params.effects ? 'с эффектами' : 'без эффектов'}
+            </button>
+            <Slider
+              label="смещение"
+              value={params.displace}
+              min={0}
+              max={1}
+              step={0.01}
+              digits={2}
+              onChange={(v) => setParams((p) => ({ ...p, displace: v }))}
+            />
+            <Slider
+              label="затенение"
+              value={params.shade}
+              min={0}
+              max={1}
+              step={0.05}
+              digits={2}
+              onChange={(v) => setParams((p) => ({ ...p, shade: v }))}
+            />
+            <Slider
+              label="гамма тени"
+              value={params.shadeGamma}
+              min={0.4}
+              max={2.5}
+              step={0.05}
+              digits={2}
+              onChange={(v) => setParams((p) => ({ ...p, shadeGamma: v }))}
+            />
+            <div style={S.row}>
+              {[1, 2, 3].map((s) => (
+                <button key={s} onClick={() => setRenderScale(s)} style={s === renderScale ? S.btnOn : S.btn}>
+                  {s}×
+                </button>
+              ))}
+              <button onClick={() => download(params)} style={S.btn}>
+                выгрузить
+              </button>
+              <label style={S.btn}>
+                вернуть
+                <input
+                  type="file"
+                  accept="application/json"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) void upload(f).then(setParams).catch(() => undefined)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+            </div>
+            <p style={S.dim}>
+              отрисовка {Math.round(state.frame.width * renderScale)} px
+              {fps !== null && ` · ${fps} кадр/с`}
+            </p>
           </Group>
 
           <Group title="Что видно">
@@ -234,6 +304,62 @@ export function Bench() {
   )
 }
 
+/** Настройки подбора уходят файлом: иначе они испарятся вместе с вкладкой. */
+function download(params: RenderParams) {
+  const blob = new Blob([JSON.stringify(params, null, 2)], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'render-params.json'
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+/** Возврат подобранного. Без него выгрузка бессмысленна: подбор нужен затем,
+ *  чтобы к нему вернуться, а не чтобы иметь файл. */
+async function upload(file: File): Promise<RenderParams> {
+  const raw = JSON.parse(await file.text()) as Partial<RenderParams>
+  return {
+    displace: Number(raw.displace ?? DEFAULT_PARAMS.displace),
+    shade: Number(raw.shade ?? DEFAULT_PARAMS.shade),
+    shadeGamma: Number(raw.shadeGamma ?? DEFAULT_PARAMS.shadeGamma),
+    effects: raw.effects ?? DEFAULT_PARAMS.effects,
+  }
+}
+
+function Slider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  digits,
+  onChange,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  digits: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <label style={S.slider}>
+      <span style={S.numLabel}>{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ flex: 1 }}
+      />
+      <span style={S.sliderValue}>{value.toFixed(digits)}</span>
+    </label>
+  )
+}
+
 function Num({
   label,
   value,
@@ -291,6 +417,8 @@ const S: Record<string, React.CSSProperties> = {
   btn: { padding: '5px 10px', border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, cursor: 'pointer' },
   btnOn: { padding: '5px 10px', border: '1px solid #111', background: '#111', color: '#fff', borderRadius: 6, cursor: 'pointer' },
   tag: { color: '#9ca3af', fontStyle: 'normal', fontSize: 11 },
+  slider: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 2 },
+  sliderValue: { fontSize: 11, color: '#6b7280', width: 38, textAlign: 'right' },
   num: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 4 },
   numLabel: { flex: 1, fontSize: 12, color: '#374151' },
   numUnit: { fontSize: 12, color: '#9ca3af', width: 26 },
