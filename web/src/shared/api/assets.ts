@@ -34,3 +34,32 @@ export async function uploadAssets(files: File[]): Promise<Asset[]> {
 export function assetUrl(digest: string, preset: 'thumb' | 'preview'): string {
   return `${BASE}assets/${digest}/${preset}`
 }
+
+export interface Match {
+  digest: string
+  name: string
+  similarity: number
+  /** file — тот же ФАЙЛ, поймал хеш (мгновенно, без модели);
+   *  same — та же КАРТИНКА, поймал вектор: файл другой, рисунок тот же;
+   *  close — похожая по теме.
+   *  Три случая, а не один: выводы из них разные, и сети разные. */
+  level: 'file' | 'same' | 'close'
+}
+
+export interface Recognised {
+  digest: string
+  matches: Match[]
+}
+
+/** Узнавание. Отдельным запросом: модель считает около 90 мс на картинку, и
+ * внутри загрузки это секунда ожидания на десятке файлов. Вызывающий этот
+ * запрос НЕ ждёт — картинки уже на изделии, окно придёт, когда придёт. */
+export async function recogniseAssets(digests: string[]): Promise<Recognised[]> {
+  const r = await fetch(`${BASE}assets/recognise`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(digests),
+  })
+  if (!r.ok) throw new Error(`Узнавание: ${r.status}`)
+  return (await r.json()) as Recognised[]
+}

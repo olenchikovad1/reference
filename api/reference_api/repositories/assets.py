@@ -9,6 +9,8 @@ from typing import Any
 
 import boto3
 from botocore.client import Config
+from urllib.parse import quote, unquote
+
 from botocore.exceptions import ClientError
 
 from reference_api.config import settings
@@ -44,13 +46,32 @@ def exists(digest: str, preset: str) -> bool:
         return False
 
 
+def _ascii(value: str) -> str:
+    """Значение метаданных в ASCII.
+
+    S3 хранит метаданные только в ASCII — это ограничение протокола, а не наше
+    решение. Имена файлов у нас русские всегда, и без кодирования хранилище
+    отказывает на загрузке, а не на чтении: файл просто не сохраняется.
+
+    Кодируется здесь, а не у вызывающего: ограничение принадлежит хранилищу,
+    и вынесенное наружу оно обязывает каждый следующий вызов о нём помнить.
+    """
+    return quote(value, safe="")
+
+
+def _readable(value: str) -> str:
+    """Обратно из ASCII. Незакодированное значение проходит насквозь: в
+    хранилище уже лежат объекты, записанные до кодирования."""
+    return unquote(value)
+
+
 def put(digest: str, preset: str, content: bytes, content_type: str, meta: dict[str, str]) -> None:
     client().put_object(
         Bucket=settings().s3_bucket,
         Key=key_of(digest, preset),
         Body=content,
         ContentType=content_type,
-        Metadata=meta,
+        Metadata={k: _ascii(v) for k, v in meta.items()},
     )
 
 
@@ -59,4 +80,5 @@ def get(digest: str, preset: str) -> tuple[bytes, str, dict[str, str]] | None:
         obj = client().get_object(Bucket=settings().s3_bucket, Key=key_of(digest, preset))
     except ClientError:
         return None
-    return obj["Body"].read(), obj.get("ContentType", "image/png"), obj.get("Metadata", {})
+    meta = {k: _readable(v) for k, v in obj.get("Metadata", {}).items()}
+    return obj["Body"].read(), obj.get("ContentType", "image/png"), meta

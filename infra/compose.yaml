@@ -9,7 +9,10 @@ services:
   # Том pgdata: данные PostgreSQL. Порт наружу открыт сознательно — смотреть
   # данные клиентом на рабочей машине удобнее, чем через exec (решение 0003).
   postgres:
-    image: postgres:17.2-alpine
+    # pgvector, а не голый postgres: векторы похожести лежат рядом с данными,
+    # чтобы «похожее И хорошо продавалось» было одним where, а не двумя
+    # запросами и склейкой на приложении (решение 0008).
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

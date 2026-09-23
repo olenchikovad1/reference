@@ -2,7 +2,6 @@
 
 from pydantic import BaseModel
 
-
 class DerivativeOut(BaseModel):
     """Ступень с ФАКТИЧЕСКИМИ размерами.
 

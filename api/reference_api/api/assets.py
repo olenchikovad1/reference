@@ -1,9 +1,13 @@
 """Файлы: вход по HTTP."""
 
-from fastapi import APIRouter, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from reference_api.db import session
 from reference_api.schemas.assets import AssetOut, DerivativeOut
+from reference_api.schemas.library import MatchOut, RecognisedOut
 from reference_api.services import assets as service
+from reference_api.services import library
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -52,3 +56,35 @@ def derivative(digest: str, preset: str) -> Response:
     except service.AssetMissing:
         raise HTTPException(404, f"Файла {digest} нет в хранилище") from None
     return Response(content, media_type=content_type)
+
+
+@router.post("/recognise", response_model=list[RecognisedOut])
+async def recognise(
+    digests: list[str], db: AsyncSession = Depends(session)
+) -> list[RecognisedOut]:
+    """Узнавание отдельным запросом, которого страница НЕ ждёт.
+
+    Модель считает около 90 мс на картинку — на десятке файлов это почти
+    секунда, и внутри загрузки она превращается в секунду, пока картинка не
+    появилась на изделии. Человек бросил файлы и работает дальше, а окно
+    приходит, когда придёт.
+
+    Содержимое берётся из хранилища, а не присылается второй раз: файл уже
+    лежит, и гонять его по сети дважды незачем.
+    """
+    out: list[RecognisedOut] = []
+    for digest in digests:
+        content = service.original(digest)
+        if content is None:
+            continue
+        seen = await library.remember(db, digest, service.name_of(digest), content)
+        out.append(
+            RecognisedOut(
+                digest=digest,
+                matches=[
+                    MatchOut(digest=m.digest, name=m.name, similarity=m.similarity, level=m.level)
+                    for m in seen
+                ],
+            )
+        )
+    return out

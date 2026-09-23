@@ -4,10 +4,26 @@
 принадлежит коду приложения в платформе, и занимать что-либо вне его нельзя.
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import APIRouter, FastAPI
 
 from reference_api.api import assets, colours, health, prints, products
 from reference_api.config import settings
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Схема поднимается при старте.
+
+    Настоящие миграции придут с первой историей, где появится модель данных
+    шире одной таблицы. Делать их сейчас — раскладывать инструмент под работу,
+    которой ещё нет.
+    """
+    from reference_api.repositories.library import ensure_schema
+
+    await ensure_schema()
+    yield
 
 
 def create_app() -> FastAPI:
@@ -17,6 +33,7 @@ def create_app() -> FastAPI:
         title="Референс",
         docs_url=cfg.base_path + "/docs",
         openapi_url=cfg.base_path + "/openapi.json",
+        lifespan=_lifespan,
     )
 
     root = APIRouter(prefix=cfg.base_path)

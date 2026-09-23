@@ -175,3 +175,24 @@ def fetch(key: str, preset: str) -> tuple[bytes, str]:
     if got is None:
         raise AssetMissing(key)
     return got[0], got[1]
+
+
+def original(digest: str) -> bytes | None:
+    """Исходное содержимое из хранилища.
+
+    Наружу оригинал не отдаётся никогда — эта функция для своих же расчётов:
+    вектор считается по нему, а не по уменьшенной ступени, потому что ступень
+    теряет детали, по которым картинка и узнаётся.
+    """
+    from reference_api.repositories import assets as repo
+
+    got = repo.get(digest, "original")
+    return None if got is None else got[0]
+
+
+def name_of(digest: str) -> str:
+    """Человеческое имя файла. Пусто — файла нет или имя не сохранилось."""
+    from reference_api.repositories import assets as repo
+
+    got = repo.get(digest, "original")
+    return "" if got is None else got[2].get("name", "")

@@ -23,7 +23,8 @@ import {
 import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
-import { assetUrl, uploadAssets } from '../shared/api/assets'
+import type { Match } from '../shared/api/assets'
+import { assetUrl, recogniseAssets, uploadAssets } from '../shared/api/assets'
 import { readDropped } from '../shared/dropped'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
@@ -59,6 +60,9 @@ export function Bench() {
   const images = useRef(new Map<string, HTMLImageElement>())
   const [imagesVersion, setImagesVersion] = useState(0)
   const [restored, setRestored] = useState(false)
+  // Узнанное. Пусто — окна нет вовсе: окно «совпадений нет» превращает
+  // подсказку в помеху, и его перестают читать вместе с полезными.
+  const [seen, setSeen] = useState<Match[]>([])
   // Закрытые предупреждения: «так и задумано». Ключ — правило плюс элемент.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const viewCanvas = useRef<HTMLCanvasElement | null>(null)
@@ -334,6 +338,21 @@ export function Bench() {
       try {
         const stored = await uploadAssets(files)
         sources = stored.map((a) => assetUrl(a.digest, 'preview'))
+        // Тот же ФАЙЛ виден сразу: его поймал хеш, модель для этого не
+        // нужна. Вектор ловит другое — ту же картинку в другом файле, — и эти
+        // две сети не подменяют друг друга.
+        const repeats: Match[] = stored
+          .filter((a) => a.reused)
+          .map((a) => ({ digest: a.digest, name: a.name, similarity: 1, level: 'file' as const }))
+        setSeen(repeats)
+        // Узнавание НЕ ожидается: человек бросил картинки и работает дальше,
+        // а окно появится, когда модель досчитает.
+        void recogniseAssets(stored.map((a) => a.digest))
+          .then((rows) => setSeen([...repeats, ...rows.flatMap((r) => r.matches)]))
+          .catch(() => {
+            // Не узналось из-за сбоя — молчим. Сообщение о неработающем
+            // узнавании не помогает делать принт и отвлекает от работы.
+          })
       } catch {
         // Хранилище не ответило — работаем с тем, что в браузере. Потерять
         // возможность приложить картинку хуже, чем потерять её сохранение.
@@ -422,6 +441,7 @@ export function Bench() {
             <p style={S.dim}>Перетащите сюда картинки — можно несколько разом.</p>
           )}
           {dropHint && <p style={S.warn}>{dropHint}</p>}
+          {seen.length > 0 && <Recognised matches={seen} onClose={() => setSeen([])} />}
         </div>
 
         <aside style={S.panel}>
@@ -891,6 +911,53 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 // Стили временные и нарочно скупые: визуальный язык приедет из @platform/tokens,
 // и заводить здесь свой набор цветов нельзя — он потом не выполется.
+const LEVELS: Record<Match['level'], string> = {
+  file: 'Этот же файл уже загружали',
+  same: 'Та же картинка, файл другой',
+  close: 'Похожая картинка',
+}
+
+/** Окно узнавания. Показывается ТОЛЬКО когда есть что показать. */
+function Recognised({ matches, onClose }: { matches: Match[]; onClose: () => void }) {
+  // Два случая разведены, потому что разные и выводы: «та же» означает дубль и
+  // повод не делать второй раз, «похожая» — повод посмотреть, чем кончилось
+  // прошлое.
+  const file = matches.filter((m) => m.level === 'file')
+  const same = matches.filter((m) => m.level === 'same')
+  const close = matches.filter((m) => m.level === 'close')
+  return (
+    <div style={S.found}>
+      <div style={S.foundHead}>
+        <strong>
+          {file.length + same.length > 0 ? 'Такое у нас уже было' : 'Похожее у нас уже было'}
+        </strong>
+        <button onClick={onClose} style={S.btn}>
+          закрыть
+        </button>
+      </div>
+      {[...file, ...same, ...close].map((m) => (
+        <div key={m.digest + m.level} style={S.foundRow}>
+          <img src={assetUrl(m.digest, 'thumb')} alt="" style={S.foundThumb} />
+          <div>
+            <div>
+              {LEVELS[m.level]}: <b>{m.name}</b>
+            </div>
+            <div style={S.dim}>
+              {m.level === 'file'
+                ? 'тот же файл — совпало содержимое'
+                : `совпадение ${(m.similarity * 100).toFixed(0)}%`}
+            </div>
+            {/* Место под итог продаж оставлено честно пустым: продаж у нас
+                пока нет, и подставлять вместо них выдумку нельзя — по ней
+                начнут принимать решения. */}
+            <div style={S.dim}>чем кончилось: продаж по этой картинке ещё не собрано</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const S: Record<string, React.CSSProperties> = {
   page: { fontFamily: 'system-ui, sans-serif', padding: 16, color: '#111' },
   head: { display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10 },
@@ -925,6 +992,30 @@ const S: Record<string, React.CSSProperties> = {
   numLabel: { flex: 1, fontSize: 12, color: '#374151' },
   numUnit: { fontSize: 12, color: '#9ca3af', width: 26 },
   input: { width: 74, padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: 5 },
+  found: {
+    marginTop: 10,
+    padding: 12,
+    border: '1px solid #c7d2fe',
+    background: '#eef2ff',
+    borderRadius: 8,
+    maxWidth: 620,
+    fontSize: 13,
+  },
+  foundHead: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  foundRow: { display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 },
+  foundThumb: {
+    width: 56,
+    height: 56,
+    objectFit: 'contain',
+    background: '#fff',
+    border: '1px solid #e5e7eb',
+    borderRadius: 6,
+  },
   warn: { color: '#b45309', fontSize: 13, lineHeight: 1.4, maxWidth: 620 },
   dim: { color: '#666', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4 },
 }
