@@ -120,8 +120,17 @@ web/src/
 Всё в докере, включая приложение. Поднимается из `infra/`:
 
 ```bash
-cp api/.env.example api/.env && cp web/.env.example web/.env && cp infra/.env.example infra/.env && docker compose -f infra/compose.yaml up -d --build
+py infra/stand/fetch_models.py && cp api/.env.example api/.env && cp web/.env.example web/.env && cp infra/.env.example infra/.env && docker compose -f infra/compose.yaml up -d --build
 ```
+
+**Модель узнавания качается до подъёма, а не лежит в репозитории:** 85 МБ,
+с которыми история перестаёт клонироваться за разумное время. Пропустить шаг
+нельзя — стенд соберётся, а узнавание свалится в `FileNotFoundError` из недр
+onnxruntime, то есть откажет невнятно. Повторный запуск ничего не качает.
+
+**Порог узнавания меняется в `api/.env`, но контейнер надо пересоздать:**
+`env_file` читается при создании, а не при каждом старте. `docker compose up -d
+api` — это пересоздание без пересборки.
 
 Порты: сервис `8010`, фронтенд `5183`, PostgreSQL `5433`, MinIO `9010`/`9011`,
 RabbitMQ `5673`/`15673`. Чистое состояние — `docker compose down -v`.
