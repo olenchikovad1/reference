@@ -1,0 +1,112 @@
+# Локальный стенд. Всё поднимается в докере, включая приложение: расхождение
+# «у меня на хосте работает» стоит дороже, чем пересборка образа.
+#
+# Значения — снаружи, из infra/.env. Чистое состояние: docker compose down -v
+# (тома pgdata и miniodata сносятся вместе со всем, что в них лежит).
+name: reference
+
+services:
+  # Том pgdata: данные PostgreSQL. Порт наружу открыт сознательно — смотреть
+  # данные клиентом на рабочей машине удобнее, чем через exec (решение 0003).
+  postgres:
+    image: postgres:17.2-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports: ["${POSTGRES_PORT}:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Том miniodata: объектное хранилище. Локальная замена Yandex Object Storage;
+  # протокол тот же, поэтому переезд на прод — смена адреса и ключей.
+  # Образы minio берутся с quay.io, а не с Docker Hub: с хаба они отсюда не
+  # тянутся вовсе («pull access denied»), проверено 23.09.2026.
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    volumes: ["miniodata:/data"]
+
+  # Разовая задача: завести ведро. Отдельным сервисом, а не шагом в сервисе —
+  # создание ведра не является частью работы приложения и повторяться не должно.
+  #
+  # Готовность minio проверяется здесь циклом, а не healthcheck самого minio:
+  # в его образе нет ни mc, ни curl, и любая проба снаружи оказывается враньём.
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2024-11-21T17-21-54Z
+    depends_on: [minio]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET}
+    entrypoint: >
+      /bin/sh -c "
+      for i in $$(seq 1 40); do
+        mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} && break;
+        echo 'жду minio...'; sleep 2;
+      done &&
+      mc mb --ignore-existing local/$${S3_BUCKET} &&
+      echo 'ведро готово: '$${S3_BUCKET}
+      "
+
+  rabbitmq:
+    image: rabbitmq:4.0.5-management-alpine
+    ports: ["${RABBITMQ_PORT}:5672", "${RABBITMQ_UI_PORT}:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    env_file: ["../api/.env"]
+    # Зависимость — это готовность, а не порядок запуска: запущенный процесс и
+    # процесс, принимающий запросы, разные состояния.
+    depends_on:
+      postgres: {condition: service_healthy}
+      minio-init: {condition: service_completed_successfully}
+    ports: ["${API_PORT}:8000"]
+    volumes:
+      # Файловое пространство: исходники изделий. Только чтение — сервис их
+      # читает при подготовке состояний, но не переписывает (решение 0002).
+      - "${FILES_HOST_PATH}:/srv/reference/files:ro"
+    command: >
+      /bin/sh -c "
+      alembic upgrade head &&
+      uvicorn reference_api.app:app --host 0.0.0.0 --port 8000
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/reference/api/health/live').status==200 else 1)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        PLATFORM_NPM_REGISTRY: ${PLATFORM_NPM_REGISTRY}
+    env_file: ["../web/.env"]
+    depends_on:
+      api: {condition: service_healthy}
+    ports: ["${WEB_PORT}:5173"]
+    # Реестр платформы слушает на 127.0.0.1 хозяйской машины, а не в нашей сети.
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+volumes:
+  pgdata:
+  miniodata:

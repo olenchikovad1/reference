@@ -1,0 +1,80 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_claim_without_run.py\"",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "py -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/require_skills.py\" --check",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_commit_trailers.py\"",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "py -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_shared_branch_push.py\"",
+            "timeout": 20
+          }
+        ],
+        "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_ui_boundary.py\"",
+            "timeout": 20
+          }
+        ],
+        "matcher": "Write|Edit|MultiEdit"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_ui_boundary.py\" --changed",
+            "timeout": 20
+          }
+        ],
+        "matcher": "Bash|Write|Edit|MultiEdit"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/push_task_branch.py\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 \"$CLAUDE_PROJECT_DIR/.claude/hooks/require_skills.py\" --index",
+            "timeout": 20
+          }
+        ],
+        "matcher": "startup|resume|clear|compact"
+      }
+    ]
+  }
+}

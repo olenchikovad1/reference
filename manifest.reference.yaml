@@ -1,0 +1,99 @@
+# Манифест приложения для платформы. Единственный способ, которым платформа
+# узнаёт о «Референсе». Платформа его не редактирует: правка состава разделов
+# в базе платформы — нарушение И-1, после неё истина лежит в двух местах.
+code: reference          # неизменен: стоит в каждой сохранённой ссылке
+display_name: Референс
+icon: "◈"
+contract_version: 1
+
+# Приложение внутреннее: доступ внешним субъектам не выдаётся вовсе, поэтому
+# вторая ось прав (область видимости) к его разделам не применяется.
+available_to_external: false
+
+sections:
+  - code: references
+    display_name: Референсы
+    actions: [view, write, delete]
+    shared: false
+  - code: library
+    display_name: Библиотека
+    actions: [view, write, delete]
+    shared: false
+  - code: products
+    display_name: Справочник изделий
+    actions: [view, write, delete]
+    shared: false
+  - code: collections
+    display_name: Коллекции
+    actions: [view, write, delete]
+    shared: false
+  - code: review
+    display_name: Согласование
+    actions: [view, write]
+    shared: false
+  - code: archive
+    display_name: Архив
+    actions: [view, write]
+    shared: false
+
+# Именованные операции, не выражаемые как создание, изменение или удаление
+# записи. Маршрут объявляет функцию, а не write на разделе: иначе всякий, кто
+# вправе поправить карточку, сможет и выгрузить техпакет на фабрику.
+functions:
+  - code: export_techpack
+    display_name: Выгрузить техпакет
+    section: references
+  - code: approve_final
+    display_name: Окончательное принятие
+    section: review
+  - code: rebuild_derivatives
+    display_name: Пересобрать производные
+    section: products
+  - code: mark_archive
+    display_name: Проставить итоги архива
+    section: archive
+
+permission_sets:
+  - code: designer
+    display_name: Дизайнер
+    grants:
+      - {section: references, action: write}
+      - {section: library, action: write}
+      - {section: collections, action: view}
+      - {section: products, action: view}
+      - {section: review, action: view}
+  - code: editor
+    display_name: Редактор
+    grants:
+      - {section: references, action: view}
+      - {section: review, action: write}
+      - {section: library, action: view}
+      - {section: collections, action: view}
+  - code: chief_editor
+    display_name: Суперредактор
+    grants:
+      - {section: references, action: write}
+      - {section: review, action: write}
+      - {section: collections, action: write}
+      - {section: archive, action: write}
+      - {section: review, function: approve_final}
+      - {section: references, function: export_techpack}
+      - {section: archive, function: mark_archive}
+  - code: technologist
+    display_name: Технолог
+    grants:
+      - {section: products, action: write}
+      - {section: references, action: view}
+      - {section: products, function: rebuild_derivatives}
+
+entry_points:
+  frontend: /reference/
+  service: /reference/api/
+
+consumed_services:
+  - files          # общий сервис файлов платформы
+  - audit
+
+probes:
+  liveness: /reference/api/health/live
+  readiness: /reference/api/health/ready

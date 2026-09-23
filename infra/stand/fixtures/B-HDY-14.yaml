@@ -1,0 +1,100 @@
+# Изделие B-HDY-14 — единственное изделие стенда.
+#
+# В репозитории лежит только это описание. Сами файлы — в томе файлового
+# пространства (`infra/stand/files/`), он в .gitignore: 444 МБ в git не кладут,
+# а кадры состояний — данные изделия, не код.
+#
+# Хеши здесь затем, чтобы подмена файла в томе была видна, а не обнаруживалась
+# по странному результату проверок.
+
+code: B-HDY-14
+display_name: Толстовка на молнии, капюшон
+kind: hoodie
+
+# Источник модели. Browzwear VStitcher 13.3.2 — не CLO 3D. Контейнер: SQLite
+# с zstd-сжатыми блобами; лекала, швы в сантиметрах и градация лежат внутри,
+# но формат закрытый, поэтому читается только то, что отдаёт VStitcher.
+source:
+  tool: browzwear-vstitcher
+  tool_version: "13.3.2"
+  path: products/B-HDY-14/source/1465 B-HDE.bw   # относительно FILES_VOLUME_PATH
+  size_bytes: 444334080
+  sha256: c0f1f9d031b5ef652412885b5846ee836ca321906db9746776a4be50cea3cb2d
+
+# Размерный ряд из модели: рост 98–164, девочки. Не S/M/L/XL — разброс между
+# крайними размерами здесь гораздо больше, и «влезает ли на S» означает «на 98».
+size_set:
+  name: 98-164 Девочки
+  sizes: [98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164]
+  simulated: [98, 134, 164]     # для остальных симуляции в модели нет
+
+# Состояния. Сейчас одно: капюшон надет, молния застёгнута. Набор состояний
+# задаёт технолог на тип изделия, а не дизайнер на карточку.
+states:
+  - code: front
+    display_name: Перед
+    kind: precise                 # по точным ракурсам считаются размещение и проверки
+    hood: up
+    zipper: closed
+    frame:
+      path: products/B-HDY-14/states/front.png
+      width: 720
+      height: 720
+      sha256: 212bb0fcdcc00a89988470d077ff3a1ef97ee42332873102275533274afce6f2
+    # Кадр обесцвечен (saturation ровно 0), поэтому служит одновременно картой
+    # освещения: цвет накладывается умножением, карта рельефа выводится из него же.
+    maps:
+      lighting: frame             # отдельного пасса нет — им является сам кадр
+      displacement: derived       # градиент размытой яркости
+      ao: null
+      print_zone: manual          # полигон обводится в админ-режиме
+    calibration:
+      px_per_cm: null             # ставится линейкой в два клика по известному размеру
+      measured_on_size: null      # какой размер отрендерен — из файла не определить
+      projection: perspective     # силуэты переда и спины расходятся на 52 px
+      note: >-
+        При ортографической камере силуэты переда и спины — зеркальные отражения
+        с одинаковым габаритом. Здесь ширина 626 против 574 при общем центре,
+        значит камера перспективная и единого px/см на весь кадр не существует.
+        Калибруется по плоскости печатной зоны, погрешность на краях не важна —
+        там ничего не размещают.
+
+  - code: back
+    display_name: Спина
+    kind: precise
+    hood: up
+    zipper: closed
+    frame:
+      path: products/B-HDY-14/states/back.png
+      width: 720
+      height: 720
+      sha256: 3960994617db8aaaba92dbe928f1478b65182c45a0fba64ea59beab703f3676d
+    defects:
+      - clipped_top           # верх капюшона срезан границей кадра: 21 непрозрачный
+                              # пиксель в нулевой строке
+    maps: {lighting: frame, displacement: derived, ao: null, print_zone: manual}
+    calibration: {px_per_cm: null, measured_on_size: null, projection: perspective}
+
+  - code: left
+    display_name: Левый бок
+    kind: illustrative        # только показ: силуэт сокращён втрое, размещать нельзя
+    hood: up
+    zipper: closed
+    frame:
+      path: products/B-HDY-14/states/left.png
+      width: 720
+      height: 720
+      sha256: 8e881e63311806c32c66eb3398e909b678a06296a76f277370f12d27df1a7f1c
+    maps: {lighting: frame, displacement: derived, ao: null, print_zone: manual}
+    calibration: {px_per_cm: null, measured_on_size: null, projection: perspective}
+
+# Состояния, которых нет и которые в прототипе не появятся. Названы затем,
+# чтобы отсутствие читалось как известное ограничение, а не как недоделка.
+states_absent: [hood_down, zipper_open]
+
+# Печатные поля по размерам и коэффициент масштабирования принта — две
+# независимые таблицы, сливать их нельзя: первая ограничение, вторая
+# преобразование. Заполняются технологом; до тех пор проверки по размерам
+# работать не будут.
+print_fields: []
+grading: {strategy: fixed}

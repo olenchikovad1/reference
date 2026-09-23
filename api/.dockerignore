@@ -1,0 +1,10 @@
+# Свой список, отдельный от .gitignore: репозиторий скрывает секреты, сборка —
+# то, что раздувает контекст и образу не нужно.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+tests/
+.env
