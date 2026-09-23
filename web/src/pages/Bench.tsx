@@ -14,9 +14,14 @@ import {
   remove,
   select,
   type Composition,
+  restyle,
+  retype,
   type ImageElement,
+  type TextElement,
 } from '../shared/composition'
+import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
+import { measureAspect } from '../shared/text'
 import { readDropped } from '../shared/dropped'
 
 // Стенд нанесения. Кадр изделия, на него бросают картинки, их двигают и мерят
@@ -38,6 +43,8 @@ export function Bench() {
   const [fps, setFps] = useState<number | null>(null)
   const [colours, setColours] = useState<Colour[]>([])
   const [colourCode, setColourCode] = useState('WHITE')
+  const [fontsReady, setFontsReady] = useState(false)
+  const measurer = useRef<CanvasRenderingContext2D | null>(null)
   const seq = useRef(0)
 
   useEffect(() => {
@@ -45,6 +52,12 @@ export function Bench() {
     fetchPalette()
       .then((p) => setColours(p.colors))
       .catch(() => undefined)
+    // Браузер грузит шрифт лениво — до первого применения. Без явного ожидания
+    // первая отрисовка надписи уходит в запасной шрифт, то есть показывает не
+    // то, что уйдёт в печать, и заметить это трудно: буквы-то на месте.
+    void Promise.all(FONTS.map((f) => document.fonts.load(`600 100px "${f.family}"`)))
+      .then(() => setFontsReady(true))
+      .catch(() => setFontsReady(true))
   }, [])
 
   const state = product?.states.find((s) => s.code === stateCode) ?? product?.states[0] ?? null
@@ -53,6 +66,47 @@ export function Bench() {
     [product],
   )
   const selected = find(composition, composition.selectedId)
+
+  // Когда шрифты доехали, пропорции надписей пересчитываются: измеренные по
+  // запасному шрифту они неверны, и надпись оказалась бы не той ширины.
+  useEffect(() => {
+    if (!fontsReady) return
+    setComposition((c) =>
+      c.elements.reduce(
+        (acc, el) => (el.kind === 'text' ? restyle(acc, el.id, { textAspect: aspectOf(el) }) : acc),
+        c,
+      ),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fontsReady])
+
+  /** Пропорция надписи меряется по отрисованному: вычислить её из текста нельзя. */
+  function aspectOf(t: Pick<TextElement, 'text' | 'fontFamily' | 'weight' | 'rgb'>): number {
+    if (!measurer.current) {
+      measurer.current = document.createElement('canvas').getContext('2d')
+    }
+    return measurer.current ? measureAspect(measurer.current, t) : 4
+  }
+
+  function addLabel() {
+    seq.current += 1
+    const style = {
+      text: 'ЗИМА 2026',
+      fontFamily: DEFAULT_FONT.family,
+      weight: 600,
+      rgb: [255, 255, 255] as const,
+    }
+    const el: TextElement = {
+      id: `el-${seq.current}`,
+      kind: 'text',
+      name: 'надпись',
+      ...style,
+      colourCode: 'WHITE',
+      textAspect: aspectOf(style),
+      placement: { anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
+    }
+    setComposition((c) => add(c, el))
+  }
 
   // Клавиши: мышкой удобно искать, но попасть в «12 см ниже горловины» ею
   // нельзя, а это основной способ работы.
@@ -295,6 +349,9 @@ export function Bench() {
           </Group>
 
           <Group title={`Элементы (${composition.elements.length})`}>
+            <button onClick={addLabel} style={S.btn}>
+              + надпись
+            </button>
             {composition.elements.length === 0 && <p style={S.dim}>пусто</p>}
             <div style={S.list}>
               {composition.elements.map((el) => (
@@ -304,7 +361,9 @@ export function Bench() {
                   style={el.id === composition.selectedId ? S.itemOn : S.item}
                 >
                   <span style={S.itemName}>{el.name}</span>
-                  {!el.hasAlpha && <span style={S.badge}>фон не вырезан</span>}
+                  {el.kind === 'image' && !el.hasAlpha && (
+                    <span style={S.badge}>фон не вырезан</span>
+                  )}
                   <button
                     style={S.x}
                     onClick={(e) => {
@@ -318,6 +377,67 @@ export function Bench() {
               ))}
             </div>
           </Group>
+
+          {selected?.kind === 'text' && (
+            <Group title="Надпись">
+              <input
+                value={selected.text}
+                onChange={(e) => {
+                  const text = e.target.value
+                  setComposition((c) => {
+                    const next = retype(c, selected.id, text)
+                    return restyle(next, selected.id, {
+                      textAspect: aspectOf({ ...selected, text }),
+                    })
+                  })
+                }}
+                style={S.textInput}
+              />
+              <div style={S.row}>
+                {FONTS.map((f) => (
+                  <button
+                    key={f.family}
+                    title={`${f.role} · ${f.license}`}
+                    onClick={() =>
+                      setComposition((c) =>
+                        restyle(c, selected.id, {
+                          fontFamily: f.family,
+                          textAspect: aspectOf({ ...selected, fontFamily: f.family }),
+                        }),
+                      )
+                    }
+                    style={{
+                      ...(f.family === selected.fontFamily ? S.btnOn : S.btn),
+                      fontFamily: `"${f.family}", sans-serif`,
+                    }}
+                  >
+                    {f.family}
+                  </button>
+                ))}
+              </div>
+              <div style={S.swatches}>
+                {colours.map((c) => (
+                  <button
+                    key={c.code}
+                    title={`${c.name} · ${c.code}`}
+                    onClick={() =>
+                      setComposition((comp) =>
+                        restyle(comp, selected.id, { colourCode: c.code, rgb: c.rgb }),
+                      )
+                    }
+                    style={{
+                      ...S.swatch,
+                      background: toCss(c),
+                      outline: c.code === selected.colourCode ? '2px solid #111' : '1px solid #d1d5db',
+                    }}
+                  />
+                ))}
+              </div>
+              <p style={S.dim}>
+                шрифты только загруженные в систему, лицензия названа у каждого
+              </p>
+            </Group>
+          )}
 
           {selected && (
             <Group title="Размещение">
@@ -469,6 +589,7 @@ const S: Record<string, React.CSSProperties> = {
   btn: { padding: '5px 10px', border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, cursor: 'pointer' },
   btnOn: { padding: '5px 10px', border: '1px solid #111', background: '#111', color: '#fff', borderRadius: 6, cursor: 'pointer' },
   tag: { color: '#9ca3af', fontStyle: 'normal', fontSize: 11 },
+  textInput: { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 6, marginBottom: 6 },
   swatches: { display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 },
   swatch: { width: 26, height: 26, borderRadius: 5, border: 'none', cursor: 'pointer', padding: 0 },
   slider: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 2 },

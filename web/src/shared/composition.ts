@@ -33,7 +33,26 @@ export interface ImageElement {
   readonly placement: Placement
 }
 
-export type PrintElement = ImageElement
+export interface TextElement {
+  readonly id: string
+  readonly kind: 'text'
+  readonly name: string
+  /** Текст остаётся ТЕКСТОМ. В кривые он переводится только на экспорте —
+   *  иначе правка одной буквы снова стоит круга через дизайнера, а замечание
+   *  «поправь только надпись» опять означает пересмотр всей работы. */
+  readonly text: string
+  readonly fontFamily: string
+  readonly weight: number
+  /** Цвет надписи кодом справочника, как и цвет изделия. */
+  readonly colourCode: string
+  readonly rgb: readonly [number, number, number]
+  /** Пропорция отрисованной надписи: ширина к высоте. Меряется по
+   *  отрисованному — вычислить её из текста нельзя. */
+  readonly textAspect: number
+  readonly placement: Placement
+}
+
+export type PrintElement = ImageElement | TextElement
 
 export interface Composition {
   readonly elements: readonly PrintElement[]
@@ -42,9 +61,16 @@ export interface Composition {
 
 export const EMPTY: Composition = { elements: [], selectedId: null }
 
-/** Высота элемента в сантиметрах — из ширины и пропорции исходника. */
+/**
+ * Высота элемента в сантиметрах.
+ *
+ * У картинки — из ширины и пропорции исходника. У надписи пропорция зависит от
+ * самого текста и начертания, поэтому её меряют по отрисованному, а не
+ * вычисляют: `textAspect` кладёт туда тот, кто рисовал.
+ */
 export function heightCm(el: PrintElement): number {
-  return el.placement.widthCm / el.aspect
+  const aspect = el.kind === 'image' ? el.aspect : el.textAspect
+  return el.placement.widthCm / Math.max(aspect, 0.01)
 }
 
 export function add(c: Composition, el: PrintElement): Composition {
@@ -81,6 +107,26 @@ export function find(c: Composition, id: string | null): PrintElement | null {
 }
 
 /** Сдвиг на заданное число сантиметров — то, что делают стрелки на клавиатуре. */
+/** Правка текста: меняется текст, всё остальное остаётся на месте. */
+export function retype(c: Composition, id: string, text: string): Composition {
+  return {
+    ...c,
+    elements: c.elements.map((e) => (e.id === id && e.kind === 'text' ? { ...e, text } : e)),
+  }
+}
+
+/** Смена начертания, веса или цвета надписи. */
+export function restyle(
+  c: Composition,
+  id: string,
+  patch: Partial<Pick<TextElement, 'fontFamily' | 'weight' | 'colourCode' | 'rgb' | 'textAspect'>>,
+): Composition {
+  return {
+    ...c,
+    elements: c.elements.map((e) => (e.id === id && e.kind === 'text' ? { ...e, ...patch } : e)),
+  }
+}
+
 export function nudge(c: Composition, id: string, dxCm: number, dyCm: number): Composition {
   const el = find(c, id)
   if (!el) return c

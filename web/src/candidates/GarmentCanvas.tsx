@@ -6,6 +6,7 @@ import { heightCm } from '../shared/composition'
 import type { Calibration } from '../shared/geometry'
 import { cmToPx } from '../shared/geometry'
 import { buildLuminance } from '../shared/luminance'
+import { drawText } from '../shared/text'
 import { createRenderer, type RenderParams, type Renderer } from './renderer'
 
 // Холст изделия. В @platform/ui такого нет и не будет — это прикладное знание,
@@ -105,15 +106,20 @@ export function GarmentCanvas(props: CanvasProps) {
     if (!ctx) return
     ctx.clearRect(0, 0, W, H)
     for (const el of composition.elements) {
-      const img = images.current.get(el.src)
-      if (!img?.complete) continue
       const [cx, cy] = centreOf(el)
       const w = cmToPx(el.placement.widthCm, calibration) * renderScale
       const h = cmToPx(heightCm(el), calibration) * renderScale
       ctx.save()
       ctx.translate(cx * renderScale, cy * renderScale)
       ctx.rotate((el.placement.rotation * Math.PI) / 180)
-      ctx.drawImage(img, -w / 2, -h / 2, w, h)
+      if (el.kind === 'text') {
+        // Текст рисуется заново каждый раз, а не берётся картинкой из кэша:
+        // в этом вся история — правка буквы не идёт через дизайнера.
+        drawText(ctx, el, w)
+      } else {
+        const img = images.current.get(el.src)
+        if (img?.complete) ctx.drawImage(img, -w / 2, -h / 2, w, h)
+      }
       ctx.restore()
     }
   }
@@ -132,6 +138,12 @@ export function GarmentCanvas(props: CanvasProps) {
     r.draw()
 
     const now = performance.now()
+    // Горячая замена модулей сохраняет useRef между версиями кода. Если форма
+    // хранимого изменилась, старое значение доживает до нового кода и роняет
+    // его — а падение здесь обрывает отрисовку целиком, и выглядит это как
+    // ошибка логики где-то совсем в другом месте. Издержка разработки, не
+    // дефект, но ловить её каждый раз дороже, чем одна строка.
+    if (!Array.isArray(frames.current)) frames.current = []
     const f = frames.current
     f.push(now)
     if (f.length > 24) f.shift()
@@ -148,6 +160,7 @@ export function GarmentCanvas(props: CanvasProps) {
   useEffect(() => {
     let pending = 0
     for (const el of composition.elements) {
+      if (el.kind !== 'image') continue
       if (images.current.has(el.src)) continue
       const img = new Image()
       pending += 1

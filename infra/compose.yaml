@@ -120,6 +120,7 @@ services:
       - "../web/tsconfig.json:/app/tsconfig.json"
       - "../web/vite.config.ts:/app/vite.config.ts"
       - "../web/index.html:/app/index.html"
+      - "../web/public:/app/public"
     # Реестр платформы слушает на 127.0.0.1 хозяйской машины, а не в нашей сети.
     extra_hosts: ["host.docker.internal:host-gateway"]
 

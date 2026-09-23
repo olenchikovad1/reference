@@ -3,6 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Путь относительный: базу приложения Vite подставляет сам, и написанная
+         ещё раз она удваивается в /reference/reference/. Шрифты при этом молча
+         не грузятся, всё падает в запасной, и надпись на экране оказывается не
+         той, что уйдёт в печать. Проверено 23.09.2026. -->
+    <link rel="stylesheet" href="fonts/fonts.css" />
     <title>Референс</title>
   </head>
   <body>

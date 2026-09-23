@@ -14,8 +14,11 @@ ENV PLATFORM_NPM_REGISTRY=${PLATFORM_NPM_REGISTRY}
 COPY package.json .npmrc ./
 RUN npm install
 
-COPY tsconfig.json tsconfig.node.json vite.config.ts index.html ./
+COPY tsconfig.json vite.config.ts index.html ./
 COPY src ./src
+# Шрифты и прочее, что отдаётся как есть. Без этого они молча не грузятся, всё
+# падает в запасной шрифт, и на экране оказывается не то, что уйдёт в печать.
+COPY public ./public
 
 # Процесс работает не от суперпользователя. Пользователь node есть в образе.
 RUN chown -R node:node /app
