@@ -5,8 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "vitest run",
-    "lint": "eslint src"
+    "test": "vitest run"
   },
   "dependencies": {
     "@platform/tokens": "^1.26.0",
