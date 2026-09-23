@@ -40,6 +40,14 @@ export interface Product {
   states: State[]
   states_absent: string[]
   print_fields: { provisional: boolean; unit: string; by_size: Record<string, Record<string, number[]>> } | null
+  print_rules: {
+    provisional: boolean
+    method: string
+    min_letter_cm: number
+    warn_letter_cm: number
+    min_stroke_cm: number
+    max_colours: number
+  } | null
 }
 
 export async function fetchProduct(code: string): Promise<Product> {

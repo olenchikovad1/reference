@@ -62,6 +62,17 @@ class PrintFields(BaseModel):
     by_size: dict[int, dict[str, list[float]]]
 
 
+class PrintRules(BaseModel):
+    """Пороги проверок. Данные, а не код: их меняет технолог."""
+
+    provisional: bool
+    method: str
+    min_letter_cm: float
+    warn_letter_cm: float
+    min_stroke_cm: float
+    max_colours: int
+
+
 class Product(BaseModel):
     code: str
     display_name: str
@@ -75,3 +86,4 @@ class Product(BaseModel):
     states: list[State]
     states_absent: list[str] = Field(default_factory=list)
     print_fields: PrintFields | None = None
+    print_rules: PrintRules | None = None

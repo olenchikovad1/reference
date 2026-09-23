@@ -24,6 +24,7 @@ import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
 import { readDropped } from '../shared/dropped'
+import { blocking, check, type Finding } from '../shared/checks'
 import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
 import { useHistoryState } from '../shared/useHistory'
 
@@ -55,6 +56,8 @@ export function Bench() {
   // Кэш картинок один на страницу: им пользуются и холст, и печатный лист.
   const images = useRef(new Map<string, HTMLImageElement>())
   const [imagesVersion, setImagesVersion] = useState(0)
+  // Закрытые предупреждения: «так и задумано». Ключ — правило плюс элемент.
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const measurer = useRef<CanvasRenderingContext2D | null>(null)
   const seq = useRef(0)
 
@@ -80,6 +83,21 @@ export function Bench() {
     [product],
   )
   const selected = find(composition, composition.selectedId)
+  // Пороги приходят из описания изделия, а не из кода.
+  const rules = product?.print_rules
+  const findings = check(
+    composition,
+    rules
+      ? {
+          minLetterCm: rules.min_letter_cm,
+          warnLetterCm: rules.warn_letter_cm,
+          minStrokeCm: rules.min_stroke_cm,
+          maxColours: rules.max_colours,
+        }
+      : undefined,
+  )
+  const keyOf = (f: Finding) => `${f.rule}:${f.elementId ?? '-'}`
+  const open = findings.filter((f) => !dismissed.has(keyOf(f)))
 
   // Когда шрифты доехали, пропорции надписей пересчитываются: измеренные по
   // запасному шрифту они неверны, и надпись оказалась бы не той ширины.
@@ -478,8 +496,48 @@ export function Bench() {
             ))}
           </Group>
 
+          <Group title={`Проверки (${open.length})`}>
+            {open.length === 0 && composition.elements.length > 0 && (
+              <p style={S.dim}>находок нет</p>
+            )}
+            <div style={S.list}>
+              {open.map((f) => (
+                <div
+                  key={keyOf(f)}
+                  style={f.weight === 'blocking' ? S.findingBlocking : S.findingWarning}
+                >
+                  <span style={S.findingText}>{f.message}</span>
+                  {f.weight === 'warning' && (
+                    <button
+                      title="Так и задумано. Кто закрыл — появится вместе со входом платформы"
+                      onClick={() => setDismissed((d) => new Set([...d, keyOf(f)]))}
+                      style={S.x}
+                    >
+                      ✓
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {dismissed.size > 0 && (
+              <p style={S.dim}>
+                закрыто «так и задумано»: {dismissed.size} · имя закрывшего появится
+                вместе со входом платформы
+              </p>
+            )}
+          </Group>
+
           <Group title="На фабрику">
-            <button onClick={downloadSheet} disabled={composition.elements.length === 0} style={S.btn}>
+            <button
+              onClick={downloadSheet}
+              disabled={composition.elements.length === 0 || blocking(open).length > 0}
+              style={S.btn}
+              title={
+                blocking(open).length > 0
+                  ? 'Сначала исправьте блокирующие находки: такой принт не пропечатается'
+                  : undefined
+              }
+            >
               выгрузить печатный лист
             </button>
             {composition.elements.length > 0 && (
@@ -771,6 +829,9 @@ const S: Record<string, React.CSSProperties> = {
   btn: { padding: '5px 10px', border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, cursor: 'pointer' },
   btnOn: { padding: '5px 10px', border: '1px solid #111', background: '#111', color: '#fff', borderRadius: 6, cursor: 'pointer' },
   tag: { color: '#9ca3af', fontStyle: 'normal', fontSize: 11 },
+  findingBlocking: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', width: '100%' },
+  findingWarning: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #fde68a', background: '#fffbeb', width: '100%' },
+  findingText: { flex: 1, fontSize: 12, lineHeight: 1.35 },
   setProbe: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #bfdbfe', background: '#eff6ff', cursor: 'pointer', textAlign: 'left', width: '100%' },
   setArtwork: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' },
   textInput: { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 6, marginBottom: 6 },
