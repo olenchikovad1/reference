@@ -15,10 +15,13 @@ if config.config_file_name:
 
 config.set_main_option("sqlalchemy.url", settings().database_url)
 
-# Метаданных пока нет: модели появятся с первой историей, и тогда сюда придёт их
-# Base.metadata. До тех пор автогенерация не работает — и это видно сразу, а не
-# выясняется по пустой сгенерированной миграции.
-target_metadata = None
+# Модели импортируются ЦЕЛИКОМ, а не выборочно: автогенерация видит только то,
+# что успело зарегистрироваться в метаданных, и забытый импорт даёт не ошибку, а
+# миграцию без половины таблиц.
+from reference_api.models.base import Base  # noqa: E402
+from reference_api.models import library, references  # noqa: E402,F401
+
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

@@ -11,6 +11,7 @@
 """
 
 import asyncio
+import pathlib
 import os
 
 _SUFFIX = "_test"
@@ -43,4 +44,18 @@ async def _create_if_absent(base: str, name: str) -> None:
         await conn.close()
 
 
+def _bring_schema_up() -> None:
+    """Схему тестовой базы поднимают ТЕ ЖЕ миграции, что и боевую.
+
+    Создавать её из метаданных было бы быстрее и проверяло бы другое: тогда
+    сломанная миграция проходит все тесты и обнаруживается на выкатке.
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(pathlib.Path(__file__).resolve().parents[1] / "alembic.ini"))
+    command.upgrade(cfg, "head")
+
+
 _switch_to_test_database()
+_bring_schema_up()

@@ -1,23 +1,9 @@
 """Векторы: как хранятся и как ищутся. Бизнес-смысла здесь нет."""
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.models.library import AssetEmbedding
-
-
-async def ensure_schema() -> None:
-    """Расширение и таблица.
-
-    Через движок, а не через сессию: run_sync у сессии даёт сессию, а создание
-    таблиц просит соединение. На стенде миграций пока нет — их приносит первая
-    история, где появится модель данных шире одной таблицы.
-    """
-    from reference_api.db import engine
-
-    async with engine.begin() as conn:
-        await conn.execute(text("create extension if not exists vector"))
-        await conn.run_sync(AssetEmbedding.metadata.create_all)
 
 
 async def put(db: AsyncSession, digest: str, name: str, model: str, vector: list[float]) -> None:
