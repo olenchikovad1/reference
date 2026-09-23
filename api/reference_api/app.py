@@ -6,7 +6,7 @@
 
 from fastapi import APIRouter, FastAPI
 
-from reference_api.api import colours, health, products
+from reference_api.api import colours, health, prints, products
 from reference_api.config import settings
 
 
@@ -23,6 +23,7 @@ def create_app() -> FastAPI:
     root.include_router(health.router)
     root.include_router(products.router)
     root.include_router(colours.router)
+    root.include_router(prints.router)
     app.include_router(root)
     return app
 

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
 import { DEFAULT_PARAMS, type RenderParams } from '../candidates/renderer'
 import { fetchPalette, toCss, toUnit, type Colour } from '../shared/api/colours'
+import { fetchPrints, printUrl, type PrintItem } from '../shared/api/prints'
 import { fetchProduct, frameUrl, type Product } from '../shared/api/products'
 import {
   EMPTY,
@@ -44,6 +45,7 @@ export function Bench() {
   const [colours, setColours] = useState<Colour[]>([])
   const [colourCode, setColourCode] = useState('WHITE')
   const [fontsReady, setFontsReady] = useState(false)
+  const [prints, setPrints] = useState<PrintItem[]>([])
   const measurer = useRef<CanvasRenderingContext2D | null>(null)
   const seq = useRef(0)
 
@@ -51,6 +53,9 @@ export function Bench() {
     fetchProduct(PRODUCT).then(setProduct).catch((e: Error) => setError(e.message))
     fetchPalette()
       .then((p) => setColours(p.colors))
+      .catch(() => undefined)
+    fetchPrints()
+      .then(setPrints)
       .catch(() => undefined)
     // Браузер грузит шрифт лениво — до первого применения. Без явного ожидания
     // первая отрисовка надписи уходит в запасной шрифт, то есть показывает не
@@ -86,6 +91,37 @@ export function Bench() {
       measurer.current = document.createElement('canvas').getContext('2d')
     }
     return measurer.current ? measureAspect(measurer.current, t) : 4
+  }
+
+  /** Принт из набора — одним нажатием. Путь через проводник убивает привычку
+   *  на второй день, а эталонами пользуются постоянно. */
+  function addFromSet(item: PrintItem) {
+    const img = new Image()
+    img.onload = () => {
+      seq.current += 1
+      setComposition((c) =>
+        add(c, {
+          id: `el-${seq.current}`,
+          kind: 'image',
+          name: item.name,
+          src: img.src,
+          aspect: img.naturalWidth / img.naturalHeight,
+          // Эталон считается вырезанным: он нарисован кодом и прозрачность у
+          // него настоящая, кроме того, который её нарочно не имеет.
+          hasAlpha: item.name !== 'fon-ne-vyrezan.png',
+          placement: {
+            anchor: 'neck',
+            dxCm: 0,
+            dyCm: 12,
+            // У эталона размер известен и обязан соблюдаться: сетка в 20 см
+            // проверяет калибровку только если ложится двадцатью сантиметрами.
+            widthCm: item.width_cm ?? 18,
+            rotation: 0,
+          },
+        }),
+      )
+    }
+    img.src = printUrl(item.path)
   }
 
   function addLabel() {
@@ -355,6 +391,29 @@ export function Bench() {
             ))}
           </Group>
 
+          <Group title="Набор принтов">
+            <div style={S.list}>
+              {prints
+                .slice()
+                .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'probe' ? -1 : 1))
+                .map((item) => (
+                  <button
+                    key={item.path}
+                    onClick={() => addFromSet(item)}
+                    title={item.answers ?? item.subject ?? item.name}
+                    style={item.kind === 'probe' ? S.setProbe : S.setArtwork}
+                  >
+                    <span style={S.itemName}>{item.subject ?? item.name}</span>
+                    {item.width_cm && <span style={S.tag}>{item.width_cm} см</span>}
+                  </button>
+                ))}
+            </div>
+            <p style={S.dim}>
+              эталоны подписаны вопросом, на который отвечают; настоящие принты
+              добавляются тем же способом
+            </p>
+          </Group>
+
           <Group title={`Элементы (${composition.elements.length})`}>
             <button onClick={addLabel} style={S.btn}>
               + надпись
@@ -597,6 +656,8 @@ const S: Record<string, React.CSSProperties> = {
   btn: { padding: '5px 10px', border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, cursor: 'pointer' },
   btnOn: { padding: '5px 10px', border: '1px solid #111', background: '#111', color: '#fff', borderRadius: 6, cursor: 'pointer' },
   tag: { color: '#9ca3af', fontStyle: 'normal', fontSize: 11 },
+  setProbe: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #bfdbfe', background: '#eff6ff', cursor: 'pointer', textAlign: 'left', width: '100%' },
+  setArtwork: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' },
   textInput: { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 6, marginBottom: 6 },
   swatches: { display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 },
   swatch: { width: 26, height: 26, borderRadius: 5, border: 'none', cursor: 'pointer', padding: 0 },
