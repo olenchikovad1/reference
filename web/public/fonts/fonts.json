@@ -1,0 +1,66 @@
+[
+  {
+    "family": "Inter",
+    "role": "обычный текст",
+    "note": "нейтральный гротеск",
+    "license": "SIL Open Font License 1.1",
+    "license_url": "https://openfontlicense.org/",
+    "source": "Google Fonts",
+    "cyrillic": true,
+    "embeddable": true,
+    "files": [
+      "inter-400-cyrillic.woff2",
+      "inter-400-latin.woff2",
+      "inter-700-cyrillic.woff2",
+      "inter-700-latin.woff2"
+    ]
+  },
+  {
+    "family": "Oswald",
+    "role": "заголовок принта",
+    "note": "узкий гротеск, очень читаемый в крупном кегле",
+    "license": "SIL Open Font License 1.1",
+    "license_url": "https://openfontlicense.org/",
+    "source": "Google Fonts",
+    "cyrillic": true,
+    "embeddable": true,
+    "files": [
+      "oswald-400-cyrillic.woff2",
+      "oswald-400-latin.woff2",
+      "oswald-600-cyrillic.woff2",
+      "oswald-600-latin.woff2"
+    ]
+  },
+  {
+    "family": "Playfair Display",
+    "role": "красивый",
+    "note": "контрастная антиква",
+    "license": "SIL Open Font License 1.1",
+    "license_url": "https://openfontlicense.org/",
+    "source": "Google Fonts",
+    "cyrillic": true,
+    "embeddable": true,
+    "files": [
+      "playfair-display-400-cyrillic.woff2",
+      "playfair-display-400-latin.woff2",
+      "playfair-display-700-cyrillic.woff2",
+      "playfair-display-700-latin.woff2"
+    ]
+  },
+  {
+    "family": "Caveat",
+    "role": "рукописный",
+    "note": "имитация письма от руки",
+    "license": "SIL Open Font License 1.1",
+    "license_url": "https://openfontlicense.org/",
+    "source": "Google Fonts",
+    "cyrillic": true,
+    "embeddable": true,
+    "files": [
+      "caveat-400-cyrillic.woff2",
+      "caveat-400-latin.woff2",
+      "caveat-700-cyrillic.woff2",
+      "caveat-700-latin.woff2"
+    ]
+  }
+]

@@ -1,4 +1,43 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(docker:*)",
+      "Bash(docker compose:*)",
+      "Bash(py:*)",
+      "Bash(python:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(alembic:*)",
+      "Bash(uv:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(psql:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(sed:*)",
+      "Bash(awk:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(xxd:*)",
+      "Bash(netstat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
   "hooks": {
     "Stop": [
       {
