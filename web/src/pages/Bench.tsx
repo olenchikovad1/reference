@@ -24,6 +24,7 @@ import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
 import { readDropped } from '../shared/dropped'
+import { useHistoryState } from '../shared/useHistory'
 
 // Стенд нанесения. Кадр изделия, на него бросают картинки, их двигают и мерят
 // в сантиметрах. Складки и тень приедут следующей историей — здесь проверяется,
@@ -37,7 +38,11 @@ export function Bench() {
   const [error, setError] = useState<string | null>(null)
   const [stateCode, setStateCode] = useState('front')
   const [overlay, setOverlay] = useState<Overlay>('zones')
-  const [composition, setComposition] = useState<Composition>(EMPTY)
+  const history = useHistoryState<Composition>(EMPTY)
+  const composition = history.value
+  // Живое изменение — без записи; шаг закрепляется там, где действие кончилось.
+  const setComposition = history.set
+  const commit = history.commit
   const [dropHint, setDropHint] = useState<string | null>(null)
   const [params, setParams] = useState<RenderParams>(DEFAULT_PARAMS)
   const [renderScale, setRenderScale] = useState(2)
@@ -99,7 +104,7 @@ export function Bench() {
     const img = new Image()
     img.onload = () => {
       seq.current += 1
-      setComposition((c) =>
+      commit((c) =>
         add(c, {
           id: `el-${seq.current}`,
           kind: 'image',
@@ -141,13 +146,20 @@ export function Bench() {
       textAspect: aspectOf(style),
       placement: { anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
     }
-    setComposition((c) => add(c, el))
+    commit((c) => add(c, el))
   }
 
   // Клавиши: мышкой удобно искать, но попасть в «12 см ниже горловины» ею
   // нельзя, а это основной способ работы.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) history.redo()
+        else history.undo()
+        return
+      }
       if (!composition.selectedId) return
       const target = e.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
@@ -161,16 +173,16 @@ export function Bench() {
       if (e.key in by) {
         e.preventDefault()
         const [dx, dy] = by[e.key]
-        setComposition((c) => nudge(c, c.selectedId as string, dx, dy))
+        commit((c) => nudge(c, c.selectedId as string, dx, dy))
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
-        setComposition((c) => remove(c, c.selectedId as string))
+        commit((c) => remove(c, c.selectedId as string))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [composition.selectedId])
+  }, [composition.selectedId, history])
 
   const onDrop = useCallback(
     async (e: React.DragEvent) => {
@@ -186,7 +198,7 @@ export function Bench() {
               'Такая картинка ляжет на изделие прямоугольником — это не поломка, ' +
               'а то, как выглядит непрозрачный файл.',
       )
-      setComposition((c) =>
+      commit((c) =>
         read.reduce((acc, d, i) => {
           seq.current += 1
           const el: ImageElement = {
@@ -249,6 +261,7 @@ export function Bench() {
               onMove={(id, dxCm, dyCm) => setComposition((c) => place(c, id, { dxCm, dyCm }))}
               onResize={(id, widthCm) => setComposition((c) => place(c, id, { widthCm }))}
               onRotate={(id, rotation) => setComposition((c) => place(c, id, { rotation }))}
+              onCommit={() => commit()}
             />
           </div>
           {composition.elements.length === 0 && (
@@ -391,6 +404,16 @@ export function Bench() {
             ))}
           </Group>
 
+          <Group title="Правка">
+            <button onClick={history.undo} disabled={!history.canUndo} style={S.btn}>
+              отменить
+            </button>
+            <button onClick={history.redo} disabled={!history.canRedo} style={S.btn}>
+              вернуть
+            </button>
+            <p style={S.dim}>Ctrl+Z и Ctrl+Shift+Z. Ползунки подбора не откатываются</p>
+          </Group>
+
           <Group title="Набор принтов">
             <div style={S.list}>
               {prints
@@ -434,7 +457,7 @@ export function Bench() {
                     style={S.x}
                     onClick={(e) => {
                       e.stopPropagation()
-                      setComposition((c) => remove(c, el.id))
+                      commit((c) => remove(c, el.id))
                     }}
                   >
                     ×
@@ -450,7 +473,7 @@ export function Bench() {
                 value={selected.text}
                 onChange={(e) => {
                   const text = e.target.value
-                  setComposition((c) => {
+                  commit((c) => {
                     const next = retype(c, selected.id, text)
                     return restyle(next, selected.id, {
                       textAspect: aspectOf({ ...selected, text }),
@@ -465,7 +488,7 @@ export function Bench() {
                     key={f.family}
                     title={`${f.role} · ${f.license}`}
                     onClick={() =>
-                      setComposition((c) =>
+                      commit((c) =>
                         restyle(c, selected.id, {
                           fontFamily: f.family,
                           textAspect: aspectOf({ ...selected, fontFamily: f.family }),
@@ -487,7 +510,7 @@ export function Bench() {
                     key={c.code}
                     title={`${c.name} · ${c.code}`}
                     onClick={() =>
-                      setComposition((comp) =>
+                      commit((comp) =>
                         restyle(comp, selected.id, { colourCode: c.code, rgb: c.rgb }),
                       )
                     }
@@ -510,23 +533,23 @@ export function Bench() {
               <Num
                 label="от горловины вниз"
                 value={selected.placement.dyCm}
-                onChange={(v) => setComposition((c) => place(c, selected.id, { dyCm: v }))}
+                onChange={(v) => commit((c) => place(c, selected.id, { dyCm: v }))}
               />
               <Num
                 label="от центра вбок"
                 value={selected.placement.dxCm}
-                onChange={(v) => setComposition((c) => place(c, selected.id, { dxCm: v }))}
+                onChange={(v) => commit((c) => place(c, selected.id, { dxCm: v }))}
               />
               <Num
                 label="ширина"
                 value={selected.placement.widthCm}
-                onChange={(v) => setComposition((c) => place(c, selected.id, { widthCm: Math.max(0.5, v) }))}
+                onChange={(v) => commit((c) => place(c, selected.id, { widthCm: Math.max(0.5, v) }))}
               />
               <Num
                 label="поворот, °"
                 value={selected.placement.rotation}
                 unit=""
-                onChange={(v) => setComposition((c) => place(c, selected.id, { rotation: v }))}
+                onChange={(v) => commit((c) => place(c, selected.id, { rotation: v }))}
               />
               <p style={S.dim}>высота {formatCm(heightCm(selected))} — следует за пропорцией</p>
               <p style={S.dim}>стрелки двигают на 1 мм, с Shift — на 1 см</p>

@@ -31,6 +31,9 @@ export interface CanvasProps {
   readonly onMove: (id: string, dxCm: number, dyCm: number) => void
   readonly onResize: (id: string, widthCm: number) => void
   readonly onRotate: (id: string, degrees: number) => void
+  /** Действие руками закончилось: тянуть перестали. Отсюда берётся шаг
+   *  истории — одно движение мышкой отменяется одним нажатием. */
+  readonly onCommit?: () => void
   /** Сколько кадров в секунду выходит при перетаскивании. */
   readonly onFps?: (fps: number) => void
 }
@@ -233,8 +236,14 @@ export function GarmentCanvas(props: CanvasProps) {
         viewBox={`0 0 ${state.frame.width} ${state.frame.height}`}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', touchAction: 'none' }}
         onPointerMove={onPointerMove}
-        onPointerUp={() => (drag.current = null)}
-        onPointerLeave={() => (drag.current = null)}
+        onPointerUp={() => {
+          if (drag.current) props.onCommit?.()
+          drag.current = null
+        }}
+        onPointerLeave={() => {
+          if (drag.current) props.onCommit?.()
+          drag.current = null
+        }}
         onPointerDown={(e) => {
           if (e.target === svg.current) props.onSelect(null)
         }}
