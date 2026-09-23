@@ -58,6 +58,7 @@ export function Bench() {
   const [imagesVersion, setImagesVersion] = useState(0)
   // Закрытые предупреждения: «так и задумано». Ключ — правило плюс элемент.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const viewCanvas = useRef<HTMLCanvasElement | null>(null)
   const measurer = useRef<CanvasRenderingContext2D | null>(null)
   const seq = useRef(0)
 
@@ -218,6 +219,33 @@ export function Bench() {
     canvas.toBlob((blob) => blob && save(blob, stem + '-pechatnyy-list.png'), 'image/png')
   }
 
+  /**
+   * Снимок стенда картинкой.
+   *
+   * Стенд живёт в докере на одной машине, и показать его команде можно только
+   * позвав людей к экрану. Картинку кидают в мессенджер — значит мнение
+   * Виктории и редакторов появится сейчас, а не через два месяца, когда
+   * система будет готова их принять.
+   *
+   * Это НЕ печатный лист: тот плоский и идёт на фабрику, а здесь изделие со
+   * складками, тенью и цветом — как его увидит человек.
+   */
+  function downloadSnapshot() {
+    const canvas = viewCanvas.current
+    if (!canvas) return
+    const colour = colours.find((c) => c.code === colourCode)?.code_short ?? colourCode
+    canvas.toBlob((blob) => {
+      if (!blob) return
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      // Имя говорит, что на снимке: три снимка в мессенджере без подписей
+      // неразличимы, и обсуждение превращается в «а это какой из них».
+      a.download = `${PRODUCT}-${stateCode}-${colour}.png`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    }, 'image/png')
+  }
+
   function addLabel() {
     seq.current += 1
     const style = {
@@ -352,6 +380,7 @@ export function Bench() {
               onResize={(id, widthCm) => setComposition((c) => place(c, id, { widthCm }))}
               onRotate={(id, rotation) => setComposition((c) => place(c, id, { rotation }))}
               onCommit={() => commit()}
+              onCanvas={(el) => (viewCanvas.current = el)}
               images={images.current}
               key={imagesVersion}
             />
@@ -551,6 +580,16 @@ export function Bench() {
             <p style={S.dim}>
               лист собирается мимо смещения и света: складок в нём не бывает по
               устройству
+            </p>
+          </Group>
+
+          <Group title="Показать людям">
+            <button onClick={downloadSnapshot} style={S.btn}>
+              сохранить картинкой
+            </button>
+            <p style={S.dim}>
+              изделие как его увидит человек — со складками, тенью и цветом. Не
+              печатный лист: тот плоский и идёт на фабрику
             </p>
           </Group>
 

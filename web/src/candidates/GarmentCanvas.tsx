@@ -36,6 +36,9 @@ export interface CanvasProps {
   /** Загруженные картинки элементов. Кэш общий со страницей: лист печати
    *  собирается там, и вторая копия того же кэша не нужна. */
   readonly images: ReadonlyMap<string, HTMLImageElement>
+  /** Полотно отдаётся наружу, чтобы с него можно было снять картинку.
+   *  Снимок — то же, что видит человек, а не пересборка похожего. */
+  readonly onCanvas?: (canvas: HTMLCanvasElement | null) => void
   readonly onCommit?: () => void
   /** Сколько кадров в секунду выходит при перетаскивании. */
   readonly onFps?: (fps: number) => void
@@ -217,7 +220,12 @@ export function GarmentCanvas(props: CanvasProps) {
 
   return (
     <div style={box}>
-      <canvas ref={glCanvas} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+      <canvas
+        ref={(el) => {
+          glCanvas.current = el
+          props.onCanvas?.(el)
+        }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
       <svg
         ref={svg}
         viewBox={`0 0 ${state.frame.width} ${state.frame.height}`}
