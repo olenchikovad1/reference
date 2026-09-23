@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from reference_api.models.library import AssetEmbedding
 
 
-async def put(db: AsyncSession, digest: str, name: str, model: str, vector: list[float]) -> None:
+async def put(
+    db: AsyncSession, digest: str, name: str, model: str, vector: list[float], kind: str = "image"
+) -> None:
     """Кладёт вектор, если такого ещё нет.
 
     Пара «файл + модель» уникальна: пересчитывать один и тот же файл той же
@@ -14,17 +16,24 @@ async def put(db: AsyncSession, digest: str, name: str, model: str, vector: list
     """
     found = await db.execute(
         select(AssetEmbedding).where(
-            AssetEmbedding.digest == digest, AssetEmbedding.model == model
+            AssetEmbedding.digest == digest,
+            AssetEmbedding.model == model,
+            AssetEmbedding.kind == kind,
         )
     )
     if found.scalar_one_or_none() is not None:
         return
-    db.add(AssetEmbedding(digest=digest, name=name, model=model, vector=vector))
+    db.add(AssetEmbedding(digest=digest, name=name, model=model, kind=kind, vector=vector))
     await db.commit()
 
 
 async def nearest(
-    db: AsyncSession, model: str, vector: list[float], exclude: str, limit: int = 5
+    db: AsyncSession,
+    model: str,
+    vector: list[float],
+    exclude: str,
+    kind: str = "image",
+    limit: int = 5,
 ) -> list[tuple[str, str, float]]:
     """Ближайшие по косинусу, в пределах ОДНОЙ модели.
 
@@ -38,7 +47,11 @@ async def nearest(
             AssetEmbedding.name,
             (1 - AssetEmbedding.vector.cosine_distance(vector)).label("similarity"),
         )
-        .where(AssetEmbedding.model == model, AssetEmbedding.digest != exclude)
+        .where(
+            AssetEmbedding.model == model,
+            AssetEmbedding.kind == kind,
+            AssetEmbedding.digest != exclude,
+        )
         .order_by(AssetEmbedding.vector.cosine_distance(vector))
         .limit(limit)
     )

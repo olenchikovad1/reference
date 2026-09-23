@@ -63,3 +63,17 @@ export async function recogniseAssets(digests: string[]): Promise<Recognised[]> 
   if (!r.ok) throw new Error(`Узнавание: ${r.status}`)
   return (await r.json()) as Recognised[]
 }
+
+/** Имя файла по содержимому из адреса ступени. Пусто — адрес не наш. */
+export function digestOf(src: string): string {
+  const m = src.match(/assets\/([0-9a-f]{64})\//)
+  return m ? m[1] : ''
+}
+
+/** Кладёт уже готовый холст в хранилище и отдаёт его имя по содержимому. */
+export async function uploadCanvas(canvas: HTMLCanvasElement, name: string): Promise<string> {
+  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'))
+  if (!blob) throw new Error('Холст не отдал картинку')
+  const [asset] = await uploadAssets([new File([blob], name, { type: 'image/png' })])
+  return asset.digest
+}

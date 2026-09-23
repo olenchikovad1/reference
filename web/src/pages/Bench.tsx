@@ -24,7 +24,15 @@ import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
 import type { Match } from '../shared/api/assets'
-import { assetUrl, recogniseAssets, uploadAssets } from '../shared/api/assets'
+import {
+  assetUrl,
+  digestOf,
+  recogniseAssets,
+  uploadAssets,
+  uploadCanvas,
+} from '../shared/api/assets'
+import type { ReferenceMatch } from '../shared/api/references'
+import { saveReference } from '../shared/api/references'
 import { readDropped } from '../shared/dropped'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
@@ -63,6 +71,9 @@ export function Bench() {
   // Узнанное. Пусто — окна нет вовсе: окно «совпадений нет» превращает
   // подсказку в помеху, и его перестают читать вместе с полезными.
   const [seen, setSeen] = useState<Match[]>([])
+  // Узнанное при сохранении собранного принта. Отдельно от seen: там
+  // совпадают ФАЙЛЫ, здесь — собранные принты, и выводы разные.
+  const [seenCards, setSeenCards] = useState<ReferenceMatch[]>([])
   // Закрытые предупреждения: «так и задумано». Ключ — правило плюс элемент.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const viewCanvas = useRef<HTMLCanvasElement | null>(null)
@@ -185,6 +196,29 @@ export function Bench() {
     img.onload = () => setImagesVersion((v) => v + 1)
     img.src = src
     images.current.set(src, img)
+  }
+
+  /** Сохранить собранный принт и узнать, не собирали ли такой раньше.
+   *
+   * Лист кладётся в хранилище как обычная картинка: по нему считается вектор
+   * «такой принт уже был», а вторая копия рядом разошлась бы с первой.
+   */
+  async function saveCard() {
+    if (composition.elements.length === 0) return
+    const canvas = renderSheet(composition, images.current, 120)
+    const sheet = await uploadCanvas(canvas, `${PRODUCT}-${stateCode}-list.png`)
+    const found = await saveReference({
+      name: `${PRODUCT} · ${stateCode}`,
+      sheet_digest: sheet,
+      image_digests: composition.elements
+        .filter((el) => el.kind === 'image')
+        .map((el) => digestOf(el.src))
+        .filter(Boolean),
+      texts: composition.elements
+        .filter((el) => el.kind === 'text')
+        .map((el) => (el.kind === 'text' ? el.text : '')),
+    })
+    setSeenCards(found.matches)
   }
 
   /** Печатный лист: сборка из сантиметров, мимо шейдера, в печатном разрешении. */
@@ -441,7 +475,15 @@ export function Bench() {
             <p style={S.dim}>Перетащите сюда картинки — можно несколько разом.</p>
           )}
           {dropHint && <p style={S.warn}>{dropHint}</p>}
-          {seen.length > 0 && <Recognised matches={seen} onClose={() => setSeen([])} />}
+          {seen.length + seenCards.length > 0 && (
+            <Recognised
+              rows={[...cardRows(seenCards), ...fileRows(seen)]}
+              onClose={() => {
+                setSeen([])
+                setSeenCards([])
+              }}
+            />
+          )}
         </div>
 
         <aside style={S.panel}>
@@ -647,6 +689,9 @@ export function Bench() {
           </Group>
 
           <Group title="Правка">
+            <button onClick={() => void saveCard()} style={S.btn}>
+              сохранить принт
+            </button>
             <button
               onClick={() => {
                 forget()
@@ -911,46 +956,84 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 // Стили временные и нарочно скупые: визуальный язык приедет из @platform/tokens,
 // и заводить здесь свой набор цветов нельзя — он потом не выполется.
-const LEVELS: Record<Match['level'], string> = {
+const FILE_LEVELS: Record<Match['level'], string> = {
   file: 'Этот же файл уже загружали',
   same: 'Та же картинка, файл другой',
   close: 'Похожая картинка',
 }
 
+// По чему совпал собранный принт. Формулировки разные, потому что разные и
+// выводы: совпавший лист — готовый дубль, совпавший рисунок при других словах —
+// РАЗНАЯ работа, совпавшая надпись при другом рисунке — почти одна и та же.
+const BY: Record<ReferenceMatch['by'], string> = {
+  print: 'Такой принт уже собирали целиком',
+  picture: 'Тот же рисунок, слова другие',
+  slogan: 'Такая надпись уже была',
+}
+
+interface Row {
+  readonly key: string
+  readonly title: string
+  readonly detail: string
+  readonly thumb?: string
+}
+
+function fileRows(matches: Match[]): Row[] {
+  // Сильное совпадение вверху: точное раньше похожего.
+  const order: Match['level'][] = ['file', 'same', 'close']
+  return [...matches]
+    .sort((a, b) => order.indexOf(a.level) - order.indexOf(b.level))
+    .map((m) => ({
+      key: `f-${m.digest}-${m.level}`,
+      title: `${FILE_LEVELS[m.level]}: ${m.name}`,
+      detail:
+        m.level === 'file'
+          ? 'тот же файл — совпало содержимое'
+          : `совпадение ${(m.similarity * 100).toFixed(0)}%`,
+      thumb: m.digest,
+    }))
+}
+
+function cardDetail(m: ReferenceMatch): string {
+  if (m.by === 'print') return 'совпал печатный лист — это готовый дубль'
+  if (m.by === 'picture') return 'совпал рисунок, а слова другие — работа разная'
+  return m.level === 'same'
+    ? `надпись та же: «${m.text}»`
+    : `надпись близкая: «${m.text}», совпало ${(m.similarity * 100).toFixed(0)}%`
+}
+
+function cardRows(matches: ReferenceMatch[]): Row[] {
+  return matches.map((m, i) => ({
+    key: `c-${m.reference_id}-${m.by}-${i}`,
+    title: `${BY[m.by]}: ${m.name || 'без имени'}`,
+    detail: cardDetail(m),
+  }))
+}
+
 /** Окно узнавания. Показывается ТОЛЬКО когда есть что показать. */
-function Recognised({ matches, onClose }: { matches: Match[]; onClose: () => void }) {
-  // Два случая разведены, потому что разные и выводы: «та же» означает дубль и
-  // повод не делать второй раз, «похожая» — повод посмотреть, чем кончилось
-  // прошлое.
-  const file = matches.filter((m) => m.level === 'file')
-  const same = matches.filter((m) => m.level === 'same')
-  const close = matches.filter((m) => m.level === 'close')
+function Recognised({ rows, onClose }: { rows: Row[]; onClose: () => void }) {
   return (
     <div style={S.found}>
       <div style={S.foundHead}>
-        <strong>
-          {file.length + same.length > 0 ? 'Такое у нас уже было' : 'Похожее у нас уже было'}
-        </strong>
+        <strong>Такое у нас уже было</strong>
         <button onClick={onClose} style={S.btn}>
           закрыть
         </button>
       </div>
-      {[...file, ...same, ...close].map((m) => (
-        <div key={m.digest + m.level} style={S.foundRow}>
-          <img src={assetUrl(m.digest, 'thumb')} alt="" style={S.foundThumb} />
+      {rows.map((r) => (
+        <div key={r.key} style={S.foundRow}>
+          {r.thumb ? (
+            <img src={assetUrl(r.thumb, 'thumb')} alt="" style={S.foundThumb} />
+          ) : (
+            <div style={S.foundThumb} />
+          )}
           <div>
-            <div>
-              {LEVELS[m.level]}: <b>{m.name}</b>
-            </div>
-            <div style={S.dim}>
-              {m.level === 'file'
-                ? 'тот же файл — совпало содержимое'
-                : `совпадение ${(m.similarity * 100).toFixed(0)}%`}
-            </div>
+            <div>{r.title}</div>
+            <div style={S.dim}>{r.detail}</div>
             {/* Место под итог продаж оставлено честно пустым: продаж у нас
                 пока нет, и подставлять вместо них выдумку нельзя — по ней
                 начнут принимать решения. */}
-            <div style={S.dim}>чем кончилось: продаж по этой картинке ещё не собрано</div>
+            <div style={S.dim}>чем кончилось: продаж по этому ещё не собрано</div>
           </div>
         </div>
       ))}

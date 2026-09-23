@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from alembic import op
 import pgvector.sqlalchemy
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision: str = '398308130e89'
@@ -40,7 +41,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=512), nullable=False),
     sa.Column('sheet_digest', sa.String(length=64), nullable=False),
-    sa.Column('image_digests', sa.ARRAY(sa.String(length=64)), nullable=False),
+    sa.Column('image_digests', postgresql.ARRAY(sa.String(length=64)), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )

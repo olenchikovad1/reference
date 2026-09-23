@@ -10,7 +10,8 @@
 
 from datetime import datetime
 
-from sqlalchemy import ARRAY, DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from reference_api.models.base import Base
@@ -31,8 +32,9 @@ class Reference(Base):
     name: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     #: Печатный лист целиком — по нему считается вектор «такой принт уже был».
     sheet_digest: Mapped[str] = mapped_column(String(64), nullable=False)
-    #: Картинки, из которых собран. Массив, а не таблица: по ним не ищут, их
-    #: только показывают рядом с найденным.
+    #: Картинки, из которых собран. Массив postgresql, а не общий: пересечение
+    #: массивов (оператор &&) есть только у него, а поиск «карточки, где
+    #: встречается хоть одна из этих картинок» — это ровно пересечение.
     image_digests: Mapped[list[str]] = mapped_column(ARRAY(String(64)), default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
