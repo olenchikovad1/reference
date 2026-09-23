@@ -15,7 +15,10 @@ WORKDIR /app
 # Зависимости ставятся до копирования кода: правка модуля не должна пересобирать
 # слой с пакетами.
 COPY pyproject.toml ./
-RUN uv pip install --system --no-cache -r pyproject.toml
+# Инструменты прогона ставятся в тот же образ. Стенд целиком в докере, и второе,
+# локальное окружение ради pytest означало бы второй способ всё запускать.
+RUN uv pip install --system --no-cache -r pyproject.toml && \
+    uv pip install --system --no-cache pytest pytest-asyncio httpx
 
 COPY alembic.ini ./
 COPY alembic ./alembic

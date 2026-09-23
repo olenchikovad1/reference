@@ -83,10 +83,18 @@ services:
       # Файловое пространство: исходники изделий. Только чтение — сервис их
       # читает при подготовке состояний, но не переписывает (решение 0002).
       - "${FILES_HOST_PATH}:/srv/reference/files:ro"
+      # Описания изделий. Отдельным томом, а не в образе: их правят руками
+      # и перечитывают без пересборки — это данные, которые ведёт технолог.
+      - "./stand/fixtures:/srv/reference/fixtures:ro"
+      # Код и тесты подключены томом, а не запечены в образ: иначе цикл правки
+      # стоит пересборки, то есть трёх минут вместо секунды. Тесты в рабочий
+      # образ не едут вовсе — их там быть не должно.
+      - "../api/reference_api:/app/reference_api"
+      - "../api/tests:/app/tests"
     command: >
       /bin/sh -c "
       alembic upgrade head &&
-      uvicorn reference_api.app:app --host 0.0.0.0 --port 8000
+      uvicorn reference_api.app:app --host 0.0.0.0 --port 8000 --reload
       "
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/reference/api/health/live').status==200 else 1)\""]

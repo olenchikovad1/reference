@@ -1,5 +1,77 @@
-"""Изделия: типы, состояния (кадр, калибровка «см ↔ пиксели», маски зон),
-печатные поля по размерам, размерные сетки.
+"""Изделия: что отдаётся наружу.
 
-Слой: schemas. Что принимается снаружи и что отдаётся наружу.
+Схемы описывают ровно то, что нужно странице, и ни полем больше: ответ читает
+браузер, и лишнее поле — это и лишний байт, и лишнее обещание.
 """
+
+from pydantic import BaseModel, Field
+
+
+class Calibration(BaseModel):
+    """Перевод сантиметров лекала в пиксели кадра."""
+
+    px_per_cm: float
+    # Пометка обязательна и не имеет умолчания `False`: число без неё
+    # неотличимо от измеренного, а разница между 98-м и 164-м размером больше
+    # половины. Принять прикидку за факт — значит отправить на фабрику печать
+    # в полтора раза не того размера.
+    provisional: bool
+    projection: str
+    derived_from: str | None = None
+    range_if_size_unknown: list[float] | None = None
+    note: str | None = None
+
+
+class Frame(BaseModel):
+    """Кадр состояния: где лежит и какого он размера."""
+
+    width: int
+    height: int
+    sha256: str
+
+
+class State(BaseModel):
+    """Изделие в одном положении."""
+
+    code: str
+    display_name: str
+    # precise — по нему считают размещение и проверки; illustrative — только показ.
+    kind: str
+    hood: str | None = None
+    zipper: str | None = None
+    frame: Frame
+    maps: dict[str, str | None] = Field(default_factory=dict)
+    silhouette: dict[str, int] = Field(default_factory=dict)
+    anchors: dict[str, list[int]] = Field(default_factory=dict)
+    zones: dict[str, list[list[int]]] = Field(default_factory=dict)
+    lines: dict[str, list[list[int]]] = Field(default_factory=dict)
+    defects: list[str] = Field(default_factory=list)
+
+
+class SizeSet(BaseModel):
+    name: str
+    sizes: list[int]
+    simulated: list[int]
+
+
+class PrintFields(BaseModel):
+    """Ограничение: куда физически можно печатать. Не путать с градацией."""
+
+    provisional: bool
+    unit: str
+    by_size: dict[int, dict[str, list[float]]]
+
+
+class Product(BaseModel):
+    code: str
+    display_name: str
+    kind: str
+    size_set: SizeSet
+    # Какой размер отрендерен — из кадра не определить. Пусто означает «не
+    # знаем», и это честнее, чем подставить допущение молча.
+    rendered_size: int | None = None
+    rendered_size_assumed: int | None = None
+    calibration: Calibration
+    states: list[State]
+    states_absent: list[str] = Field(default_factory=list)
+    print_fields: PrintFields | None = None

@@ -14,10 +14,13 @@ dependencies = [
     "aio-pika",
     "boto3",
     "pgvector",
+    # Описание изделия правит человек, а не программа: YAML читается глазами и
+    # терпит комментарии, в которых половина смысла фикстуры.
+    "pyyaml",
 ]
 
 [dependency-groups]
-dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
+dev = ["pytest", "pytest-asyncio", "httpx", "ruff", "mypy"]
 
 [build-system]
 requires = ["hatchling"]

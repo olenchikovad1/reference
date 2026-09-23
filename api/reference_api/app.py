@@ -6,7 +6,7 @@
 
 from fastapi import APIRouter, FastAPI
 
-from reference_api.api import health
+from reference_api.api import health, products
 from reference_api.config import settings
 
 
@@ -21,6 +21,7 @@ def create_app() -> FastAPI:
 
     root = APIRouter(prefix=cfg.base_path)
     root.include_router(health.router)
+    root.include_router(products.router)
     app.include_router(root)
     return app
 
