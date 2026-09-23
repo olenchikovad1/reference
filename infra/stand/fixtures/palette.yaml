@@ -18,7 +18,10 @@ colors:
   - {group: БЕЛЫЙ,         code: WHITE,          code_short: WHITE,    name: WHITE,                          rgb: [255, 255, 255]}
   - {group: СРЕДНИЙ СЕРЫЙ, code: 16-0518 TPG,    code_short: 16-0518,  name: 16-0518 TPG Gray Green,         rgb: [162, 157, 125]}
   - {group: КРАСНЫЙ,       code: RED,            code_short: RED,      name: RED,                            rgb: [225, 29, 33]}
-  - {group: ОРАНЖЕВЫЙ,     code: 15-1062 OTHRS,  code_short: 15-1062,  name: 15-1062 OTHRS Gold Fusion,      rgb: [255, 177, 0]}
+  # Не самый насыщенный в своей группе, а самый далёкий от соседей: отбор
+  # «самый насыщенный» дал оранжевый (255,177,0), неотличимый от жёлтого
+  # (245,203,0). Поймано тестом на контрастность набора.
+  - {group: ОРАНЖЕВЫЙ,     code: 16-1453 TPG,    code_short: 16-1453,  name: 16-1453 TPG Exotic Orange,      rgb: [252, 110, 69]}
   - {group: ЖЕЛТЫЙ,        code: 13-0751 TPG,    code_short: 13-0751,  name: 13-0751 TPG High Visibility,    rgb: [245, 203, 0]}
   - {group: ЗЕЛЕНЫЙ,       code: 15-5534 TPG,    code_short: 15-5534,  name: 15-5534 TPG Bright Green,       rgb: [0, 164, 102]}
   - {group: БИРЮЗОВЫЙ,     code: 17-4530 TPG,    code_short: 17-4530,  name: 17-4530 TPG Barrier Reef,       rgb: [0, 136, 165]}

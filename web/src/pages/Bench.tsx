@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
 import { DEFAULT_PARAMS, type RenderParams } from '../candidates/renderer'
+import { fetchPalette, toCss, toUnit, type Colour } from '../shared/api/colours'
 import { fetchProduct, frameUrl, type Product } from '../shared/api/products'
 import {
   EMPTY,
@@ -35,10 +36,15 @@ export function Bench() {
   const [params, setParams] = useState<RenderParams>(DEFAULT_PARAMS)
   const [renderScale, setRenderScale] = useState(2)
   const [fps, setFps] = useState<number | null>(null)
+  const [colours, setColours] = useState<Colour[]>([])
+  const [colourCode, setColourCode] = useState('WHITE')
   const seq = useRef(0)
 
   useEffect(() => {
     fetchProduct(PRODUCT).then(setProduct).catch((e: Error) => setError(e.message))
+    fetchPalette()
+      .then((p) => setColours(p.colors))
+      .catch(() => undefined)
   }, [])
 
   const state = product?.states.find((s) => s.code === stateCode) ?? product?.states[0] ?? null
@@ -173,6 +179,48 @@ export function Bench() {
                 {s.kind === 'illustrative' && <em style={S.tag}> только показ</em>}
               </button>
             ))}
+          </Group>
+
+          <Group title="Цвет изделия">
+            <div style={S.swatches}>
+              {colours.map((c) => (
+                <button
+                  key={c.code}
+                  title={`${c.name} · ${c.code}`}
+                  onClick={() => {
+                    setColourCode(c.code)
+                    setParams((p) => ({ ...p, base: toUnit(c) }))
+                  }}
+                  style={{
+                    ...S.swatch,
+                    background: toCss(c),
+                    outline: c.code === colourCode ? '2px solid #111' : '1px solid #d1d5db',
+                  }}
+                />
+              ))}
+            </div>
+            <p style={S.dim}>
+              {colours.find((c) => c.code === colourCode)?.name ?? '—'}
+              {' · на фабрику уходит код, а не оттенок с экрана'}
+            </p>
+            <Slider
+              label="гамма базы"
+              value={params.baseGamma}
+              min={0.3}
+              max={1.5}
+              step={0.05}
+              digits={2}
+              onChange={(v) => setParams((p) => ({ ...p, baseGamma: v }))}
+            />
+            <Slider
+              label="блики"
+              value={params.specAmount}
+              min={0}
+              max={1}
+              step={0.05}
+              digits={2}
+              onChange={(v) => setParams((p) => ({ ...p, specAmount: v }))}
+            />
           </Group>
 
           <Group title="Эффекты">
@@ -319,6 +367,10 @@ function download(params: RenderParams) {
 async function upload(file: File): Promise<RenderParams> {
   const raw = JSON.parse(await file.text()) as Partial<RenderParams>
   return {
+    base: raw.base ?? DEFAULT_PARAMS.base,
+    baseGamma: Number(raw.baseGamma ?? DEFAULT_PARAMS.baseGamma),
+    specCut: Number(raw.specCut ?? DEFAULT_PARAMS.specCut),
+    specAmount: Number(raw.specAmount ?? DEFAULT_PARAMS.specAmount),
     displace: Number(raw.displace ?? DEFAULT_PARAMS.displace),
     shade: Number(raw.shade ?? DEFAULT_PARAMS.shade),
     shadeGamma: Number(raw.shadeGamma ?? DEFAULT_PARAMS.shadeGamma),
@@ -417,6 +469,8 @@ const S: Record<string, React.CSSProperties> = {
   btn: { padding: '5px 10px', border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, cursor: 'pointer' },
   btnOn: { padding: '5px 10px', border: '1px solid #111', background: '#111', color: '#fff', borderRadius: 6, cursor: 'pointer' },
   tag: { color: '#9ca3af', fontStyle: 'normal', fontSize: 11 },
+  swatches: { display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 },
+  swatch: { width: 26, height: 26, borderRadius: 5, border: 'none', cursor: 'pointer', padding: 0 },
   slider: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 2 },
   sliderValue: { fontSize: 11, color: '#6b7280', width: 38, textAlign: 'right' },
   num: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 4 },

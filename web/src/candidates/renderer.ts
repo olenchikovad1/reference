@@ -35,9 +35,26 @@ uniform float uShade;         // сила затенения принта
 uniform float uShadeGamma;    // гамма затенения
 uniform float uWhite;         // опорный белый изделия, 0..1
 uniform float uEffects;       // 1 — с эффектами, 0 — плоско
+uniform vec3  uBase;          // цвет изделия
+uniform float uBaseGamma;     // гамма перекраски
+uniform float uSpecCut;       // порог, выше которого начинаются блики
+uniform float uSpecAmount;    // сила бликов
 
 void main() {
   vec4 garment = texture(uGarment, vUv);
+
+  // Перекраска. Чистое умножение на цвет здесь не годится: опорный белый кадра
+  // 245, глубокая тень 56, и на чёрном (#1a1a1a) остался бы диапазон 26…6 —
+  // плоское пятно вместо изделия. А чёрный самый ходовой цвет, и опозорилось бы
+  // это на первом же показе.
+  //
+  // Поэтому гамма поднимает средние тона, а блики возвращают объём: то, что
+  // ярче порога, добавляется поверх цвета, а не умножается на него.
+  float l = clamp(garment.r / max(uWhite, 0.001), 0.0, 1.0);
+  vec3 tinted = uBase * pow(l, uBaseGamma);
+  float spec = max(0.0, l - uSpecCut) / max(1e-3, 1.0 - uSpecCut);
+  tinted += vec3(spec * spec * uSpecAmount);
+  garment.rgb = clamp(tinted, 0.0, 1.0);
 
   // Градиент размытой яркости. Складка — это и есть перепад яркости, поэтому
   // её же градиент и тянет рисунок: физически неверно, на ткани убедительно.
@@ -62,6 +79,11 @@ void main() {
 }`
 
 export interface RenderParams {
+  /** Цвет изделия, 0..1 по каналу. */
+  base: [number, number, number]
+  baseGamma: number
+  specCut: number
+  specAmount: number
   displace: number
   shade: number
   shadeGamma: number
@@ -76,6 +98,12 @@ export const DEFAULT_PARAMS: RenderParams = {
   // складок до 0.03. Чтобы сдвиг был виден глазом (десяток пикселей на кадре
   // в 1440), множитель обязан быть порядка единицы, а не сотых. Первая версия
   // с 0.012 давала сдвиг в полпикселя — эффект был, но увидеть его было нельзя.
+  base: [1, 1, 1],
+  // Гамма ниже единицы поднимает средние тона: без неё тёмная база
+  // теряет складки, а с ними и всякое правдоподобие.
+  baseGamma: 0.8,
+  specCut: 0.88,
+  specAmount: 0.35,
   displace: 0.25,
   shade: 0.85,
   shadeGamma: 1.0,
@@ -144,6 +172,10 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       gl.uniform1f(u('uShadeGamma'), params.shadeGamma)
       gl.uniform1f(u('uWhite'), white)
       gl.uniform1f(u('uEffects'), params.effects ? 1 : 0)
+      gl.uniform3f(u('uBase'), params.base[0], params.base[1], params.base[2])
+      gl.uniform1f(u('uBaseGamma'), params.baseGamma)
+      gl.uniform1f(u('uSpecCut'), params.specCut)
+      gl.uniform1f(u('uSpecAmount'), params.specAmount)
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
