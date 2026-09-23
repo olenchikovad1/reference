@@ -24,6 +24,7 @@ import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
 import { readDropped } from '../shared/dropped'
+import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
 import { useHistoryState } from '../shared/useHistory'
 
 // Стенд нанесения. Кадр изделия, на него бросают картинки, их двигают и мерят
@@ -51,6 +52,9 @@ export function Bench() {
   const [colourCode, setColourCode] = useState('WHITE')
   const [fontsReady, setFontsReady] = useState(false)
   const [prints, setPrints] = useState<PrintItem[]>([])
+  // Кэш картинок один на страницу: им пользуются и холст, и печатный лист.
+  const images = useRef(new Map<string, HTMLImageElement>())
+  const [imagesVersion, setImagesVersion] = useState(0)
   const measurer = useRef<CanvasRenderingContext2D | null>(null)
   const seq = useRef(0)
 
@@ -104,6 +108,7 @@ export function Bench() {
     const img = new Image()
     img.onload = () => {
       seq.current += 1
+      cacheImage(img.src)
       commit((c) =>
         add(c, {
           id: `el-${seq.current}`,
@@ -127,6 +132,72 @@ export function Bench() {
       )
     }
     img.src = printUrl(item.path)
+  }
+
+  /** Кладёт картинку в общий кэш и будит тех, кто её ждёт. */
+  function cacheImage(src: string) {
+    if (images.current.has(src)) return
+    const img = new Image()
+    img.onload = () => setImagesVersion((v) => v + 1)
+    img.src = src
+    images.current.set(src, img)
+  }
+
+  /** Печатный лист: сборка из сантиметров, мимо шейдера, в печатном разрешении. */
+  function downloadSheet() {
+    if (composition.elements.length === 0) return
+    // 120 пикселей на сантиметр — около 300 точек на дюйм, обычное печатное
+    // разрешение. Число названо здесь, а не спрятано: оно уйдёт на фабрику.
+    const spec = describeSheet(composition)
+    const canvas = renderSheet(composition, images.current, 120)
+
+    // Пометка о предварительной калибровке НЕ впечатывается в лист: его
+    // напечатают вместе с ней. Она уходит в имя файла и в сопроводительную
+    // спецификацию — от файла они не отвяжутся, а на ткань не попадут.
+    const mark = cal.provisional ? '-PREDVARITELNO' : ''
+    const stem = PRODUCT + '-' + stateCode + mark
+
+    const save = (blob: Blob, name: string) => {
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = name
+      a.click()
+      URL.revokeObjectURL(a.href)
+    }
+
+    const lines = [
+      'Изделие: ' + PRODUCT + ', состояние: ' + stateCode,
+      'Габарит печати: ' + spec.widthCm.toFixed(1) + ' x ' + spec.heightCm.toFixed(1) + ' см',
+      'Разрешение файла: 120 px/см (около 300 dpi)',
+      cal.provisional
+        ? 'ВНИМАНИЕ: калибровка изделия предварительная (' +
+          cal.px_per_cm +
+          ' px/см, ' +
+          (cal.derived_from ?? '') +
+          '). Размеры ниже уточнятся после измерения.'
+        : 'Калибровка изделия измерена.',
+      '',
+      ...spec.items.map(
+        (i) =>
+          '- ' +
+          i.name +
+          ': ' +
+          i.widthCm.toFixed(1) +
+          ' x ' +
+          i.heightCm.toFixed(1) +
+          ' см, от ориентира ' +
+          i.anchor +
+          ': вниз ' +
+          i.dyCm.toFixed(1) +
+          ' см, вбок ' +
+          i.dxCm.toFixed(1) +
+          ' см, поворот ' +
+          i.rotation +
+          ' град',
+      ),
+    ]
+    save(new Blob([lines.join(String.fromCharCode(10))], { type: 'text/plain' }), stem + '-specifikaciya.txt')
+    canvas.toBlob((blob) => blob && save(blob, stem + '-pechatnyy-list.png'), 'image/png')
   }
 
   function addLabel() {
@@ -190,6 +261,7 @@ export function Bench() {
       const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'))
       if (files.length === 0) return
       const read = await Promise.all(files.map(readDropped))
+      read.forEach((d) => cacheImage(d.src))
       const opaque = read.filter((d) => !d.hasAlpha)
       setDropHint(
         opaque.length === 0
@@ -262,6 +334,8 @@ export function Bench() {
               onResize={(id, widthCm) => setComposition((c) => place(c, id, { widthCm }))}
               onRotate={(id, rotation) => setComposition((c) => place(c, id, { rotation }))}
               onCommit={() => commit()}
+              images={images.current}
+              key={imagesVersion}
             />
           </div>
           {composition.elements.length === 0 && (
@@ -402,6 +476,24 @@ export function Bench() {
                 {{ all: 'всё', anchors: 'ориентиры', zones: 'зоны', none: 'ничего' }[o]}
               </button>
             ))}
+          </Group>
+
+          <Group title="На фабрику">
+            <button onClick={downloadSheet} disabled={composition.elements.length === 0} style={S.btn}>
+              выгрузить печатный лист
+            </button>
+            {composition.elements.length > 0 && (
+              <p style={S.dim}>
+                {describeSheet(composition).widthCm.toFixed(1)} ×{' '}
+                {describeSheet(composition).heightCm.toFixed(1)} см, элементов{' '}
+                {describeSheet(composition).items.length}
+                {cal.provisional && ' · калибровка предварительная, числа уточнятся'}
+              </p>
+            )}
+            <p style={S.dim}>
+              лист собирается мимо смещения и света: складок в нём не бывает по
+              устройству
+            </p>
           </Group>
 
           <Group title="Правка">

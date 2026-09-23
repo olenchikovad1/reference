@@ -33,6 +33,9 @@ export interface CanvasProps {
   readonly onRotate: (id: string, degrees: number) => void
   /** Действие руками закончилось: тянуть перестали. Отсюда берётся шаг
    *  истории — одно движение мышкой отменяется одним нажатием. */
+  /** Загруженные картинки элементов. Кэш общий со страницей: лист печати
+   *  собирается там, и вторая копия того же кэша не нужна. */
+  readonly images: ReadonlyMap<string, HTMLImageElement>
   readonly onCommit?: () => void
   /** Сколько кадров в секунду выходит при перетаскивании. */
   readonly onFps?: (fps: number) => void
@@ -50,7 +53,6 @@ export function GarmentCanvas(props: CanvasProps) {
   const renderer = useRef<Renderer | null>(null)
   const printCanvas = useRef<HTMLCanvasElement | null>(null)
   const occluderCanvas = useRef<HTMLCanvasElement | null>(null)
-  const images = useRef(new Map<string, HTMLImageElement>())
   const drag = useRef<Drag | null>(null)
   // Скользящее окно последних отрисовок. Счёт за фиксированный промежуток врёт:
   // при редких перерисовках он делит одну отрисовку на секунды простоя и
@@ -127,7 +129,7 @@ export function GarmentCanvas(props: CanvasProps) {
         // в этом вся история — правка буквы не идёт через дизайнера.
         drawText(ctx, el, w)
       } else {
-        const img = images.current.get(el.src)
+        const img = props.images.get(el.src)
         if (img?.complete) ctx.drawImage(img, -w / 2, -h / 2, w, h)
       }
       ctx.restore()
@@ -165,25 +167,10 @@ export function GarmentCanvas(props: CanvasProps) {
     }
   }
 
-  // Картинки элементов подгружаются один раз и живут в кэше: без него каждый
-  // кадр перетаскивания заново декодировал бы принт.
   useEffect(() => {
-    let pending = 0
-    for (const el of composition.elements) {
-      if (el.kind !== 'image') continue
-      if (images.current.has(el.src)) continue
-      const img = new Image()
-      pending += 1
-      img.onload = () => {
-        pending -= 1
-        if (pending === 0) drawAll()
-      }
-      img.src = el.src
-      images.current.set(el.src, img)
-    }
     drawAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composition, props.params, renderScale, calibration])
+  }, [composition, props.params, renderScale, calibration, props.images])
 
   function toFrame(e: { clientX: number; clientY: number }): [number, number] {
     const el = svg.current
