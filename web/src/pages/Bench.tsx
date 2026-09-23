@@ -284,6 +284,13 @@ export function Bench() {
             >
               {params.effects ? 'с эффектами' : 'без эффектов'}
             </button>
+            <button
+              onClick={() => setParams((p) => ({ ...p, through: !p.through }))}
+              style={params.through ? S.btnOn : S.btn}
+              title="Показать то, что скрыто капюшоном. По умолчанию выключено: картинка не должна врать в состоянии, в котором её открыли"
+            >
+              {params.through ? 'перекрытое насквозь' : 'перекрытое скрыто'}
+            </button>
             <Slider
               label="смещение"
               value={params.displace}
@@ -491,6 +498,7 @@ async function upload(file: File): Promise<RenderParams> {
     baseGamma: Number(raw.baseGamma ?? DEFAULT_PARAMS.baseGamma),
     specCut: Number(raw.specCut ?? DEFAULT_PARAMS.specCut),
     specAmount: Number(raw.specAmount ?? DEFAULT_PARAMS.specAmount),
+    through: raw.through ?? DEFAULT_PARAMS.through,
     displace: Number(raw.displace ?? DEFAULT_PARAMS.displace),
     shade: Number(raw.shade ?? DEFAULT_PARAMS.shade),
     shadeGamma: Number(raw.shadeGamma ?? DEFAULT_PARAMS.shadeGamma),

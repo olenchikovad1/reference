@@ -6,6 +6,7 @@ import { heightCm } from '../shared/composition'
 import type { Calibration } from '../shared/geometry'
 import { cmToPx } from '../shared/geometry'
 import { buildLuminance } from '../shared/luminance'
+import { rasterise } from '../shared/mask'
 import { drawText } from '../shared/text'
 import { createRenderer, type RenderParams, type Renderer } from './renderer'
 
@@ -45,6 +46,7 @@ export function GarmentCanvas(props: CanvasProps) {
   const svg = useRef<SVGSVGElement>(null)
   const renderer = useRef<Renderer | null>(null)
   const printCanvas = useRef<HTMLCanvasElement | null>(null)
+  const occluderCanvas = useRef<HTMLCanvasElement | null>(null)
   const images = useRef(new Map<string, HTMLImageElement>())
   const drag = useRef<Drag | null>(null)
   // Скользящее окно последних отрисовок. Счёт за фиксированный промежуток врёт:
@@ -57,6 +59,7 @@ export function GarmentCanvas(props: CanvasProps) {
   const H = Math.round(state.frame.height * renderScale)
 
   if (!printCanvas.current) printCanvas.current = document.createElement('canvas')
+  if (!occluderCanvas.current) occluderCanvas.current = document.createElement('canvas')
 
   // Изделие: грузится и разбирается ОДИН раз на кадр. Оно не меняется, пока
   // двигают принт, и в этом вся скорость — при перетаскивании пересчитывается
@@ -82,6 +85,10 @@ export function GarmentCanvas(props: CanvasProps) {
       const data = ctx.getImageData(0, 0, probe.width, probe.height).data
       const map = buildLuminance(data, probe.width, probe.height, 6)
       r.setGarment(img, map.blurred, map.raw, map.width, map.height, map.white)
+      // Маска перекрытия считается один раз на состояние: зона не меняется,
+      // пока не сменили кадр.
+      const hood = state.zones.hood ?? []
+      r.setOccluder(rasterise(hood, probe.width, probe.height, occluderCanvas.current ?? undefined))
       drawAll()
     }
     img.src = frameSrc
@@ -89,7 +96,7 @@ export function GarmentCanvas(props: CanvasProps) {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frameSrc])
+  }, [frameSrc, state.zones])
 
   /** Композиция принта в отдельный холст, потом текстурой в шейдер. */
   function drawPrint() {

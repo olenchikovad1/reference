@@ -28,6 +28,7 @@ uniform sampler2D uGarment;   // кадр изделия, RGBA
 uniform sampler2D uPrint;     // композиция принта, RGBA
 uniform sampler2D uBlur;      // размытая яркость: её градиент двигает принт
 uniform sampler2D uLum;       // яркость как есть: ею затеняется принт
+uniform sampler2D uOccluder;  // что лежит ПОВЕРХ принта: капюшон
 
 uniform vec2  uTexel;         // размер пикселя карты, для градиента
 uniform float uDisplace;      // сила смещения
@@ -39,6 +40,7 @@ uniform vec3  uBase;          // цвет изделия
 uniform float uBaseGamma;     // гамма перекраски
 uniform float uSpecCut;       // порог, выше которого начинаются блики
 uniform float uSpecAmount;    // сила бликов
+uniform float uThrough;       // 1 — показывать перекрытое насквозь
 
 void main() {
   vec4 garment = texture(uGarment, vUv);
@@ -73,8 +75,18 @@ void main() {
   float shade = pow(clamp(lum / max(uWhite, 0.001), 0.0, 1.0), uShadeGamma);
   print.rgb *= mix(1.0, shade, uShade * uEffects);
 
+  // Перекрытие. Капюшон лежит ПОВЕРХ верха спины, и принт, нарисованный
+  // сверху, показывает то, чего не бывает. Врать здесь дороже всего: «а
+  // капюшон это не закроет?» — тот самый вопрос, ради которого всё затевается.
+  //
+  // Насквозь показывать можно, но по явному выбору смотрящего: в работе
+  // полезно знать, что там нарисовано, а по умолчанию картинка обязана
+  // соответствовать жизни.
+  float occluded = texture(uOccluder, vUv).r;
+  float hidden = occluded * (1.0 - uThrough);
+
   // Принт живёт только на изделии: за силуэтом его нет.
-  float a = print.a * step(0.5, garment.a);
+  float a = print.a * step(0.5, garment.a) * (1.0 - hidden) * mix(1.0, 0.45, occluded * uThrough);
   outColor = vec4(mix(garment.rgb, print.rgb, a), garment.a);
 }`
 
@@ -84,6 +96,8 @@ export interface RenderParams {
   baseGamma: number
   specCut: number
   specAmount: number
+  /** Показывать ли перекрытое капюшоном насквозь. */
+  through: boolean
   displace: number
   shade: number
   shadeGamma: number
@@ -104,6 +118,7 @@ export const DEFAULT_PARAMS: RenderParams = {
   baseGamma: 0.8,
   specCut: 0.88,
   specAmount: 0.35,
+  through: false,
   displace: 0.25,
   shade: 0.85,
   shadeGamma: 1.0,
@@ -113,6 +128,8 @@ export const DEFAULT_PARAMS: RenderParams = {
 export interface Renderer {
   setGarment(image: TexImageSource, blur: Uint8ClampedArray, lum: Uint8ClampedArray, w: number, h: number, white: number): void
   setPrint(source: TexImageSource): void
+  /** Что лежит поверх принта на этом состоянии. */
+  setOccluder(source: TexImageSource): void
   setParams(p: RenderParams): void
   draw(): void
   dispose(): void
@@ -136,6 +153,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   const tex = {
     garment: makeTexture(gl),
     print: makeTexture(gl),
+    occluder: makeTexture(gl),
     blur: makeTexture(gl),
     lum: makeTexture(gl),
   }
@@ -148,6 +166,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   bindUnit(gl, program, 'uPrint', 1)
   bindUnit(gl, program, 'uBlur', 2)
   bindUnit(gl, program, 'uLum', 3)
+  bindUnit(gl, program, 'uOccluder', 4)
 
   return {
     setGarment(image, blur, lum, w, h, whitePoint) {
@@ -159,6 +178,9 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     },
     setPrint(source) {
       upload(gl, tex.print, 1, source)
+    },
+    setOccluder(source) {
+      upload(gl, tex.occluder, 4, source)
     },
     setParams(p) {
       params = p
@@ -176,6 +198,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       gl.uniform1f(u('uBaseGamma'), params.baseGamma)
       gl.uniform1f(u('uSpecCut'), params.specCut)
       gl.uniform1f(u('uSpecAmount'), params.specAmount)
+      gl.uniform1f(u('uThrough'), params.through ? 1 : 0)
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
