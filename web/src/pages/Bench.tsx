@@ -23,7 +23,9 @@ import {
 import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
+import { assetUrl, uploadAssets } from '../shared/api/assets'
 import { readDropped } from '../shared/dropped'
+import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
 import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
 import { useHistoryState } from '../shared/useHistory'
@@ -56,6 +58,7 @@ export function Bench() {
   // Кэш картинок один на страницу: им пользуются и холст, и печатный лист.
   const images = useRef(new Map<string, HTMLImageElement>())
   const [imagesVersion, setImagesVersion] = useState(0)
+  const [restored, setRestored] = useState(false)
   // Закрытые предупреждения: «так и задумано». Ключ — правило плюс элемент.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const viewCanvas = useRef<HTMLCanvasElement | null>(null)
@@ -73,6 +76,16 @@ export function Bench() {
     // Браузер грузит шрифт лениво — до первого применения. Без явного ожидания
     // первая отрисовка надписи уходит в запасной шрифт, то есть показывает не
     // то, что уйдёт в печать, и заметить это трудно: буквы-то на месте.
+    const was = load()
+    if (was) {
+      setStateCode(was.stateCode)
+      setColourCode(was.colourCode)
+      for (const el of was.composition.elements) {
+        if (el.kind === 'image') cacheImage(el.src)
+      }
+      commit(was.composition)
+      setRestored(true)
+    }
     void Promise.all(FONTS.map((f) => document.fonts.load(`600 100px "${f.family}"`)))
       .then(() => setFontsReady(true))
       .catch(() => setFontsReady(true))
@@ -84,6 +97,14 @@ export function Bench() {
     [product],
   )
   const selected = find(composition, composition.selectedId)
+
+  // Сохраняем то, что закреплено. Живое перетаскивание не пишем: писать
+  // десятки раз в секунду незачем, а отличить закреплённое от живого умеет
+  // только тот, кто менял.
+  useEffect(() => {
+    if (composition.elements.length === 0) return
+    save({ version: 1, stateCode, colourCode, composition })
+  }, [composition, stateCode, colourCode])
   // Пороги приходят из описания изделия, а не из кода.
   const rules = product?.print_rules
   const findings = check(
@@ -307,7 +328,18 @@ export function Bench() {
       const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'))
       if (files.length === 0) return
       const read = await Promise.all(files.map(readDropped))
-      read.forEach((d) => cacheImage(d.src))
+      // Файлы уходят в хранилище: ссылка на ступень переживает перезагрузку,
+      // а ссылка на blob — нет.
+      let sources = read.map((d) => d.src)
+      try {
+        const stored = await uploadAssets(files)
+        sources = stored.map((a) => assetUrl(a.digest, 'preview'))
+      } catch {
+        // Хранилище не ответило — работаем с тем, что в браузере. Потерять
+        // возможность приложить картинку хуже, чем потерять её сохранение.
+        setDropHint('Файлы не сохранились: хранилище не ответило. Работа продолжается, но перезагрузка их потеряет.')
+      }
+      sources.forEach((s) => cacheImage(s))
       const opaque = read.filter((d) => !d.hasAlpha)
       setDropHint(
         opaque.length === 0
@@ -323,7 +355,7 @@ export function Bench() {
             id: `el-${seq.current}`,
             kind: 'image',
             name: d.name,
-            src: d.src,
+            src: sources[i],
             aspect: d.aspect,
             hasAlpha: d.hasAlpha,
             placement: {
@@ -355,6 +387,7 @@ export function Bench() {
         <span style={S.code}>{product.code}</span>
         <span style={S.dim}>
           {cal.px_per_cm} px/см{cal.provisional && ' · предварительно'}
+          {restored && ' · восстановлено с прошлого раза'}
         </span>
       </header>
 
@@ -594,6 +627,16 @@ export function Bench() {
           </Group>
 
           <Group title="Правка">
+            <button
+              onClick={() => {
+                forget()
+                commit(EMPTY)
+                setRestored(false)
+              }}
+              style={S.btn}
+            >
+              очистить
+            </button>
             <button onClick={history.undo} disabled={!history.canUndo} style={S.btn}>
               отменить
             </button>
