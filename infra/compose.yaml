@@ -112,6 +112,14 @@ services:
     depends_on:
       api: {condition: service_healthy}
     ports: ["${WEB_PORT}:5173"]
+    volumes:
+      # То же, что у сервиса: правка исходника не должна стоить пересборки.
+      # node_modules остаются контейнерными — на хосте их нет и быть не должно.
+      - "../web/src:/app/src"
+      - "../web/vitest.config.ts:/app/vitest.config.ts"
+      - "../web/tsconfig.json:/app/tsconfig.json"
+      - "../web/vite.config.ts:/app/vite.config.ts"
+      - "../web/index.html:/app/index.html"
     # Реестр платформы слушает на 127.0.0.1 хозяйской машины, а не в нашей сети.
     extra_hosts: ["host.docker.internal:host-gateway"]
 
