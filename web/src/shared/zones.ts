@@ -10,6 +10,7 @@ import { heightCm } from './composition'
 import type { Finding } from './checks'
 import { type Calibration, cmToPx } from './geometry'
 import { coverage, type Point, type Polygon } from './mask'
+import { anchorOnSurface, toSurface, type Panel, type Torso } from './torso'
 
 export interface FrameState {
   readonly code: string
@@ -25,6 +26,21 @@ const LINE_NAMES: Record<string, string> = {
   seam: 'шов',
   shoulder_seam: 'плечевой шов',
   side_seam: 'боковой шов',
+}
+
+/**
+ * Всё, что нужно, чтобы считать по ткани, а не по кадру.
+ *
+ * По кадру принт у края торса больше, чем по ткани: ткань там уходит от
+ * камеры. Зона нарисована на кадре, поэтому её вершины переводятся на ткань;
+ * поле размера приходит от технолога в сантиметрах ткани и строится сразу там.
+ */
+export interface SurfaceContext {
+  readonly torso: Torso
+  /** Ориентиры стороны на её собственном кадре. */
+  readonly anchors: Readonly<Record<string, [number, number]>>
+  /** Поле размера [ширина, высота], см ткани. Есть — заменяет зону печати. */
+  readonly fieldCm?: readonly number[] | null
 }
 
 interface Rect {
@@ -54,6 +70,83 @@ function rectOf(el: PrintElement, state: FrameState, cal: Calibration): Rect {
   const width = w * cos + h * sin
   const height = w * sin + h * cos
   return { x: cx - width / 2, y: cy - height / 2, width, height }
+}
+
+/** Габарит элемента на ТКАНИ: по горизонтали длина дуги, по вертикали высота
+ *  вниз от верха. Ось вниз — как у кадра, чтобы прямоугольник был тем же. */
+function rectOnSurface(el: PrintElement, panel: Panel, ctx: SurfaceContext): Rect {
+  const a = anchorOnSurface(ctx.torso, panel, ctx.anchors[el.placement.anchor] ?? [0, 0])
+  const cx = a.u + el.placement.dxCm
+  const cy = -(a.h - el.placement.dyCm)
+  const w = el.placement.widthCm
+  const h = heightCm(el)
+  const r = (el.placement.rotation * Math.PI) / 180
+  const width = w * Math.abs(Math.cos(r)) + h * Math.abs(Math.sin(r))
+  const height = w * Math.abs(Math.sin(r)) + h * Math.abs(Math.cos(r))
+  return { x: cx - width / 2, y: cy - height / 2, width, height }
+}
+
+/** Точка кадра → точка ткани в той же системе, что rectOnSurface.
+ *  Вершина за габаритом торса прижимается к его краю: зону, нарисованную
+ *  чуть шире торса, это не ломает. */
+function frameToSurface(ctx: SurfaceContext, panel: Panel, [x, y]: Point): Point {
+  const s =
+    toSurface(ctx.torso, panel, x, y) ??
+    toSurface(ctx.torso, panel, nearEdge(ctx.torso, panel, x, y), y)
+  if (!s) return [0, 0]
+  return [panel === 'front' ? s.uFront : s.uBack, -s.h]
+}
+
+function nearEdge(torso: Torso, panel: Panel, x: number, y: number): number {
+  const g = torso.views[panel]
+  const { centre, half } = g.at(y)
+  return centre + Math.sign(x - centre) * half * 0.999
+}
+
+/** Ломаная кадра → ткань. Отрезки дробятся: прямая на кадре у края торса —
+ *  дуга на ткани, и по двум концам её не восстановить. */
+function polyToSurface(ctx: SurfaceContext, panel: Panel, poly: readonly Point[], closed: boolean): Point[] {
+  const out: Point[] = []
+  const n = closed ? poly.length : poly.length - 1
+  for (let i = 0; i < n; i += 1) {
+    const a = poly[i]
+    const b = poly[(i + 1) % poly.length]
+    for (let k = 0; k < 8; k += 1) {
+      const f = k / 8
+      out.push(frameToSurface(ctx, panel, [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]))
+    }
+  }
+  if (!closed && poly.length > 0) out.push(frameToSurface(ctx, panel, poly[poly.length - 1]))
+  return out
+}
+
+/** Зоны, переведённые на ткань, — раз на модель торса, кадр и поле размера.
+ *  От движения принта они не зависят, а перевод сотни точек на каждое
+ *  движение мышью и был самой дорогой частью проверок. */
+interface FabricZones {
+  bounds: Polygon | undefined
+  lines: [string, Point[]][]
+  hood: Polygon | undefined
+}
+const fabricZones = new WeakMap<Torso, WeakMap<object, Map<string, FabricZones>>>()
+
+function fieldKey(s: SurfaceContext): string {
+  return s.fieldCm ? s.fieldCm.join('x') : '-'
+}
+
+function remember(s: SurfaceContext, state: object, z: FabricZones) {
+  let byState = fabricZones.get(s.torso)
+  if (!byState) fabricZones.set(s.torso, (byState = new WeakMap()))
+  let byField = byState.get(state)
+  if (!byField) byState.set(state, (byField = new Map()))
+  byField.set(fieldKey(s), z)
+}
+
+/** Центр многоугольника по габариту. */
+function centreOfPoly(poly: readonly Point[]): Point {
+  const xs = poly.map((p) => p[0])
+  const ys = poly.map((p) => p[1])
+  return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]
 }
 
 /** Пересекает ли ломаная прямоугольник. */
@@ -104,13 +197,51 @@ export function checkZones(
    *  отрендеренного изделия, а печатают на выбранном размере. Нет — по зоне,
    *  и человеку сказано, что размер без поля. */
   field?: Polygon | null,
+  /** Есть — считаем по ткани. Нет — по кадру, как у изделия без объёма. */
+  surface?: SurfaceContext | null,
 ): Finding[] {
   if (state.kind === 'illustrative') return []
   const found: Finding[] = []
-  const bounds = field ?? (state.zones.print as Polygon | undefined)
+  const panel = state.code === 'front' || state.code === 'back' ? (state.code as Panel) : null
+  const onFabric = !!surface && !!panel && !!surface.torso.views[state.code]
+
+  let bounds: Polygon | undefined
+  let lines: [string, Point[]][]
+  let hood: Polygon | undefined
+  const cached = onFabric && surface ? fabricZones.get(surface.torso)?.get(state)?.get(fieldKey(surface)) : undefined
+  if (cached) {
+    ;({ bounds, lines, hood } = cached)
+  } else if (onFabric && surface && panel) {
+    const zone = state.zones.print as Polygon | undefined
+    if (surface.fieldCm && zone && zone.length >= 3) {
+      // Поле размера строится сразу на ткани: таблица технолога — это
+      // сантиметры ткани, а не пиксели фотографии.
+      const [cu, cv] = frameToSurface(surface, panel, centreOfPoly(zone))
+      const [w, h] = surface.fieldCm
+      bounds = [
+        [cu - w / 2, cv - h / 2],
+        [cu + w / 2, cv - h / 2],
+        [cu + w / 2, cv + h / 2],
+        [cu - w / 2, cv + h / 2],
+      ]
+    } else if (zone && zone.length >= 3) {
+      bounds = polyToSurface(surface, panel, zone, true)
+    }
+    lines = Object.entries(state.lines ?? {}).map(([name, line]) => [
+      name,
+      polyToSurface(surface, panel, line as Point[], false),
+    ])
+    const hz = state.zones.hood as Polygon | undefined
+    hood = hz && hz.length >= 3 ? polyToSurface(surface, panel, hz, true) : undefined
+    remember(surface, state, { bounds, lines, hood })
+  } else {
+    bounds = field ?? (state.zones.print as Polygon | undefined)
+    lines = Object.entries(state.lines ?? {}).map(([name, line]) => [name, line as Point[]])
+    hood = state.zones.hood as Polygon | undefined
+  }
 
   for (const el of c.elements) {
-    const rect = rectOf(el, state, cal)
+    const rect = onFabric && surface && panel ? rectOnSurface(el, panel, surface) : rectOf(el, state, cal)
 
     if (bounds && bounds.length >= 3) {
       const inside = coverage(bounds, rect)
@@ -129,8 +260,8 @@ export function checkZones(
       }
     }
 
-    for (const [name, line] of Object.entries(state.lines ?? {})) {
-      if (line.length >= 2 && crosses(line as Point[], rect)) {
+    for (const [name, line] of lines) {
+      if (line.length >= 2 && crosses(line, rect)) {
         found.push({
           rule: 'crosses-line',
           weight: 'blocking',
@@ -142,7 +273,6 @@ export function checkZones(
       }
     }
 
-    const hood = state.zones.hood as Polygon | undefined
     if (hood && hood.length >= 3 && coverage(hood, rect) > 0.01) {
       found.push({
         rule: 'under-hood',

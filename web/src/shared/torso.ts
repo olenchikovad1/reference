@@ -125,8 +125,25 @@ export function buildTorso(data: TorsoData, ppc: number): Torso | null {
 
 const STEPS = 512
 
-/** Накопленная длина дуги от центра переда, θ ∈ [0, π] — таблицей. */
+/** Таблицы дуги по сечениям. Глубина меняется по высоте плавно, и сечения
+ *  соседних строк совпадают до сотых сантиметра: без запоминания проверки и
+ *  рамки строили одну и ту же таблицу сотни раз на каждое движение мышью. */
+const tables = new Map<string, Float64Array>()
+
+/** Накопленная длина дуги от центра переда, θ ∈ [0, π] — таблицей.
+ *  Сечения округляются до 0.005 см: на длине дуги это меньше десятой доли
+ *  миллиметра, а запомненных таблиц — тысячи, а не миллионы. */
 function arcTable(a: number, b: number): Float64Array {
+  const key = `${Math.round(a * 200)}:${Math.round(b * 200)}`
+  const hit = tables.get(key)
+  if (hit) return hit
+  if (tables.size > 4000) tables.clear()
+  const table = buildArcTable(Math.round(a * 200) / 200, Math.round(b * 200) / 200)
+  tables.set(key, table)
+  return table
+}
+
+function buildArcTable(a: number, b: number): Float64Array {
   const table = new Float64Array(STEPS + 1)
   const dt = Math.PI / STEPS
   const f = (t: number) => Math.sqrt(a * a * Math.cos(t) ** 2 + b * b * Math.sin(t) ** 2)
@@ -332,4 +349,56 @@ export function buildLookup(
 /** Половина обхвата на высоте h — дальше этого ткань детали не уходит. */
 export function halfGirth(t: Torso, h: number): number {
   return arcFromTable(arcTable(t.a, t.depthAt(h)), Math.PI)
+}
+
+/** Точка элемента в его собственных координатах (от центра, вниз — плюс,
+ *  до поворота) → кадр. */
+export function projectLocal(
+  t: Torso,
+  view: string,
+  panel: Panel,
+  centre: { u: number; h: number },
+  lx: number,
+  ly: number,
+  rotationDeg: number,
+): { x: number; y: number; visible: boolean } | null {
+  const r = (rotationDeg * Math.PI) / 180
+  const du = lx * Math.cos(r) - ly * Math.sin(r)
+  const dv = lx * Math.sin(r) + ly * Math.cos(r)
+  return toFrame(t, view, panel, centre.u + du, centre.h - dv)
+}
+
+/**
+ * Контур прямоугольника ткани на кадре: стороны дробятся, и каждая точка
+ * проходит через модель. Прямая на ткани у края торса — дуга на кадре, и по
+ * четырём углам её не нарисовать. Невидимые точки — за краем, где ткань
+ * ушла от камеры, — в контур не входят.
+ */
+export function projectRect(
+  t: Torso,
+  view: string,
+  panel: Panel,
+  centre: { u: number; h: number },
+  w: number,
+  h: number,
+  rotationDeg: number,
+  steps = 8,
+): [number, number][] {
+  const corners = [
+    [-w / 2, -h / 2],
+    [w / 2, -h / 2],
+    [w / 2, h / 2],
+    [-w / 2, h / 2],
+  ]
+  const out: [number, number][] = []
+  for (let i = 0; i < 4; i += 1) {
+    const [x0, y0] = corners[i]
+    const [x1, y1] = corners[(i + 1) % 4]
+    for (let k = 0; k < steps; k += 1) {
+      const f = k / steps
+      const p = projectLocal(t, view, panel, centre, x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, rotationDeg)
+      if (p?.visible) out.push([p.x, p.y])
+    }
+  }
+  return out
 }

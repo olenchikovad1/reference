@@ -163,8 +163,11 @@ export interface Renderer {
   setOccluder(source: TexImageSource): void
   /** Карта «пиксель отрисовки → ткань». null — плоский показ, без объёма. */
   setLookup(map: Float32Array | null, width: number, height: number): void
-  /** Развёртки переда и спинки и их размер по ткани. */
-  setPanels(front: TexImageSource, back: TexImageSource, halfU: number, heightCm: number): void
+  /** Развёртка одной детали. Загружается только изменившаяся: при
+   *  перетаскивании меняется одна, и грузить обе — вдвое больше работы. */
+  setPanel(panel: 'front' | 'back', source: TexImageSource): void
+  /** Размер развёрток по ткани. */
+  setSurface(halfU: number, heightCm: number): void
   setParams(p: RenderParams): void
   draw(): void
   dispose(): void
@@ -235,10 +238,12 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       // а памяти вдвое меньше — на 3× карта весит десятки мегабайт.
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, map)
     },
-    setPanels(front, back, halfU, heightCm) {
+    setPanel(panel, source) {
+      if (panel === 'front') upload(gl, tex.front, 6, source)
+      else upload(gl, tex.back, 7, source)
+    },
+    setSurface(halfU, heightCm) {
       surface = [halfU, heightCm]
-      upload(gl, tex.front, 6, front)
-      upload(gl, tex.back, 7, back)
     },
     setParams(p) {
       params = p

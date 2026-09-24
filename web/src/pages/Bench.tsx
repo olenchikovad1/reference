@@ -35,11 +35,11 @@ import type { ReferenceMatch } from '../shared/api/references'
 import { saveReference } from '../shared/api/references'
 import { readDropped } from '../shared/dropped'
 import { newElementId, onSide, sidesUsed } from '../shared/sides'
-import { buildTorso } from '../shared/torso'
+import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones } from '../shared/zones'
-import { calibrationFor, fieldFor, sizesWithField } from '../shared/fields'
+import { calibrationFor, fieldFor, fieldSize, sizesWithField } from '../shared/fields'
 import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
 import { useHistoryState } from '../shared/useHistory'
 
@@ -171,6 +171,30 @@ export function Bench() {
     [product, size, stateCode, state, calibration],
   )
 
+  // Поле размера в сантиметрах ткани и его контур на кадре. С объёмом контур
+  // идёт через модель, как принт: плоский прямоугольник на 164 вылезал бы за
+  // торс, хотя по ткани поле на нём укладывается.
+  const fieldCm = useMemo(
+    () => fieldSize(product?.print_fields ?? null, size, stateCode),
+    [product, size, stateCode],
+  )
+  const fieldOutline = useMemo(() => {
+    const zone = state?.zones?.print
+    const panel = stateCode === 'front' || stateCode === 'back' ? stateCode : null
+    if (!torso || !panel || !fieldCm || !zone || !torso.views[stateCode]) return field
+    const xs = zone.map((p) => p[0])
+    const ys = zone.map((p) => p[1])
+    const s = toSurface(
+      torso,
+      stateCode,
+      (Math.min(...xs) + Math.max(...xs)) / 2,
+      (Math.min(...ys) + Math.max(...ys)) / 2,
+    )
+    if (!s) return field
+    const centre = { u: panel === 'front' ? s.uFront : s.uBack, h: s.h }
+    return projectRect(torso, stateCode, panel, centre, fieldCm[0], fieldCm[1], 0, 12)
+  }, [torso, stateCode, fieldCm, state, field])
+
   const selected = find(visible, visible.selectedId)
 
   // Сохраняем то, что закреплено. Живое перетаскивание не пишем: писать
@@ -190,6 +214,7 @@ export function Bench() {
       state ?? { code: '', kind: 'precise', anchors: {}, zones: {}, lines: {} },
       calibration,
       field,
+      torso && state ? { torso, anchors: state.anchors, fieldCm } : null,
     ),
     ...check(
     visible,
@@ -624,7 +649,7 @@ export function Bench() {
               renderScale={renderScale}
               onFps={setFps}
               showZones={overlay === 'zones' || overlay === 'all'}
-              field={field}
+              field={fieldOutline}
               fieldLabel={size ? `поле ${size}` : null}
               showAnchors={overlay === 'anchors' || overlay === 'all'}
               onSelect={(id) => setComposition((c) => select(c, id))}

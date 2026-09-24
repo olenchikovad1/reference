@@ -8,7 +8,16 @@ import type { Calibration } from '../shared/geometry'
 import { cmToPx } from '../shared/geometry'
 import { buildLuminance } from '../shared/luminance'
 import { drawText } from '../shared/text'
-import { anchorOnSurface, buildLookup, halfGirth, type Panel, type Torso } from '../shared/torso'
+import {
+  anchorOnSurface,
+  buildLookup,
+  halfGirth,
+  projectLocal,
+  projectRect,
+  toSurface,
+  type Panel,
+  type Torso,
+} from '../shared/torso'
 import { createRenderer, type RenderParams, type Renderer } from './renderer'
 
 // Холст изделия. В @platform/ui такого нет и не будет — это прикладное знание,
@@ -62,6 +71,11 @@ type Drag =
   | { kind: 'move'; id: string; startCm: [number, number]; from: [number, number] }
   | { kind: 'resize'; id: string; centre: [number, number] }
   | { kind: 'rotate'; id: string; centre: [number, number] }
+  // По ткани: точка, за которую взялись, в сантиметрах ткани. Сдвиг считается
+  // там же — иначе у края торса принт ехал бы быстрее руки.
+  | { kind: 'move-fabric'; id: string; startCm: [number, number]; from: { u: number; h: number } }
+  | { kind: 'resize-fabric'; id: string; centre: { u: number; h: number }; rotation: number }
+  | { kind: 'rotate-fabric'; id: string; centre: { u: number; h: number } }
 
 export function GarmentCanvas(props: CanvasProps) {
   const { state, frameSrc, calibration, composition, renderScale } = props
@@ -72,6 +86,10 @@ export function GarmentCanvas(props: CanvasProps) {
   const occluderCanvas = useRef<HTMLCanvasElement | null>(null)
   const panels = useRef<Record<Panel, HTMLCanvasElement> | null>(null)
   const lookupBuffer = useRef<Float32Array | undefined>(undefined)
+  // Что сейчас лежит в каждой развёртке. Совпало — развёртка не
+  // перерисовывается и не грузится: при перетаскивании меняется одна деталь,
+  // а две по полтора миллиона пикселей на кадр роняли плавность втрое.
+  const panelDrawn = useRef<Record<Panel, string>>({ front: '', back: '' })
   const drag = useRef<Drag | null>(null)
   // Скользящее окно последних отрисовок. Счёт за фиксированный промежуток врёт:
   // при редких перерисовках он делит одну отрисовку на секунды простоя и
@@ -157,13 +175,19 @@ export function GarmentCanvas(props: CanvasProps) {
    * Смещение элемента — длина по ткани от ориентира его стороны, поэтому
    * рисуется он здесь без всякой перспективы, как на лекале. Изгиб даёт
    * карта, а не рисование: иначе каждый ракурс гнул бы принт по-своему. */
-  function drawPanels() {
+  function drawPanels(r: Renderer) {
     const pc = panels.current
     if (!pc || !torso || !surface) return
     const k = torso.ppc * renderScale
     const w = Math.round(surface.halfU * 2 * k)
     const h = Math.round(surface.heightCm * k)
+    r.setSurface(surface.halfU, surface.heightCm)
     for (const panel of ['front', 'back'] as const) {
+      const mine = composition.elements.filter((el) => (el.placement.side ?? 'front') === panel)
+      const loaded = mine.map((el) => (el.kind === 'image' ? props.images.get(el.src)?.complete : true))
+      const sig = JSON.stringify([w, h, surface, mine, loaded, props.anchorsBySide?.[panel]])
+      if (panelDrawn.current[panel] === sig) continue
+      panelDrawn.current[panel] = sig
       const c = pc[panel]
       if (c.width !== w || c.height !== h) {
         c.width = w
@@ -190,6 +214,7 @@ export function GarmentCanvas(props: CanvasProps) {
         }
         ctx.restore()
       }
+      r.setPanel(panel, c)
     }
   }
 
@@ -250,8 +275,7 @@ export function GarmentCanvas(props: CanvasProps) {
       canvas.height = H
     }
     if (wrapped && surface && panels.current) {
-      drawPanels()
-      r.setPanels(panels.current.front, panels.current.back, surface.halfU, surface.heightCm)
+      drawPanels(r)
     } else {
       drawPrint()
       r.setPrint(printCanvas.current)
@@ -302,10 +326,46 @@ export function GarmentCanvas(props: CanvasProps) {
     ]
   }
 
+  /** Своя сторона кадра — деталь, если на ней есть объём. */
+  const panel: Panel | null =
+    wrapped && (props.side === 'front' || props.side === 'back') ? props.side : null
+
+  function fabricCentre(el: PrintElement): { u: number; h: number } | null {
+    if (!torso || !panel) return null
+    const a = anchorOnSurface(torso, panel, props.anchorsBySide?.[panel]?.[el.placement.anchor] ?? [0, 0])
+    return { u: a.u + el.placement.dxCm, h: a.h - el.placement.dyCm }
+  }
+
+  function fabricAt(x: number, y: number): { u: number; h: number } | null {
+    if (!torso || !panel) return null
+    const s = toSurface(torso, state.code, x, y)
+    if (!s) return null
+    return { u: panel === 'front' ? s.uFront : s.uBack, h: s.h }
+  }
+
   function onPointerMove(e: React.PointerEvent) {
     const d = drag.current
     if (!d) return
     const [x, y] = toFrame(e)
+    if (d.kind === 'move-fabric' || d.kind === 'resize-fabric' || d.kind === 'rotate-fabric') {
+      // Указатель ушёл с торса — последнее положение остаётся. Прыжок принта
+      // вслед за рукой по фону хуже, чем пауза.
+      const f = fabricAt(x, y)
+      if (!f) return
+      if (d.kind === 'move-fabric') {
+        props.onMove(d.id, d.startCm[0] + (f.u - d.from.u), d.startCm[1] - (f.h - d.from.h))
+      } else if (d.kind === 'resize-fabric') {
+        const r = (d.rotation * Math.PI) / 180
+        const du = f.u - d.centre.u
+        const dv = d.centre.h - f.h
+        const lx = du * Math.cos(r) + dv * Math.sin(r)
+        props.onResize(d.id, Math.max(0.5, Math.abs(lx) * 2))
+      } else {
+        const deg = (Math.atan2(d.centre.h - f.h, f.u - d.centre.u) * 180) / Math.PI + 90
+        props.onRotate(d.id, Math.round(deg))
+      }
+      return
+    }
     if (d.kind === 'move') {
       props.onMove(
         d.id,
@@ -318,6 +378,78 @@ export function GarmentCanvas(props: CanvasProps) {
       const deg = (Math.atan2(y - d.centre[1], x - d.centre[0]) * 180) / Math.PI + 90
       props.onRotate(d.id, Math.round(deg))
     }
+  }
+
+  /** Рамка элемента по ткани: контур и ручки проходят через ту же модель,
+   *  что и принт, и совпадают с ним у края, а не только в середине. */
+  function fabricHandles(el: PrintElement, fc: { u: number; h: number }, t: Torso, pn: Panel) {
+    const w = el.placement.widthCm
+    const h = heightCm(el)
+    const rot = el.placement.rotation
+    const outline = projectRect(t, state.code, pn, fc, w, h, rot)
+    if (outline.length < 3) return null
+    const points = outline.map(([x, y]) => `${x},${y}`).join(' ')
+    const selected = el.id === composition.selectedId
+    const corner = projectLocal(t, state.code, pn, fc, w / 2, h / 2, rot)
+    const top = projectLocal(t, state.code, pn, fc, 0, -h / 2, rot)
+    return (
+      <g key={el.id}>
+        <polygon
+          points={points}
+          fill="transparent"
+          style={{ cursor: 'move' }}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            e.currentTarget.setPointerCapture(e.pointerId)
+            props.onSelect(el.id)
+            const [x, y] = toFrame(e)
+            const from = fabricAt(x, y) ?? fc
+            drag.current = {
+              kind: 'move-fabric',
+              id: el.id,
+              startCm: [el.placement.dxCm, el.placement.dyCm],
+              from,
+            }
+          }}
+        />
+        {selected && (
+          <>
+            <polygon points={points} fill="none" stroke="#2563eb" strokeWidth={2} pointerEvents="none" />
+            {corner?.visible && (
+              <circle
+                cx={corner.x}
+                cy={corner.y}
+                r={9}
+                fill="#2563eb"
+                style={{ cursor: 'nwse-resize' }}
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                  drag.current = { kind: 'resize-fabric', id: el.id, centre: fc, rotation: rot }
+                }}
+              />
+            )}
+            {top?.visible && (
+              <>
+                <line x1={top.x} y1={top.y} x2={top.x} y2={top.y - 26} stroke="#16a34a" strokeWidth={2} pointerEvents="none" />
+                <circle
+                  cx={top.x}
+                  cy={top.y - 26}
+                  r={8}
+                  fill="#16a34a"
+                  style={{ cursor: 'grab' }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation()
+                    e.currentTarget.setPointerCapture(e.pointerId)
+                    drag.current = { kind: 'rotate-fabric', id: el.id, centre: fc }
+                  }}
+                />
+              </>
+            )}
+          </>
+        )}
+      </g>
+    )
   }
 
   const box = useMemo(
@@ -351,6 +483,8 @@ export function GarmentCanvas(props: CanvasProps) {
         }}
       >
         {own.elements.map((el) => {
+          const fc = fabricCentre(el)
+          if (fc && torso && panel) return fabricHandles(el, fc, torso, panel)
           const [cx, cy] = centreOf(el)
           const w = cmToPx(el.placement.widthCm, calibration)
           const h = cmToPx(heightCm(el), calibration)

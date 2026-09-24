@@ -82,3 +82,13 @@ export function calibrationFor(
   if (size === null || size === renderedSize) return base
   return { pxPerCm: (base.pxPerCm * renderedSize) / size, provisional: true }
 }
+
+/** Поле размера [ширина, высота] в сантиметрах ткани. null — поля нет. */
+export function fieldSize(
+  fields: PrintFields | null,
+  size: number | null,
+  side: string,
+): [number, number] | null {
+  const wh = size === null ? null : fields?.by_size?.[String(size)]?.[side]
+  return wh && wh.length >= 2 ? [wh[0], wh[1]] : null
+}
