@@ -819,7 +819,7 @@ export function Bench() {
             ))}
           </Group>
 
-          <Group title={`Проверки (${open.length})`}>
+          <Group title={`Проверки (${open.length})`} wide>
             {open.length === 0 && composition.elements.length > 0 && (
               <p style={S.dim}>находок нет</p>
             )}
@@ -910,7 +910,7 @@ export function Bench() {
             <p style={S.dim}>Ctrl+Z и Ctrl+Shift+Z. Ползунки подбора не откатываются</p>
           </Group>
 
-          <Group title="Набор принтов">
+          <Group title="Набор принтов" wide>
             <div style={S.list}>
               {prints
                 .slice()
@@ -1144,9 +1144,11 @@ function Num({
   )
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+function Group({ title, wide, children }: { title: string; wide?: boolean; children: React.ReactNode }) {
   return (
-    <section style={S.group}>
+    // wide — для групп, которые в узкой ячейке нечитаемы: список принтов,
+    // находки проверок. Они занимают всю ширину плитки, остальные делят её.
+    <section style={{ ...S.group, ...(wide ? { gridColumn: '1 / -1' } : null) }}>
       <h2 style={S.h2}>{title}</h2>
       <div style={S.row}>{children}</div>
     </section>
@@ -1256,7 +1258,24 @@ const S: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     touchAction: 'none',
   },
-  panel: { minWidth: 280, maxWidth: 330 },
+  panel: {
+    // Плитка, а не колонка. Работа идёт короткими кругами «подвинул —
+    // посмотрел — поправил», и прокрутка в каждом круге становится основным
+    // занятием, пока справа пустует половина экрана.
+    //
+    // Сетка, а не колонки CSS: колонки рвут группу пополам, и половина
+    // настроек уезжает в соседний столбец — это хуже длинной колонки, потому
+    // что искать приходится в двух местах вместо одного.
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+    alignItems: 'start',
+    gap: 14,
+    flex: 1,
+    minWidth: 280,
+    // Порядок групп не зависит от ширины: сетка заполняется по строкам, и
+    // переставленные местами настройки заставляли бы искать заново при каждом
+    // изменении окна.
+  },
   group: { marginBottom: 14 },
   h2: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: '#666', margin: '0 0 6px' },
   row: { display: 'flex', flexWrap: 'wrap', gap: 6 },
