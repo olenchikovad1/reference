@@ -643,6 +643,15 @@ export function Bench() {
         </div>
 
         <aside style={S.panel}>
+          <Group title="Что нанести">
+            {/* Первой группой, а не внизу списка элементов: ненайденная
+                возможность равна отсутствующей, и владелец её не нашёл. */}
+            <button onClick={addLabel} style={S.btn}>
+              + надпись
+            </button>
+            <span style={S.dim}>картинки — перетаскиванием в окно слева</span>
+          </Group>
+
           <Group title="Состояние">
             {product.states.map((s) => (
               <button
@@ -933,19 +942,23 @@ export function Bench() {
             </p>
           </Group>
 
-          <Group title={`Элементы (${composition.elements.length})`}>
-            <button onClick={addLabel} style={S.btn}>
-              + надпись
-            </button>
-            {composition.elements.length === 0 && <p style={S.dim}>пусто</p>}
+          <Group title={`Элементы (${visible.elements.length})`}>
+            {visible.elements.length === 0 && <p style={S.dim}>пусто</p>}
             <div style={S.list}>
-              {composition.elements.map((el) => (
+              {visible.elements.map((el) => (
                 <div
                   key={el.id}
                   onClick={() => setComposition((c) => select(c, el.id))}
-                  style={el.id === composition.selectedId ? S.itemOn : S.item}
+                  style={el.id === visible.selectedId ? S.itemOn : S.item}
                 >
                   <span style={S.itemName}>{el.name}</span>
+                  {/* Шрифт виден у КАЖДОЙ надписи, а не только у выделенной:
+                      иначе, чтобы сравнить две, приходится тыкать в каждую. */}
+                  {el.kind === 'text' && (
+                    <span style={{ ...S.badge, fontFamily: `"${el.fontFamily}", sans-serif` }}>
+                      {el.fontFamily}
+                    </span>
+                  )}
                   {el.kind === 'image' && !el.hasAlpha && (
                     <span style={S.badge}>фон не вырезан</span>
                   )}
