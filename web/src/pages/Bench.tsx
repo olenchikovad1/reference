@@ -36,7 +36,7 @@ import { saveReference } from '../shared/api/references'
 import { readDropped } from '../shared/dropped'
 import { newElementId, onSide, sidesUsed } from '../shared/sides'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
-import { gradeOf, graded, toBase } from '../shared/grading'
+import { byGrid, editAtSize, gradeOf, graded, manualAt, resetAtSize } from '../shared/grading'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones } from '../shared/zones'
@@ -143,8 +143,12 @@ export function Bench() {
   const sized = useMemo(() => graded(composition, grid, size), [composition, grid, size])
   /** Правка на размере — в единицах базы: иначе переключение размера тихо
    *  переписывало бы то, от чего считаются все остальные. */
-  const placeSized = (c: typeof composition, id: string, patch: Parameters<typeof place>[2]) =>
-    place(c, id, toBase(patch, grid, size))
+  const placeSized = (c: typeof composition, id: string, patch: Parameters<typeof place>[2]) => {
+    // Правка ширины не на базовом размере — исключение этого размера, а не
+    // новая база: остальные размеры остаются по сетке.
+    const el = c.elements.find((e) => e.id === id)
+    return el ? place(c, id, editAtSize(el.placement, patch, grid, size)) : c
+  }
   // Вид на ТЕКУЩУЮ сторону. Правки идут в полную композицию по id, поэтому
   // переключение стороны ничего не теряет: отбор — это взгляд, а не правка.
   const visible = useMemo(() => onSide(sized, stateCode), [sized, stateCode])
@@ -1142,12 +1146,33 @@ export function Bench() {
                   {product.size_set.sizes.map((s) => {
                     const g = gradeOf(grid, s)
                     const base = composition.elements.find((e) => e.id === selected.id)
-                    const w = (base?.placement.widthCm ?? 0) * g
+                    if (!base) return null
+                    const manual = manualAt(base.placement, s)
+                    const auto = byGrid(base.placement, grid, s)
                     return (
                       <tr key={s} style={s === size ? S.gradeRowOn : undefined}>
                         <td>{s}</td>
                         <td style={S.dim}>×{g.toFixed(3)}</td>
-                        <td>{w.toFixed(1)} см</td>
+                        <td>{(manual ?? auto).toFixed(1)} см</td>
+                        <td>
+                          {/* Исключение видно ВМЕСТЕ с тем, что было бы по сетке:
+                              иначе технолог, сверяя с сеткой, «исправит» его
+                              обратно, не зная, что это нарочно. */}
+                          {manual !== null && (
+                            <>
+                              <span style={S.manual}>вручную · по сетке {auto.toFixed(1)}</span>{' '}
+                              <button
+                                style={S.x}
+                                title="вернуть этот размер к сетке"
+                                onClick={() =>
+                                  commit((c) => place(c, base.id, resetAtSize(base.placement, s)))
+                                }
+                              >
+                                ↺
+                              </button>
+                            </>
+                          )}
+                        </td>
                       </tr>
                     )
                   })}
@@ -1441,6 +1466,7 @@ const S: Record<string, React.CSSProperties> = {
   },
   gradeTable: { fontSize: 12, borderCollapse: 'collapse', width: '100%' },
   gradeRowOn: { background: '#eff6ff', fontWeight: 600 },
+  manual: { fontSize: 11, color: '#b45309' },
   warn: { color: '#b45309', fontSize: 13, lineHeight: 1.4, maxWidth: 620 },
   dim: { color: '#666', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4 },
 }

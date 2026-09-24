@@ -27,6 +27,12 @@ export interface Placement {
   readonly widthCm: number
   /** Поворот по часовой, градусы. */
   readonly rotation: number
+  /** Ширина, вписанная руками на размере, — исключение из сетки.
+   *
+   * Хранится ЧИСЛОМ того размера, а не коэффициентом: дизайнер сказал «на
+   * 98 — 16 см», и после правки базы это должно остаться 16, а не уехать
+   * вслед за ней. Нет записи — ширина по сетке. */
+  readonly widthBySize?: Readonly<Record<string, number>>
 }
 
 export interface ImageElement {

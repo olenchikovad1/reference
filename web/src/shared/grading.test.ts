@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { add, EMPTY, type ImageElement } from './composition'
-import { gradeOf, graded, toBase, type SizeGrid } from './grading'
+import { byGrid, editAtSize, gradeOf, graded, manualAt, resetAtSize, toBase, type SizeGrid } from './grading'
 
 const GRID: SizeGrid = {
   provisional: true,
@@ -76,5 +76,63 @@ describe('правка на размере', () => {
 
   it('без размера правка идёт как есть', () => {
     expect(toBase({ dxCm: 3 }, GRID, null)).toEqual({ dxCm: 3 })
+  })
+})
+
+describe('ширина, вписанная на размере руками', () => {
+  it('меняет только этот размер', () => {
+    // На 98 по сетке надпись мелкая — дизайнер оставляет её крупнее. База и
+    // остальные размеры при этом считаются по сетке, как раньше.
+    const el = picture(0, 12, 18)
+    const patch = editAtSize(el.placement, { widthCm: 16 }, GRID, 98)
+    const c = add(EMPTY, { ...el, placement: { ...el.placement, ...patch } })
+    expect(c.elements[0].placement.widthCm).toBe(18)
+    expect(graded(c, GRID, 98).elements[0].placement.widthCm).toBe(16)
+    expect(graded(c, GRID, 164).elements[0].placement.widthCm).toBeCloseTo(22.03, 2)
+    expect(graded(c, GRID, null).elements[0].placement.widthCm).toBe(18)
+  })
+
+  it('видно, что вручную, и сколько было бы по сетке', () => {
+    const el = picture(0, 12, 18)
+    const p = { ...el.placement, ...editAtSize(el.placement, { widthCm: 16 }, GRID, 98) }
+    expect(manualAt(p, 98)).toBe(16)
+    expect(manualAt(p, 164)).toBeNull()
+    expect(byGrid(p, GRID, 98)).toBeCloseTo(13.16, 2)
+  })
+
+  it('снимается одним действием и возвращает размер к сетке', () => {
+    const el = picture(0, 12, 18)
+    const p = { ...el.placement, ...editAtSize(el.placement, { widthCm: 16 }, GRID, 98) }
+    const back = { ...p, ...resetAtSize(p, 98) }
+    const c = add(EMPTY, { ...el, placement: back })
+    expect(manualAt(back, 98)).toBeNull()
+    expect(graded(c, GRID, 98).elements[0].placement.widthCm).toBeCloseTo(13.16, 2)
+  })
+
+  it('на базовом размере правка ширины меняет базу, а не пишет исключение', () => {
+    const el = picture(0, 12, 18)
+    const patch = editAtSize(el.placement, { widthCm: 20 }, GRID, 134)
+    expect(patch.widthCm).toBe(20)
+    expect(patch.widthBySize).toBeUndefined()
+  })
+
+  it('положение на размере по-прежнему идёт в базу, а не в исключение', () => {
+    // Исключение — только про ширину принта. Сдвинуть принт на одном размере
+    // и не на других — это уже другая градация, ступенчатая, и её не просили.
+    const el = picture(0, 12, 18)
+    const patch = editAtSize(el.placement, { dyCm: 10 }, GRID, 98)
+    expect(patch.dyCm).toBeCloseTo(13.68, 2)
+  })
+})
+
+describe('исключение принадлежит элементу', () => {
+  it('у двух принтов на одном изделии исключения свои', () => {
+    const a = picture(0, 12, 18)
+    const b = { ...picture(0, 30, 10), id: 'другой' }
+    const pa = { ...a.placement, ...editAtSize(a.placement, { widthCm: 16 }, GRID, 98) }
+    const c = add(add(EMPTY, { ...a, placement: pa }), b)
+    const on98 = graded(c, GRID, 98).elements
+    expect(on98[0].placement.widthCm).toBe(16)
+    expect(on98[1].placement.widthCm).toBeCloseTo(7.31, 2)
   })
 })
