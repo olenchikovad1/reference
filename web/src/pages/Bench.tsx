@@ -23,10 +23,11 @@ import {
 import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
-import type { Match } from '../shared/api/assets'
+import type { Match, Tag } from '../shared/api/assets'
 import {
   assetUrl,
   digestOf,
+  fetchTags,
   recogniseAssets,
   uploadAssets,
   uploadCanvas,
@@ -101,7 +102,25 @@ export function Bench() {
   const [seenCards, setSeenCards] = useState<ReferenceMatch[]>([])
   // Сохранённые карточки. Грузятся при открытии и после каждого сохранения.
   const [cards, setCards] = useState<Card[]>([])
+  // Теги файлов по имени файла. Ставятся сами при узнавании; для уже
+  // лежащих — досчитываются по сохранённому вектору.
+  const [tagsOf, setTagsOf] = useState<Record<string, Tag[]>>({})
   const [opened, setOpened] = useState<string | null>(null)
+  useEffect(() => {
+    const missing = [
+      ...new Set(
+        composition.elements
+          .filter((el) => el.kind === 'image')
+          .map((el) => digestOf(el.src))
+          .filter((d) => d && !(d in tagsOf)),
+      ),
+    ]
+    if (missing.length === 0) return
+    void fetchTags(missing)
+      .then((got) => setTagsOf((m) => ({ ...m, ...got })))
+      .catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composition.elements])
   useEffect(() => {
     void listReferences().then(setCards).catch(() => setCards([]))
   }, [])
@@ -600,7 +619,10 @@ export function Bench() {
         // Узнавание НЕ ожидается: человек бросил картинки и работает дальше,
         // а окно появится, когда модель досчитает.
         void recogniseAssets(stored.map((a) => a.digest))
-          .then((rows) => setSeen([...repeats, ...rows.flatMap((r) => r.matches)]))
+          .then((rows) => {
+            setSeen([...repeats, ...rows.flatMap((r) => r.matches)])
+            setTagsOf((m) => ({ ...m, ...Object.fromEntries(rows.map((r) => [r.digest, r.tags])) }))
+          })
           .catch(() => {
             // Не узналось из-за сбоя — молчим. Сообщение о неработающем
             // узнавании не помогает делать принт и отвлекает от работы.
@@ -1124,6 +1146,17 @@ export function Bench() {
                   {el.kind === 'image' && !el.hasAlpha && (
                     <span style={S.badge}>фон не вырезан</span>
                   )}
+                  {el.kind === 'image' && (tagsOf[digestOf(el.src)] ?? []).length > 0 && (
+                    <span style={S.tags}>
+                      {/* Уверенность рядом с тегом: человек сам решает, верить ли
+                          «Снег 0.32», — порог ставит машина, судит он. */}
+                      {(tagsOf[digestOf(el.src)] ?? []).map((tg) => (
+                        <span key={tg.code} style={S.tagChip} title={`уверенность ${tg.score.toFixed(2)} · ${tg.model}`}>
+                          {tg.name} <span style={S.tagScore}>{tg.score.toFixed(2)}</span>
+                        </span>
+                      ))}
+                    </span>
+                  )}
                   <button
                     style={S.x}
                     onClick={(e) => {
@@ -1590,6 +1623,9 @@ const S: Record<string, React.CSSProperties> = {
   gradeTable: { fontSize: 12, borderCollapse: 'collapse', width: '100%' },
   gradeRowOn: { background: '#eff6ff', fontWeight: 600 },
   manual: { fontSize: 11, color: '#b45309' },
+  tags: { display: 'flex', flexWrap: 'wrap', gap: 3, width: '100%' },
+  tagChip: { fontSize: 10, background: '#eef2ff', color: '#3730a3', padding: '1px 5px', borderRadius: 4 },
+  tagScore: { color: '#818cf8' },
   warn: { color: '#b45309', fontSize: 13, lineHeight: 1.4, maxWidth: 620 },
   dim: { color: '#666', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4 },
 }

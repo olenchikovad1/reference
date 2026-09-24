@@ -32,6 +32,23 @@ MODELS = [
         ),
         "size": 89_117_001,
     },
+    # Текстовая половина той же модели и её словарь — для автотегов: картинка
+    # сравнивается со словами словаря тегов (решение 0011). Той же модели,
+    # иначе векторы картинки и слов лежат в разных пространствах и не
+    # сравниваются.
+    {
+        "path": "files/models/clip-vit-base-patch32/text_model_quantized.onnx",
+        "url": (
+            "https://huggingface.co/Xenova/clip-vit-base-patch32/"
+            "resolve/main/onnx/text_model_quantized.onnx"
+        ),
+        "size": 64_504_507,
+    },
+    {
+        "path": "files/models/clip-vit-base-patch32/tokenizer.json",
+        "url": "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/main/tokenizer.json",
+        "size": 2_224_119,
+    },
 ]
 
 

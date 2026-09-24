@@ -5,9 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
 from reference_api.schemas.assets import AssetOut, DerivativeOut
-from reference_api.schemas.library import MatchOut, RecognisedOut
+from reference_api.repositories import tags as tag_repo
+from reference_api.schemas.library import FileTagsOut, MatchOut, RecognisedOut, TagOut
 from reference_api.services import assets as service
 from reference_api.services import library
+from reference_api.services import tags as tagging
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -84,7 +86,11 @@ async def recognise(
         content = service.original(digest)
         if content is None:
             continue
-        seen = await library.remember(db, digest, service.name_of(digest), content)
+        seen, emb = await library.remember(db, digest, service.name_of(digest), content)
+        # Теги — из того же вектора: картинку уже посмотрели, второй раз
+        # модель не нужна.
+        found = tagging.tag(emb.vector)
+        await tag_repo.replace(db, digest, tagging.MODEL_NAME, [(x.code, x.name, x.score) for x in found])
         out.append(
             RecognisedOut(
                 digest=digest,
@@ -92,6 +98,32 @@ async def recognise(
                     MatchOut(digest=m.digest, name=m.name, similarity=m.similarity, level=m.level)
                     for m in seen
                 ],
+                tags=[TagOut(code=x.code, name=x.name, score=x.score, model=tagging.MODEL_NAME) for x in found],
+            )
+        )
+    return out
+
+
+@router.post("/tags", response_model=list[FileTagsOut])
+async def file_tags(digests: list[str], db: AsyncSession = Depends(session)) -> list[FileTagsOut]:
+    """Теги файлов. Нет — досчитываются по уже лежащему вектору; нет и
+    вектора — у файла пусто, пока его не узнавали."""
+    from reference_api.services.embeddings import MODEL_NAME as IMAGE_MODEL
+
+    stored = await tag_repo.of(db, digests, tagging.MODEL_NAME)
+    out: list[FileTagsOut] = []
+    for d in digests:
+        rows = stored.get(d, [])
+        if not rows:
+            vec = await tag_repo.vector_of(db, d, IMAGE_MODEL)
+            if vec is not None:
+                found = tagging.tag(vec)
+                await tag_repo.replace(db, d, tagging.MODEL_NAME, [(x.code, x.name, x.score) for x in found])
+                rows = (await tag_repo.of(db, [d], tagging.MODEL_NAME))[d]
+        out.append(
+            FileTagsOut(
+                digest=d,
+                tags=[TagOut(code=r.code, name=r.name, score=r.score, model=r.model) for r in rows],
             )
         )
     return out

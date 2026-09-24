@@ -11,6 +11,20 @@ class MatchOut(BaseModel):
     level: str
 
 
+class TagOut(BaseModel):
+    code: str
+    name: str
+    #: Уверенность 0…1: «Снег 0.89» и «Снег 0.32» — разное, решает человек.
+    score: float
+    #: Чем поставлен. Сменится модель — теги пересчитываются.
+    model: str
+
+
+class FileTagsOut(BaseModel):
+    digest: str
+    tags: list[TagOut]
+
+
 class RecognisedOut(BaseModel):
     """Что узналось по одному файлу.
 
@@ -20,3 +34,5 @@ class RecognisedOut(BaseModel):
 
     digest: str
     matches: list[MatchOut]
+    #: Теги, поставленные сами. Пусто — модель ничего уверенно не увидела.
+    tags: list[TagOut] = []

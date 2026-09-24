@@ -10,14 +10,26 @@
 # это данные, а не код. Скопированы владельцем 23.09.2026.
 
 files:
-  - {name: td-rusty-print.png,             subject: Об. 268,   category: танк,     note: ржавый, зимняя сцена}
-  - {name: td-winter-camo-print.png,       subject: Об. 268,   category: танк,     note: зимний камуфляж}
-  - {name: is3-summer-print.png,           subject: ИС-3,      category: танк,     note: летняя сцена}
-  - {name: is3-winter-print.png,           subject: ИС-3,      category: танк,     note: зимняя сцена}
-  - {name: conqueror-red-print.png,        subject: Conqueror, category: танк,     note: красный}
-  - {name: t14-armata-print.png,           subject: Т-14,      category: танк,     note: null}
-  - {name: t72-winter-print.png,           subject: Т-72,      category: танк,     note: зимняя сцена}
-  - {name: mi8-cloud-sharp-clean-print.png, subject: Ми-8,     category: вертолёт, note: заведомо чужой}
+  # tags_expected записаны 24.09.2026 ДО замера автотегов (US-0478), по
+  # самим картинкам, а не по именам файлов. Слабость набора видна сразу: все
+  # семь танков в снегу, «снег без снега» на нём не проверить — отрицательные
+  # примеры добавляются в замер отдельно.
+  - {name: td-rusty-print.png,             subject: Об. 268,   category: танк,     note: ржавый, зимняя сцена,
+     tags_expected: [Танк, Снег, Зима, Лес]}
+  - {name: td-winter-camo-print.png,       subject: Об. 268,   category: танк,     note: зимний камуфляж,
+     tags_expected: [Танк, Снег, Зима, Камуфляж]}
+  - {name: is3-summer-print.png,           subject: ИС-3,      category: танк,     note: в снегу, хотя в имени «summer» — подпись раньше была по имени файла,
+     tags_expected: [Танк, Снег, Зима]}
+  - {name: is3-winter-print.png,           subject: ИС-3,      category: танк,     note: зимняя сцена,
+     tags_expected: [Танк, Снег, Зима, Лес]}
+  - {name: conqueror-red-print.png,        subject: Conqueror, category: танк,     note: красный,
+     tags_expected: [Танк, Снег, Зима, Горы, Небо]}
+  - {name: t14-armata-print.png,           subject: Т-14,      category: танк,     note: null,
+     tags_expected: [Танк, Снег, Зима, Небо]}
+  - {name: t72-winter-print.png,           subject: Т-72,      category: танк,     note: зимняя сцена,
+     tags_expected: [Танк, Снег, Зима]}
+  - {name: mi8-cloud-sharp-clean-print.png, subject: Ми-8,     category: вертолёт, note: заведомо чужой,
+     tags_expected: [Вертолёт, Лес, Огонь, Дым, Снег, Зима]}
 
 # Чего ждём от узнавания. Три уровня, и порог обязан их разделять: если между
 # «тот же объект» и «та же категория» он не различает, узнавание будет
@@ -110,3 +122,21 @@ measured:
     - {change: осветлена на треть, similarity: 0.960}
     - {change: пересохранена в JPEG 70, similarity: 0.915}
     - {change: другой объект — граница снизу, similarity: 0.896}
+
+# Замер автотегов 24.09.2026 (US-0478), по tags_expected, записанным до замера,
+# плюс пять надписей на белом (ждём только «Надпись») и три кадра толстовки
+# (не ждём ничего). Теги соревнуются внутри группы; вероятность ≥ 0.3, до
+# одного тега на группу.
+measured_tags:
+  settings: {template: "a photo of {}", probability_min: 0.3, per_group: 1}
+  result: {correct: 27, extra: 4, missed: 11, f1: 0.78}
+  with_implied: {correct: 44, extra: 6, missed: 11, f1: 0.84, why: следствия «Техника», «Военное», «Авиация» верны ровно тогда, когда верен тег объекта, — F1 растёт от них, а не от модели; сравнивать с result нельзя}
+  first_try: {correct: 12, extra: 3, missed: 26, why: один порог на весь словарь — военные теги набирают больше снега на любом танке}
+  removed: {Камуфляж: модель не отличает камуфляж от военной техники вообще}
+  notes:
+    - все семь танков — «Танк»; шесть из семи — «Снег» и «Зима» (у Т-14 снега под танком мало)
+    - вертолёт — «Вертолёт», «Огонь», «Снег», «Зима»; пропущены «Дым» и «Лес»
+    - кадры белой толстовки — ни одного тега: белый фон не засчитан за снег
+    - надпись «TANK POWER» — «Танк» вместо «Надпись»: модель читает слово на картинке
+    - второй тег местности (лес рядом со снегом, горы) почти не проходит — группа даёт один
+    - «TANK POWER» тянет за «Танком» и «Технику» с «Военным»: одна ошибка модели — три лишних тега

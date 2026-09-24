@@ -61,9 +61,32 @@ export interface Match {
   level: 'file' | 'same' | 'close'
 }
 
+export interface Tag {
+  code: string
+  name: string
+  /** Уверенность 0…1: «Снег 0.89» и «Снег 0.32» — разное, решает человек. */
+  score: number
+  model: string
+}
+
 export interface Recognised {
   digest: string
   matches: Match[]
+  /** Теги, поставленные сами. Пусто — модель ничего уверенно не увидела. */
+  tags: Tag[]
+}
+
+/** Теги уже лежащих файлов — без повторной загрузки картинок. */
+export async function fetchTags(digests: string[]): Promise<Record<string, Tag[]>> {
+  if (digests.length === 0) return {}
+  const r = await fetch(`${BASE}assets/tags`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(digests),
+  })
+  if (!r.ok) throw new Error(`Теги: ${r.status}`)
+  const rows = (await r.json()) as { digest: string; tags: Tag[] }[]
+  return Object.fromEntries(rows.map((x) => [x.digest, x.tags]))
 }
 
 /** Узнавание. Отдельным запросом: модель считает около 90 мс на картинку, и

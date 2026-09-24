@@ -5,7 +5,7 @@
 не помещается.
 """
 
-from sqlalchemy import Index, Integer, String, UniqueConstraint
+from sqlalchemy import Float, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
 
@@ -46,4 +46,30 @@ class AssetEmbedding(Base):
             postgresql_using="hnsw",
             postgresql_ops={"vector": "vector_cosine_ops"},
         ),
+    )
+
+
+class AssetTag(Base):
+    """Тег, поставленный картинке автоматически.
+
+    Привязан к ФАЙЛУ, как и вектор: один файл в десятке референсов тегируется
+    один раз. Хранится вместе с моделью — сменится модель или словарь, теги
+    пересчитываются, а не смешиваются со старыми.
+    """
+
+    __tablename__ = "asset_tags"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    #: Код тега из словаря: по нему ищут. Имя — для показа.
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    #: Уверенность 0…1. Человек видит её числом и сам решает, верить ли.
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("digest", "model", "code", name="uq_asset_tags_digest_model_code"),
+        # Поиск идёт по коду тега: «все снежные» — это все строки с code=snow.
+        Index("ix_asset_tags_code", "code"),
     )

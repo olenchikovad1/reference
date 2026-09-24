@@ -22,10 +22,14 @@ class Match:
     level: str
 
 
-async def remember(db: AsyncSession, digest: str, name: str, content: bytes) -> list[Match]:
+async def remember(
+    db: AsyncSession, digest: str, name: str, content: bytes
+) -> tuple[list[Match], embeddings.Embedding]:
     """Считает вектор, ищет похожее и запоминает.
 
     Порядок важен: сначала ищем, потом запоминаем. Иначе файл найдёт сам себя.
+    Вектор отдаётся наружу: из него же считаются теги, второй раз модель
+    гонять незачем.
     """
     emb = embeddings.embed(content)
     found = await repo.nearest(db, emb.model, emb.vector, exclude=digest)
@@ -38,7 +42,7 @@ async def remember(db: AsyncSession, digest: str, name: str, content: bytes) -> 
             out.append(Match(d, n, s, "same"))
         elif s >= cfg.similarity_close:
             out.append(Match(d, n, s, "close"))
-    return out
+    return out, emb
 
 
 async def put_vector(
