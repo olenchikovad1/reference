@@ -20,13 +20,28 @@ export interface Asset {
   reused: boolean
 }
 
+/** Хранилище отказало и сказало почему. Без причины — не ответило вовсе. */
+export class UploadRefused extends Error {
+  constructor(
+    readonly status: number,
+    readonly reason: string | null,
+  ) {
+    super(reason ?? `Загрузка: ${status}`)
+  }
+}
+
 export async function uploadAssets(files: File[]): Promise<Asset[]> {
   const body = new FormData()
   // Несколько файлов одной операцией: по одному — та же работа, ради
   // устранения которой всё затевалось.
   for (const f of files) body.append('files', f)
   const r = await fetch(`${BASE}assets`, { method: 'POST', body })
-  if (!r.ok) throw new Error(`Загрузка: ${r.status}`)
+  if (!r.ok) {
+    // Отказ с причиной словами — её и показываем: «хранилище не ответило» про
+    // файл, который просто слишком велик, увело бы человека не туда.
+    const detail = await r.json().then((j) => j?.detail).catch(() => null)
+    throw new UploadRefused(r.status, typeof detail === 'object' && detail?.reason ? detail.reason : null)
+  }
   return (await r.json()) as Asset[]
 }
 

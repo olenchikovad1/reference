@@ -21,9 +21,16 @@ async def upload(files: list[UploadFile]) -> list[AssetOut]:
     """
     out: list[AssetOut] = []
     for f in files:
-        content = await f.read()
+        name = f.filename or "без имени"
         try:
-            stored = service.store(content, f.filename or "без имени")
+            # Объявленный размер проверяется до чтения, настоящий — в store:
+            # объявленного может не быть, и верить ему на слово нельзя.
+            service.check_size(name, f.size)
+            stored = service.store(await f.read(), name)
+        except service.TooLarge as e:
+            # Код и форма — как у сервиса файлов платформы: страница, читающая
+            # отказ, после переезда не должна заметить разницы.
+            raise HTTPException(413, {"code": "file_too_large", "reason": str(e)}) from None
         except service.NotAnImage as e:
             raise HTTPException(415, f"{f.filename}: содержимое не опознано как изображение ({e})") from None
         out.append(

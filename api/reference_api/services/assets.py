@@ -28,6 +28,32 @@ class UnknownPreset(Exception):
     """Такой ступени нет. Отказ, а не подбор похожего."""
 
 
+#: Предел картинки — как у сервиса файлов платформы (её решение 0024): наше
+#: хранилище временное и повторяет её договор (наше решение 0009). Принимай мы
+#: больше, после переезда та же картинка вдруг получала бы отказ.
+MAX_IMAGE_BYTES = 100 * 1024 * 1024
+
+
+class TooLarge(Exception):
+    """Файл больше предела. Причина — словами, для человека."""
+
+    def __init__(self, name: str, size: int) -> None:
+        mb = size / 1024 / 1024
+        limit = MAX_IMAGE_BYTES / 1024 / 1024
+        super().__init__(
+            f"«{name}» весит {mb:.0f} МБ, а картинка принимается до {limit:.0f} МБ. "
+            "Мастер-исходник такого размера держат в файловом хранилище и "
+            "подключают томом, а сюда кладут рабочую копию."
+        )
+
+
+def check_size(name: str, size: int | None) -> None:
+    """Отказ до чтения файла, если размер известен заранее. Лишние сотни
+    мегабайт в памяти ради того, чтобы потом отказать, ни к чему."""
+    if size is not None and size > MAX_IMAGE_BYTES:
+        raise TooLarge(name, size)
+
+
 class NotAnImage(Exception):
     """Содержимое не опознано как изображение."""
 
@@ -122,6 +148,7 @@ def store(content: bytes, name: str) -> Stored:
     картинку, пересохранённую или перекрашенную, ловит вектор (US-0431) — это
     разные сети, и вторая нужна потому, что первая пропускает.
     """
+    check_size(name, len(content))
     from reference_api.repositories import assets as repo
 
     content_type = kind_of(content)

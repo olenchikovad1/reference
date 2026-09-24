@@ -30,6 +30,7 @@ import {
   recogniseAssets,
   uploadAssets,
   uploadCanvas,
+  UploadRefused,
 } from '../shared/api/assets'
 import type { ReferenceMatch } from '../shared/api/references'
 import { listReferences, openReference, saveReference, type Card } from '../shared/api/references'
@@ -588,10 +589,16 @@ export function Bench() {
             // Не узналось из-за сбоя — молчим. Сообщение о неработающем
             // узнавании не помогает делать принт и отвлекает от работы.
           })
-      } catch {
+      } catch (e) {
         // Хранилище не ответило — работаем с тем, что в браузере. Потерять
         // возможность приложить картинку хуже, чем потерять её сохранение.
-        setDropHint('Файлы не сохранились: хранилище не ответило. Работа продолжается, но перезагрузка их потеряет.')
+        // Если оно отказало с причиной — показываем причину: «не ответило»
+        // про слишком большой файл увело бы человека не туда.
+        const reason = e instanceof UploadRefused ? e.reason : null
+        setDropHint(
+          (reason ?? 'Файлы не сохранились: хранилище не ответило.') +
+            ' Работа продолжается, но перезагрузка их потеряет.',
+        )
       }
       sources.forEach((s) => cacheImage(s))
       const opaque = read.filter((d) => !d.hasAlpha)

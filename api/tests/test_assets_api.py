@@ -204,3 +204,24 @@ async def test_nothing_similar_gives_no_window(client) -> None:
     """
     lone = (await send(client, ("одинокая.png", png(300, 200, shade=200)))).json()[0]
     assert (await recognise(client, lone["digest"]))[lone["digest"]] == []
+
+
+async def test_too_large_is_refused_like_the_platform_does(client, monkeypatch) -> None:
+    """Слишком большой файл — отказ 413 с кодом платформы.
+
+    Наше хранилище временное и повторяет договор сервиса файлов платформы
+    (решение 0009). Предел там — 100 МБ на картинку; принимай мы больше,
+    после переезда та же картинка вдруг получила бы отказ. Предел в тесте
+    уменьшен, чтобы не гонять сто мегабайт.
+    """
+    from reference_api.services import assets as service
+
+    # Однотонная PNG 60×60 сжимается до нескольких сотен байт — предел ниже.
+    monkeypatch.setattr(service, "MAX_IMAGE_BYTES", 100)
+    r = await send(client, ("огромный.png", png(60, 60)))
+    assert r.status_code == 413, r.text
+    detail = r.json()["detail"]
+    assert detail["code"] == "file_too_large"
+    # Причина словами: сколько весит, какой предел и куда девать исходник.
+    assert "огромный.png" in detail["reason"]
+    assert "том" in detail["reason"]
