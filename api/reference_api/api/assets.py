@@ -91,7 +91,7 @@ async def recognise(
         # Теги — из того же вектора: картинку уже посмотрели, второй раз
         # модель не нужна.
         found = tagging.tag(emb.vector)
-        await tag_repo.replace(db, digest, tagging.MODEL_NAME, [(x.code, x.name, x.score) for x in found])
+        await tag_repo.replace(db, digest, tagging.model_name(), [(x.code, x.name, x.score) for x in found])
         named = await naming.name_of(db, digest, seen)
         out.append(
             RecognisedOut(
@@ -100,7 +100,10 @@ async def recognise(
                     MatchOut(digest=m.digest, name=m.name, similarity=m.similarity, level=m.level)
                     for m in seen
                 ],
-                tags=[TagOut(code=x.code, name=x.name, score=x.score, model=tagging.MODEL_NAME) for x in found],
+                tags=[
+                    TagOut(code=x.code, name=x.name, score=x.score, strong=x.strong, model=tagging.model_name())
+                    for x in found
+                ],
                 name=_name_out(named),
             )
         )
@@ -117,7 +120,8 @@ async def file_tags(digests: list[str], db: AsyncSession = Depends(session)) -> 
     вектора — у файла пусто, пока его не узнавали."""
     from reference_api.services.embeddings import MODEL_NAME as IMAGE_MODEL
 
-    stored = await tag_repo.of(db, digests, tagging.MODEL_NAME)
+    model = tagging.model_name()
+    stored = await tag_repo.of(db, digests, model)
     named = await naming.stored(db, digests)
     out: list[FileTagsOut] = []
     for d in digests:
@@ -126,12 +130,19 @@ async def file_tags(digests: list[str], db: AsyncSession = Depends(session)) -> 
             vec = await tag_repo.vector_of(db, d, IMAGE_MODEL)
             if vec is not None:
                 found = tagging.tag(vec)
-                await tag_repo.replace(db, d, tagging.MODEL_NAME, [(x.code, x.name, x.score) for x in found])
-                rows = (await tag_repo.of(db, [d], tagging.MODEL_NAME))[d]
+                await tag_repo.replace(db, d, model, [(x.code, x.name, x.score) for x in found])
+                rows = (await tag_repo.of(db, [d], model))[d]
+        # Хранятся веса, а не пометка «сильный»: граница считается из весов
+        # тем же правилом, что при постановке, и смена доли не требует
+        # пересчёта тегов.
+        strong = tagging.strong_of([r.score for r in rows])
         out.append(
             FileTagsOut(
                 digest=d,
-                tags=[TagOut(code=r.code, name=r.name, score=r.score, model=r.model) for r in rows],
+                tags=[
+                    TagOut(code=r.code, name=r.name, score=r.score, strong=st, model=r.model)
+                    for r, st in zip(rows, strong, strict=True)
+                ],
                 name=_name_out(named.get(d)),
             )
         )

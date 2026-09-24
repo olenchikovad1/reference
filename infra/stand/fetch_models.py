@@ -32,10 +32,9 @@ MODELS = [
         ),
         "size": 89_117_001,
     },
-    # Текстовая половина той же модели и её словарь — для автотегов: картинка
-    # сравнивается со словами словаря тегов (решение 0011). Той же модели,
-    # иначе векторы картинки и слов лежат в разных пространствах и не
-    # сравниваются.
+    # Английская текстовая половина той же модели и её словарь. Автотеги с
+    # US-0482 берут русский кодировщик ниже; эта нужна только замеру
+    # scripts/measure_names.py (US-0479) и уходит вместе с ним.
     {
         "path": "files/models/clip-vit-base-patch32/text_model_quantized.onnx",
         "url": (
@@ -48,6 +47,43 @@ MODELS = [
         "path": "files/models/clip-vit-base-patch32/tokenizer.json",
         "url": "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/main/tokenizer.json",
         "size": 2_224_119,
+    },
+    # Многоязычный текстовый кодировщик, дистиллированный в пространство той же
+    # CLIP ViT-B/32: русское слово сравнивается с уже лежащими векторами
+    # картинок без перевода. Теги без списка допустимых и поиск по весам
+    # (US-0482, US-0480). В onnx только трансформер: средний пулинг и слой
+    # 768→512 без смещения делаются руками, веса слоя — отдельным файлом.
+    {
+        "path": "files/models/clip-vit-b32-multilingual/model_quint8_avx2.onnx",
+        "url": (
+            "https://huggingface.co/sentence-transformers/clip-ViT-B-32-multilingual-v1/"
+            "resolve/main/onnx/model_quint8_avx2.onnx"
+        ),
+        "size": 135_377_779,
+    },
+    {
+        "path": "files/models/clip-vit-b32-multilingual/dense.safetensors",
+        "url": (
+            "https://huggingface.co/sentence-transformers/clip-ViT-B-32-multilingual-v1/"
+            "resolve/main/2_Dense/model.safetensors"
+        ),
+        "size": 1_572_984,
+    },
+    {
+        "path": "files/models/clip-vit-b32-multilingual/tokenizer.json",
+        "url": (
+            "https://huggingface.co/sentence-transformers/clip-ViT-B-32-multilingual-v1/"
+            "resolve/main/tokenizer.json"
+        ),
+        "size": 1_961_847,
+    },
+    # Словарь языка, из которого берутся слова тегов: «Новый частотный словарь
+    # русской лексики» (Ляшевская, Шаров). Не список допустимых — его никто не
+    # курирует; берутся существительные по частоте.
+    {
+        "path": "files/dictionaries/freq2011.zip",
+        "url": "http://dict.ruslang.ru/Freq2011.zip",
+        "size": 493_491,
     },
 ]
 

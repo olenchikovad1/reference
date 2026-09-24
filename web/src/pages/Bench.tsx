@@ -23,7 +23,7 @@ import {
 import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
-import type { FileTags, Match, Named } from '../shared/api/assets'
+import type { FileTags, Match, Named, Tag } from '../shared/api/assets'
 import {
   assetUrl,
   digestOf,
@@ -1194,15 +1194,7 @@ export function Bench() {
                     <NameChip named={tagsOf[digestOf(el.src)]!.name!} />
                   )}
                   {el.kind === 'image' && (tagsOf[digestOf(el.src)]?.tags ?? []).length > 0 && (
-                    <span style={S.tags}>
-                      {/* Уверенность рядом с тегом: человек сам решает, верить ли
-                          «Снег 0.32», — порог ставит машина, судит он. */}
-                      {(tagsOf[digestOf(el.src)]?.tags ?? []).map((tg) => (
-                        <span key={tg.code} style={S.tagChip} title={`уверенность ${tg.score.toFixed(2)} · ${tg.model}`}>
-                          {tg.name} <span style={S.tagScore}>{tg.score.toFixed(2)}</span>
-                        </span>
-                      ))}
-                    </span>
+                    <TagChips tags={tagsOf[digestOf(el.src)]!.tags} />
                   )}
                   <button
                     style={S.x}
@@ -1580,6 +1572,42 @@ function Recognised({ rows, onClose }: { rows: Row[]; onClose: () => void }) {
  *  надёжность: второе перепроверяют, и различать их надо с одного взгляда. */
 const NAME_SOURCES: Record<string, string> = { catalog: 'из каталога', inherited: 'как у той же картинки' }
 
+/** Вес — доля слова среди десяти тысяч слов словаря, обычно от 0.0005 до
+ *  0.05. Двумя знаками после запятой почти всё стало бы «0.00», поэтому —
+ *  проценты с двумя значащими цифрами: «танк 0.50 %», «артиллерист 1.2 %». */
+const weightText = (score: number) => `${(score * 100).toPrecision(2)} %`
+
+/** Теги картинки: сильные видны сразу, остальные из двадцати — по раскрытию.
+ *  Вес рядом с тегом: человек сам решает, верить ли «снег 0.31 %», — границу
+ *  сильных ставит машина, судит он. */
+function TagChips({ tags }: { tags: Tag[] }) {
+  const [open, setOpen] = useState(false)
+  const strong = tags.filter((t) => t.strong)
+  const rest = tags.filter((t) => !t.strong)
+  const chip = (tg: Tag, style: React.CSSProperties) => (
+    <span key={tg.code} style={style} title={`вес ${tg.score.toFixed(4)} · ${tg.model}`}>
+      {tg.name} <span style={S.tagScore}>{weightText(tg.score)}</span>
+    </span>
+  )
+  return (
+    <span style={S.tags}>
+      {strong.map((tg) => chip(tg, S.tagChip))}
+      {open && rest.map((tg) => chip(tg, S.tagWeak))}
+      {rest.length > 0 && (
+        <button
+          style={S.tagMore}
+          onClick={(e) => {
+            e.stopPropagation()
+            setOpen((v) => !v)
+          }}
+        >
+          {open ? 'свернуть' : `ещё ${rest.length}`}
+        </button>
+      )}
+    </span>
+  )
+}
+
 function NameChip({ named }: { named: Named }) {
   const from = NAME_SOURCES[named.source] ?? named.source
   return (
@@ -1706,6 +1734,8 @@ const S: Record<string, React.CSSProperties> = {
   nameSource: { fontWeight: 400, opacity: 0.8 },
   tagChip: { fontSize: 10, background: '#eef2ff', color: '#3730a3', padding: '1px 5px', borderRadius: 4 },
   tagScore: { color: '#818cf8' },
+  tagWeak: { fontSize: 10, background: '#f5f5f5', color: '#6b7280', padding: '1px 5px', borderRadius: 4 },
+  tagMore: { fontSize: 10, border: 'none', background: 'none', color: '#4f46e5', cursor: 'pointer', padding: '1px 3px' },
   warn: { color: '#b45309', fontSize: 13, lineHeight: 1.4, maxWidth: 620 },
   dim: { color: '#666', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4 },
 }

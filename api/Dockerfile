@@ -26,6 +26,10 @@ COPY reference_api ./reference_api
 
 # Процесс работает не от суперпользователя.
 RUN useradd --create-home --uid 10001 app && chown -R app:app /app
+# Каталог производных создаётся в образе и отдаётся процессу: именованный том,
+# смонтированный сюда, берёт владельца у каталога образа. Без этой строки том
+# принадлежит суперпользователю, и записать в него нельзя.
+RUN mkdir -p /srv/reference/cache && chown app:app /srv/reference/cache
 USER app
 
 EXPOSE 8000

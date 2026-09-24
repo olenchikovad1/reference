@@ -62,15 +62,16 @@ class AssetTag(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     digest: Mapped[str] = mapped_column(String(64), nullable=False)
     model: Mapped[str] = mapped_column(String(128), nullable=False)
-    #: Код тега из словаря: по нему ищут. Имя — для показа.
+    #: Слово словаря языка: по нему ищут. Имя — для показа, сейчас то же слово.
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    #: Уверенность 0…1. Человек видит её числом и сам решает, верить ли.
+    #: Вес 0…1 — доля слова среди всех слов словаря. «Сильный» не хранится:
+    #: он считается из весов картинки при каждом чтении (services/tags.py).
     score: Mapped[float] = mapped_column(Float, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("digest", "model", "code", name="uq_asset_tags_digest_model_code"),
-        # Поиск идёт по коду тега: «все снежные» — это все строки с code=snow.
+        # Поиск идёт по слову тега: «все с танком» — это все строки с code=танк.
         Index("ix_asset_tags_code", "code"),
     )
 
