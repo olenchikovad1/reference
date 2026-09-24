@@ -37,6 +37,7 @@ import { readDropped } from '../shared/dropped'
 import { onSide, sidesUsed } from '../shared/sides'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
+import { checkZones } from '../shared/zones'
 import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
 import { useHistoryState } from '../shared/useHistory'
 
@@ -135,7 +136,10 @@ export function Bench() {
     return counts
   }, [composition, stateCode])
 
-  const selected = find(composition, composition.selectedId)
+  // Свойства правятся у ВИДИМОГО элемента. Из полной композиции сюда попадал
+  // бы выделенный на другой стороне: панель показывает одно, экран другое, и
+  // правка уходит в невидимое — заметить это можно только по чужому кадру.
+  const selected = find(visible, visible.selectedId)
 
   // Сохраняем то, что закреплено. Живое перетаскивание не пишем: писать
   // десятки раз в секунду незачем, а отличить закреплённое от живого умеет
@@ -146,7 +150,11 @@ export function Bench() {
   }, [composition, stateCode, colourCode])
   // Пороги приходят из описания изделия, а не из кода.
   const rules = product?.print_rules
-  const findings = check(
+  // Две группы находок, а не одна: первая считается из самого принта и верна на
+  // любом изделии, вторая — из КАДРА, и без состояния её посчитать нечем.
+  const findings = [
+    ...checkZones(visible, state ?? { code: "", kind: "precise", anchors: {}, zones: {}, lines: {} }, calibration),
+    ...check(
     visible,
     rules
       ? {
@@ -156,7 +164,8 @@ export function Bench() {
           maxColours: rules.max_colours,
         }
       : undefined,
-  )
+    ),
+  ]
   const keyOf = (f: Finding) => `${f.rule}:${f.elementId ?? '-'}`
   const open = findings.filter((f) => !dismissed.has(keyOf(f)))
 
