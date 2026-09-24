@@ -1,5 +1,7 @@
 """Собранный принт: что принимается и что отдаётся."""
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -9,6 +11,10 @@ class SaveIn(BaseModel):
     sheet_digest: str
     image_digests: list[str] = []
     texts: list[str] = []
+    #: Работа целиком. Форму её держит страница: сервис хранит и отдаёт
+    #: как есть, без разбора, чтобы новая история на странице не требовала
+    #: правки сервиса.
+    work: dict | None = None
 
 
 class ReferenceMatchOut(BaseModel):
@@ -32,3 +38,14 @@ class SavedOut(BaseModel):
 class FoundOut(BaseModel):
     id: int
     name: str
+
+
+class CardOut(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+
+
+class CardWorkOut(CardOut):
+    #: Пусто — карточка сохранена до того, как работу начали хранить.
+    work: dict | None

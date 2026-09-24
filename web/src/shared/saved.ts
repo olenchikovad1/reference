@@ -19,6 +19,8 @@ export interface SavedState {
   readonly version: 2
   readonly stateCode: string
   readonly colourCode: string
+  /** Выбранный размер. Нет — база. */
+  readonly size?: number | null
   readonly composition: Composition
 }
 

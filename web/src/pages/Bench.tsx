@@ -32,9 +32,9 @@ import {
   uploadCanvas,
 } from '../shared/api/assets'
 import type { ReferenceMatch } from '../shared/api/references'
-import { saveReference } from '../shared/api/references'
+import { listReferences, openReference, saveReference, type Card } from '../shared/api/references'
 import { readDropped } from '../shared/dropped'
-import { newElementId, onSide, sidesUsed } from '../shared/sides'
+import { newElementId, onSide, sidesUsed, upgrade } from '../shared/sides'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { byGrid, editAtSize, gradeOf, graded, manualAt, resetAtSize } from '../shared/grading'
 import { forget, load, save } from '../shared/saved'
@@ -97,6 +97,12 @@ export function Bench() {
   // Узнанное при сохранении собранного принта. Отдельно от seen: там
   // совпадают ФАЙЛЫ, здесь — собранные принты, и выводы разные.
   const [seenCards, setSeenCards] = useState<ReferenceMatch[]>([])
+  // Сохранённые карточки. Грузятся при открытии и после каждого сохранения.
+  const [cards, setCards] = useState<Card[]>([])
+  const [opened, setOpened] = useState<string | null>(null)
+  useEffect(() => {
+    void listReferences().then(setCards).catch(() => setCards([]))
+  }, [])
   // Закрытые предупреждения: «так и задумано». Ключ — правило плюс элемент.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const viewCanvas = useRef<HTMLCanvasElement | null>(null)
@@ -117,6 +123,7 @@ export function Bench() {
     if (was) {
       setStateCode(was.stateCode)
       setColourCode(was.colourCode)
+      setSize(was.size ?? null)
       for (const el of was.composition.elements) {
         if (el.kind === 'image') cacheImage(el.src)
       }
@@ -211,8 +218,8 @@ export function Bench() {
   // только тот, кто менял.
   useEffect(() => {
     if (composition.elements.length === 0) return
-    save({ version: 2, stateCode, colourCode, composition })
-  }, [composition, stateCode, colourCode])
+    save({ version: 2, stateCode, colourCode, size, composition })
+  }, [composition, stateCode, colourCode, size])
   // Пороги приходят из описания изделия, а не из кода.
   const rules = product?.print_rules
   // Две группы находок, а не одна: первая считается из самого принта и верна на
@@ -351,7 +358,7 @@ export function Bench() {
     const canvas = renderSheet(visible, images.current, 120)
     const sheet = await uploadCanvas(canvas, `${PRODUCT}-${stateCode}-list.png`)
     const found = await saveReference({
-      name: `${PRODUCT} · ${SIDE_NAMES[stateCode] ?? stateCode}`,
+      name: `${PRODUCT} · ${SIDE_NAMES[stateCode] ?? stateCode} · ${colourCode}${size ? ' · ' + size : ''}`,
       sheet_digest: sheet,
       image_digests: visible.elements
         .filter((el) => el.kind === 'image')
@@ -360,8 +367,37 @@ export function Bench() {
       texts: visible.elements
         .filter((el) => el.kind === 'text')
         .map((el) => (el.kind === 'text' ? el.text : '')),
+      // Работа целиком — все стороны, сантиметры базы, исключения размеров,
+      // цвет. Лист и надписи выше — для узнавания; открывается карточка
+      // вот этим.
+      work: { version: 2, stateCode, colourCode, size, composition },
     })
     setSeenCards(found.matches)
+    void listReferences().then(setCards).catch(() => undefined)
+  }
+
+  /** Открыть сохранённую карточку: работа восстанавливается как была. */
+  async function openCard(card: Card) {
+    const got = await openReference(card.id)
+    const w = got.work as {
+      stateCode?: string
+      colourCode?: string
+      size?: number | null
+      composition?: typeof composition
+    } | null
+    if (!w?.composition) {
+      // Карточка из тех времён, когда сохранялся только снимок для узнавания.
+      // Открыть её нечем — и сказано это прямо, а не пустым изделием.
+      setDropHint(`«${card.name}» сохранена до того, как карточки стали хранить работу: открыть нечего.`)
+      return
+    }
+    const c = upgrade(w.composition)
+    for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
+    if (w.stateCode) setStateCode(w.stateCode)
+    if (w.colourCode) setColourCode(w.colourCode)
+    setSize(w.size ?? null)
+    commit(c)
+    setOpened(`${card.name} · №${card.id}`)
   }
 
   /** Печатный лист: сборка из сантиметров, мимо шейдера, в печатном разрешении. */
@@ -987,6 +1023,28 @@ export function Bench() {
               вернуть
             </button>
             <p style={S.dim}>Ctrl+Z и Ctrl+Shift+Z. Ползунки подбора не откатываются</p>
+          </Group>
+
+          <Group title={`Сохранённое (${cards.length})`}>
+            {opened && <p style={S.dim}>открыта: {opened}</p>}
+            {cards.length === 0 && <p style={S.dim}>пока ничего — «сохранить принт» кладёт сюда</p>}
+            <div style={S.list}>
+              {cards.slice(0, 12).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => void openCard(c)}
+                  title={`${c.name} · ${new Date(c.created_at).toLocaleString('ru-RU')}`}
+                  style={S.setArtwork}
+                >
+                  <span style={S.itemName}>
+                    №{c.id} · {c.name}
+                  </span>
+                  <span style={S.tag}>
+                    {new Date(c.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </button>
+              ))}
+            </div>
           </Group>
 
           <Group title="Набор принтов">

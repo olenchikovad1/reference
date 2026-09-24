@@ -1,10 +1,17 @@
 """Собранный принт: вход по HTTP."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
-from reference_api.schemas.references import FoundOut, ReferenceMatchOut, SavedOut, SaveIn
+from reference_api.schemas.references import (
+    CardOut,
+    CardWorkOut,
+    FoundOut,
+    ReferenceMatchOut,
+    SavedOut,
+    SaveIn,
+)
 from reference_api.services import references as service
 
 router = APIRouter(prefix="/references", tags=["references"])
@@ -14,7 +21,7 @@ router = APIRouter(prefix="/references", tags=["references"])
 async def save(body: SaveIn, db: AsyncSession = Depends(session)) -> SavedOut:
     """Сохраняет собранный принт и сразу говорит, что узналось."""
     card_id, found = await service.save(
-        db, body.name, body.sheet_digest, body.image_digests, body.texts
+        db, body.name, body.sheet_digest, body.image_digests, body.texts, body.work
     )
     return SavedOut(
         id=card_id,
@@ -41,3 +48,21 @@ async def search(q: str, db: AsyncSession = Depends(session)) -> list[FoundOut]:
     поиск сломан.
     """
     return [FoundOut(id=i, name=n) for i, n in await service.search(db, q)]
+
+
+@router.get("", response_model=list[CardOut])
+async def latest(db: AsyncSession = Depends(session)) -> list[CardOut]:
+    """Сохранённые карточки, свежие первыми."""
+    return [CardOut(id=c.id, name=c.name, created_at=c.created_at) for c in await service.latest(db)]
+
+
+# Объявлен ПОСЛЕ /search: иначе «search» разбирался бы как номер карточки и
+# падал бы проверкой типа, а не находил поиск.
+@router.get("/{card_id}", response_model=CardWorkOut)
+async def open_card(card_id: int, db: AsyncSession = Depends(session)) -> CardWorkOut:
+    """Карточка с работой — чтобы открыть её там, где сохранили, или на другом
+    компьютере."""
+    card = await service.open_card(db, card_id)
+    if card is None:
+        raise HTTPException(404, "карточки с таким номером нет")
+    return CardWorkOut(id=card.id, name=card.name, created_at=card.created_at, work=card.work)

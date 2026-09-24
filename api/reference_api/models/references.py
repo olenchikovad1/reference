@@ -11,7 +11,7 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from reference_api.models.base import Base
@@ -39,6 +39,12 @@ class Reference(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    #: Работа целиком: стороны, сантиметры, исключения размеров, цвет,
+    #: выбранный размер. Документом, а не таблицами: форма работы ещё будет
+    #: меняться с каждой историей, а искать по её полям никто не будет — ищут
+    #: по надписям и картинкам, они лежат рядом отдельно. Пусто — карточка
+    #: сохранена до того, как работу начали хранить.
+    work: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     texts: Mapped[list["ReferenceText"]] = relationship(
         back_populates="reference", cascade="all, delete-orphan", lazy="selectin"

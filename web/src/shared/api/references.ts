@@ -26,6 +26,9 @@ export async function saveReference(body: {
   sheet_digest: string
   image_digests: string[]
   texts: string[]
+  /** Работа целиком: без неё карточка — снимок для узнавания, открыть
+   *  который нечем. */
+  work?: unknown
 }): Promise<Saved> {
   const r = await fetch(`${BASE}references`, {
     method: 'POST',
@@ -40,5 +43,25 @@ export async function saveReference(body: {
 export async function searchReferences(q: string): Promise<{ id: number; name: string }[]> {
   const r = await fetch(`${BASE}references/search?q=${encodeURIComponent(q)}`)
   if (!r.ok) throw new Error(`Поиск: ${r.status}`)
+  return await r.json()
+}
+
+export interface Card {
+  id: number
+  name: string
+  created_at: string
+}
+
+/** Сохранённые карточки, свежие первыми. */
+export async function listReferences(): Promise<Card[]> {
+  const r = await fetch(`${BASE}references`)
+  if (!r.ok) throw new Error(`Список: ${r.status}`)
+  return await r.json()
+}
+
+/** Карточка с работой. work пусто — сохранена до того, как её начали хранить. */
+export async function openReference(id: number): Promise<Card & { work: unknown }> {
+  const r = await fetch(`${BASE}references/${id}`)
+  if (!r.ok) throw new Error(`Открыть: ${r.status}`)
   return await r.json()
 }

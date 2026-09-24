@@ -7,11 +7,19 @@ from reference_api.models.references import Reference, ReferenceText
 
 
 async def save(
-    db: AsyncSession, name: str, sheet_digest: str, image_digests: list[str], texts: list[tuple[str, str]]
+    db: AsyncSession,
+    name: str,
+    sheet_digest: str,
+    image_digests: list[str],
+    texts: list[tuple[str, str]],
+    work: dict | None = None,
 ) -> Reference:
-    """Кладёт карточку вместе с её надписями. Надписи приходят парами
-    «как написано, нормализовано»: нормализация — забота сервиса."""
-    card = Reference(name=name, sheet_digest=sheet_digest, image_digests=list(image_digests))
+    """Кладёт НОВУЮ карточку вместе с её надписями. Пути обновления нет
+    вовсе (И-6): сохранить ещё раз — это новая карточка, прошлая остаётся как
+    была. Надписи приходят парами «как написано, нормализовано»."""
+    card = Reference(
+        name=name, sheet_digest=sheet_digest, image_digests=list(image_digests), work=work
+    )
     card.texts = [ReferenceText(text=t, normalised=n) for t, n in texts]
     db.add(card)
     await db.commit()
@@ -87,3 +95,15 @@ async def search(db: AsyncSession, normalised: str, limit: int = 20) -> list[Ref
         .limit(limit)
     )
     return list(rows.unique().scalars())
+
+
+async def get(db: AsyncSession, card_id: int) -> Reference | None:
+    return await db.get(Reference, card_id)
+
+
+async def latest(db: AsyncSession, limit: int = 50) -> list[Reference]:
+    """Свежие первыми: открывают почти всегда последнее сохранённое."""
+    rows = await db.execute(
+        select(Reference).order_by(Reference.created_at.desc(), Reference.id.desc()).limit(limit)
+    )
+    return list(rows.scalars())

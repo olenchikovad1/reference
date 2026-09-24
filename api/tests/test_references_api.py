@@ -156,3 +156,89 @@ async def test_the_very_same_sheet_matches_by_print(client) -> None:
     second = await save(client, name="второй", sheet=sheet, images=[pic], texts=["ЛЕТО 2025"])
     by = [m["by"] for m in second["matches"]]
     assert by == ["print"], f"тот же лист не узнался как лист: {second['matches']}"
+
+
+WORK = {
+    "version": 2,
+    "stateCode": "back",
+    "colourCode": "BLACK",
+    "size": 98,
+    "composition": {
+        "selectedId": None,
+        "elements": [
+            {
+                "id": "el-a",
+                "kind": "image",
+                "name": "перед",
+                "src": "/x.png",
+                "aspect": 1,
+                "hasAlpha": True,
+                "placement": {"side": "front", "anchor": "neck", "dxCm": 0, "dyCm": 12, "widthCm": 18, "rotation": 0},
+            },
+            {
+                "id": "el-b",
+                "kind": "image",
+                "name": "спина",
+                "src": "/y.png",
+                "aspect": 1,
+                "hasAlpha": True,
+                "placement": {
+                    "side": "back",
+                    "anchor": "neck",
+                    "dxCm": 0,
+                    "dyCm": 14,
+                    "widthCm": 30,
+                    "rotation": 0,
+                    "widthBySize": {"98": 24},
+                },
+            },
+        ],
+    },
+}
+
+
+async def test_the_whole_work_is_saved_and_opens_as_it_was(client) -> None:
+    """Сохраняется работа целиком, а не снимок для узнавания.
+
+    Раньше на сервер уходили лист, картинки и надписи — размещений, цвета и
+    исключений размеров там не было, и открыть работу с другого компьютера
+    было нечем.
+    """
+    sheet = await store(client, "лист.png", 400, 300, 40)
+    r = await client.post(
+        "/reference/api/references",
+        json={"name": "работа", "sheet_digest": sheet, "image_digests": [], "texts": [], "work": WORK},
+    )
+    assert r.status_code == 200, r.text
+    card = r.json()["id"]
+
+    opened = await client.get(f"/reference/api/references/{card}")
+    assert opened.status_code == 200
+    assert opened.json()["work"] == WORK, "работа открылась не такой, какой её сохранили"
+
+
+async def test_saving_again_makes_a_new_card_and_keeps_the_first(client) -> None:
+    """Каждое сохранение — новая карточка; прошлые не перезаписываются (И-6)."""
+    sheet = await store(client, "лист.png", 400, 300, 40)
+    first = (
+        await client.post(
+            "/reference/api/references",
+            json={"name": "первая", "sheet_digest": sheet, "image_digests": [], "texts": [], "work": WORK},
+        )
+    ).json()["id"]
+    changed = {**WORK, "colourCode": "WHITE"}
+    second = (
+        await client.post(
+            "/reference/api/references",
+            json={"name": "вторая", "sheet_digest": sheet, "image_digests": [], "texts": [], "work": changed},
+        )
+    ).json()["id"]
+
+    assert second != first
+    assert (await client.get(f"/reference/api/references/{first}")).json()["work"]["colourCode"] == "BLACK"
+    listed = (await client.get("/reference/api/references")).json()
+    assert [c["id"] for c in listed][:2] == [second, first], "свежие — первыми"
+
+
+async def test_unknown_card_is_a_404(client) -> None:
+    assert (await client.get("/reference/api/references/999999")).status_code == 404

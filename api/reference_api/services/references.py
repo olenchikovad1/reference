@@ -43,7 +43,12 @@ def normalise(text: str) -> str:
 
 
 async def save(
-    db: AsyncSession, name: str, sheet_digest: str, image_digests: list[str], texts: list[str]
+    db: AsyncSession,
+    name: str,
+    sheet_digest: str,
+    image_digests: list[str],
+    texts: list[str],
+    work: dict | None = None,
 ) -> tuple[int, list[Match]]:
     """Сохраняет собранный принт и говорит, что узналось.
 
@@ -52,7 +57,7 @@ async def save(
     """
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=0)
     card = await repo.save(
-        db, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts]
+        db, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts], work
     )
 
     # Вектор листа считается ПОСЛЕ поиска и по тому же оригиналу, что у картинок.
@@ -101,3 +106,12 @@ async def _recognise(
 async def search(db: AsyncSession, query: str) -> list[tuple[int, str]]:
     """Точный поиск по надписи."""
     return [(c.id, c.name) for c in await repo.search(db, normalise(query))]
+
+
+async def open_card(db: AsyncSession, card_id: int):
+    """Карточка с её работой. None — такой нет."""
+    return await repo.get(db, card_id)
+
+
+async def latest(db: AsyncSession):
+    return await repo.latest(db)
