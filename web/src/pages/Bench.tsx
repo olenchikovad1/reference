@@ -38,6 +38,7 @@ import { onSide, sidesUsed } from '../shared/sides'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones } from '../shared/zones'
+import { fieldFor, sizesWithField } from '../shared/fields'
 import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
 import { useHistoryState } from '../shared/useHistory'
 
@@ -59,6 +60,9 @@ export function Bench() {
   const [product, setProduct] = useState<Product | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [stateCode, setStateCode] = useState('front')
+  // Размер изделия. Печатное поле идёт за ним: принт, помещающийся на 164,
+  // на 98 не влезает вдвое, и узнать это надо здесь, а не на фабрике.
+  const [size, setSize] = useState<number | null>(null)
   const [overlay, setOverlay] = useState<Overlay>('zones')
   const history = useHistoryState<Composition>(EMPTY)
   const composition = history.value
@@ -139,6 +143,13 @@ export function Bench() {
   // Свойства правятся у ВИДИМОГО элемента. Из полной композиции сюда попадал
   // бы выделенный на другой стороне: панель показывает одно, экран другое, и
   // правка уходит в невидимое — заметить это можно только по чужому кадру.
+  // Поле выбранного размера. null — для этого размера технолог поля не дал,
+  // и тогда считаем по зоне кадра, сказав об этом человеку.
+  const field = useMemo(
+    () => fieldFor(product?.print_fields ?? null, size ?? 0, stateCode, state?.zones?.print, calibration),
+    [product, size, stateCode, state, calibration],
+  )
+
   const selected = find(visible, visible.selectedId)
 
   // Сохраняем то, что закреплено. Живое перетаскивание не пишем: писать
@@ -153,7 +164,12 @@ export function Bench() {
   // Две группы находок, а не одна: первая считается из самого принта и верна на
   // любом изделии, вторая — из КАДРА, и без состояния её посчитать нечем.
   const findings = [
-    ...checkZones(visible, state ?? { code: "", kind: "precise", anchors: {}, zones: {}, lines: {} }, calibration),
+    ...checkZones(
+      visible,
+      state ?? { code: '', kind: 'precise', anchors: {}, zones: {}, lines: {} },
+      calibration,
+      field,
+    ),
     ...check(
     visible,
     rules
@@ -638,6 +654,46 @@ export function Bench() {
                 {s.kind === 'illustrative' && <em style={S.tag}> только показ</em>}
               </button>
             ))}
+          </Group>
+
+          <Group title="Размер">
+            <div style={S.row}>
+              {product.size_set.sizes.map((s) => {
+                const known = sizesWithField(product.print_fields ?? null, stateCode).includes(s)
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setSize(s)}
+                    style={{
+                      ...(s === size ? S.btnOn : S.btn),
+                      // Размер без поля показан бледным, а не спрятан: спрятанный
+                      // размер выглядит как несуществующий, а он существует —
+                      // просто технолог поля для него не дал.
+                      opacity: known ? 1 : 0.45,
+                    }}
+                    title={known ? '' : 'поля для этого размера нет — спросить технолога'}
+                  >
+                    {s}
+                  </button>
+                )
+              })}
+            </div>
+            <p style={S.dim}>
+              {size === null
+                ? 'Размер не выбран: поле считается по зоне кадра, а она нарисована для одного размера.'
+                : field
+                  ? `Поле ${product.print_fields?.by_size?.[String(size)]?.[stateCode]?.join(' × ')} см` +
+                    (product.print_fields?.provisional ? ' · предварительно, от технолога ещё не подтверждено' : '')
+                  : 'Для этого размера поля нет — считаем по зоне кадра. Число придёт от технолога.'}
+            </p>
+            <p style={S.dim}>
+              {/* Отрисованный размер и выбранный — разные вещи. Кадр один, и
+                  растягивать его под размер нельзя: врать будет всё. */}
+              Отрисован{' '}
+              {product.rendered_size
+                ? `${product.rendered_size}`
+                : `предположительно ${product.rendered_size_assumed} — в именах кадров размера нет`}
+            </p>
           </Group>
 
           <Group title="Цвет изделия">

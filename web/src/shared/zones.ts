@@ -100,16 +100,20 @@ export function checkZones(
   c: Composition,
   state: FrameState,
   cal: Calibration,
+  /** Поле выбранного размера. Есть — считаем по нему: зона нарисована для
+   *  отрендеренного изделия, а печатают на выбранном размере. Нет — по зоне,
+   *  и человеку сказано, что размер без поля. */
+  field?: Polygon | null,
 ): Finding[] {
   if (state.kind === 'illustrative') return []
   const found: Finding[] = []
-  const field = state.zones.print as Polygon | undefined
+  const bounds = field ?? (state.zones.print as Polygon | undefined)
 
   for (const el of c.elements) {
     const rect = rectOf(el, state, cal)
 
-    if (field && field.length >= 3) {
-      const inside = coverage(field, rect)
+    if (bounds && bounds.length >= 3) {
+      const inside = coverage(bounds, rect)
       if (inside < 0.999) {
         const outside = Math.max(1, Math.round((1 - inside) * 100))
         found.push({
