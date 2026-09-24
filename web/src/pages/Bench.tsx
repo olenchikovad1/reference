@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
 import { DEFAULT_PARAMS, type RenderParams } from '../candidates/renderer'
@@ -208,16 +208,21 @@ export function Bench() {
   const rules = product?.print_rules
   // Две группы находок, а не одна: первая считается из самого принта и верна на
   // любом изделии, вторая — из КАДРА, и без состояния её посчитать нечем.
+  // Находки считаются по ОТЛОЖЕННОЙ композиции: во время перетаскивания
+  // панели проверок незачем обновляться на каждый кадр, а считаются они по
+  // ткани дороже, чем рисуется сам принт. Отстают на кадр-другой и догоняют,
+  // как только рука остановилась.
+  const checked = useDeferredValue(visible)
   const findings = [
     ...checkZones(
-      visible,
+      checked,
       state ?? { code: '', kind: 'precise', anchors: {}, zones: {}, lines: {} },
       calibration,
       field,
       torso && state ? { torso, anchors: state.anchors, fieldCm } : null,
     ),
     ...check(
-    visible,
+    checked,
     rules
       ? {
           minLetterCm: rules.min_letter_cm,

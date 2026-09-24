@@ -111,8 +111,11 @@ function polyToSurface(ctx: SurfaceContext, panel: Panel, poly: readonly Point[]
   for (let i = 0; i < n; i += 1) {
     const a = poly[i]
     const b = poly[(i + 1) % poly.length]
-    for (let k = 0; k < 8; k += 1) {
-      const f = k / 8
+    // Три отрезка на сторону, а не больше: изгиб в пределах стороны зоны мал,
+    // а каждая лишняя вершина множит стоимость подсчёта покрытия — он идёт
+    // сотнями проб на элемент при каждом движении.
+    for (let k = 0; k < 3; k += 1) {
+      const f = k / 3
       out.push(frameToSurface(ctx, panel, [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]))
     }
   }
