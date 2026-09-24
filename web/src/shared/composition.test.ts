@@ -10,7 +10,7 @@ const tank = (id: string): ImageElement => ({
   src: `blob:${id}`,
   aspect: 2,
   hasAlpha: true,
-  placement: { anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 20, rotation: 0 },
+  placement: { side: 'front', anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 20, rotation: 0 },
 })
 
 describe('состав композиции', () => {

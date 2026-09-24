@@ -10,7 +10,7 @@ const picture = (id: string, over: Partial<ImageElement['placement']> = {}): Ima
   src: `blob:${id}`,
   aspect: 2,
   hasAlpha: true,
-  placement: { anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 20, rotation: 0, ...over },
+  placement: { side: 'front', anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 20, rotation: 0, ...over },
 })
 
 const label: TextElement = {
@@ -23,7 +23,7 @@ const label: TextElement = {
   colourCode: 'WHITE',
   rgb: [255, 255, 255],
   textAspect: 4,
-  placement: { anchor: 'neck', dxCm: 0, dyCm: 30, widthCm: 12, rotation: 0 },
+  placement: { side: 'front', anchor: 'neck', dxCm: 0, dyCm: 30, widthCm: 12, rotation: 0 },
 }
 
 const one = (c: Composition = EMPTY) => add(c, picture('a'))

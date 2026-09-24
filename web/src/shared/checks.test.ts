@@ -13,7 +13,7 @@ const label = (over: Partial<TextElement> = {}): TextElement => ({
   colourCode: 'WHITE',
   rgb: [255, 255, 255],
   textAspect: 4,
-  placement: { anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 20, rotation: 0 },
+  placement: { side: 'front', anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 20, rotation: 0 },
   ...over,
 })
 
@@ -24,7 +24,7 @@ const picture: ImageElement = {
   src: 'blob:i',
   aspect: 2,
   hasAlpha: true,
-  placement: { anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 20, rotation: 0 },
+  placement: { side: 'front', anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 20, rotation: 0 },
 }
 
 /** Надпись заданной высоты буквы: ширина подбирается от пропорции. */

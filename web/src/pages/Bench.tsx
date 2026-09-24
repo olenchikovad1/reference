@@ -34,6 +34,7 @@ import {
 import type { ReferenceMatch } from '../shared/api/references'
 import { saveReference } from '../shared/api/references'
 import { readDropped } from '../shared/dropped'
+import { onSide, sidesUsed } from '../shared/sides'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
 import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
@@ -44,6 +45,9 @@ import { useHistoryState } from '../shared/useHistory'
 // что сантиметры стыкуются с кадром и что этим можно пользоваться руками.
 
 const PRODUCT = 'B-HDY-14'
+
+// Имена сторон по-русски. Коды уходят на фабрику, имена — человеку.
+const SIDE_NAMES: Record<string, string> = { front: 'перед', back: 'спина', left: 'левый бок' }
 type Overlay = 'none' | 'anchors' | 'zones' | 'all'
 
 export function Bench() {
@@ -111,6 +115,17 @@ export function Bench() {
     () => ({ pxPerCm: product?.calibration.px_per_cm ?? 1, provisional: true }),
     [product],
   )
+  // Вид на ТЕКУЩУЮ сторону. Правки идут в полную композицию по id, поэтому
+  // переключение стороны ничего не теряет: отбор — это взгляд, а не правка.
+  const visible = useMemo(() => onSide(composition, stateCode), [composition, stateCode])
+  // Что лежит на других сторонах. Без этого про спину забывают и сдают
+  // половину работы.
+  const elsewhere = useMemo(() => {
+    const counts = sidesUsed(composition)
+    delete counts[stateCode]
+    return counts
+  }, [composition, stateCode])
+
   const selected = find(composition, composition.selectedId)
 
   // Сохраняем то, что закреплено. Живое перетаскивание не пишем: писать
@@ -118,12 +133,12 @@ export function Bench() {
   // только тот, кто менял.
   useEffect(() => {
     if (composition.elements.length === 0) return
-    save({ version: 1, stateCode, colourCode, composition })
+    save({ version: 2, stateCode, colourCode, composition })
   }, [composition, stateCode, colourCode])
   // Пороги приходят из описания изделия, а не из кода.
   const rules = product?.print_rules
   const findings = check(
-    composition,
+    visible,
     rules
       ? {
           minLetterCm: rules.min_letter_cm,
@@ -175,6 +190,7 @@ export function Bench() {
           // него настоящая, кроме того, который её нарочно не имеет.
           hasAlpha: item.name !== 'fon-ne-vyrezan.png',
           placement: {
+            side: stateCode,
             anchor: 'neck',
             dxCm: 0,
             dyCm: 12,
@@ -204,17 +220,19 @@ export function Bench() {
    * «такой принт уже был», а вторая копия рядом разошлась бы с первой.
    */
   async function saveCard() {
-    if (composition.elements.length === 0) return
-    const canvas = renderSheet(composition, images.current, 120)
+    // Сохраняется СТОРОНА, а не изделие целиком: перед и спина печатаются
+    // разными прогонами, и «такой принт уже был» — вопрос про сторону.
+    if (visible.elements.length === 0) return
+    const canvas = renderSheet(visible, images.current, 120)
     const sheet = await uploadCanvas(canvas, `${PRODUCT}-${stateCode}-list.png`)
     const found = await saveReference({
-      name: `${PRODUCT} · ${stateCode}`,
+      name: `${PRODUCT} · ${SIDE_NAMES[stateCode] ?? stateCode}`,
       sheet_digest: sheet,
-      image_digests: composition.elements
+      image_digests: visible.elements
         .filter((el) => el.kind === 'image')
         .map((el) => digestOf(el.src))
         .filter(Boolean),
-      texts: composition.elements
+      texts: visible.elements
         .filter((el) => el.kind === 'text')
         .map((el) => (el.kind === 'text' ? el.text : '')),
     })
@@ -224,16 +242,27 @@ export function Bench() {
   /** Печатный лист: сборка из сантиметров, мимо шейдера, в печатном разрешении. */
   function downloadSheet() {
     if (composition.elements.length === 0) return
+    // По файлу на КАЖДУЮ сторону, где что-то есть. Сведённые в один лист перед
+    // и спина дают файл, который на фабрике не печатается ничем: это два
+    // разных прогона.
+    for (const side of Object.keys(sidesUsed(composition))) {
+      downloadSheetOf(side)
+    }
+  }
+
+  function downloadSheetOf(side: string) {
+    const only = onSide(composition, side)
+    if (only.elements.length === 0) return
     // 120 пикселей на сантиметр — около 300 точек на дюйм, обычное печатное
     // разрешение. Число названо здесь, а не спрятано: оно уйдёт на фабрику.
-    const spec = describeSheet(composition)
-    const canvas = renderSheet(composition, images.current, 120)
+    const spec = describeSheet(only)
+    const canvas = renderSheet(only, images.current, 120)
 
     // Пометка о предварительной калибровке НЕ впечатывается в лист: его
     // напечатают вместе с ней. Она уходит в имя файла и в сопроводительную
     // спецификацию — от файла они не отвяжутся, а на ткань не попадут.
     const mark = cal.provisional ? '-PREDVARITELNO' : ''
-    const stem = PRODUCT + '-' + stateCode + mark
+    const stem = PRODUCT + '-' + side + mark
 
     const save = (blob: Blob, name: string) => {
       const a = document.createElement('a')
@@ -244,7 +273,7 @@ export function Bench() {
     }
 
     const lines = [
-      'Изделие: ' + PRODUCT + ', состояние: ' + stateCode,
+      'Изделие: ' + PRODUCT + ', сторона: ' + (SIDE_NAMES[side] ?? side),
       'Габарит печати: ' + spec.widthCm.toFixed(1) + ' x ' + spec.heightCm.toFixed(1) + ' см',
       'Разрешение файла: 120 px/см (около 300 dpi)',
       cal.provisional
@@ -320,7 +349,7 @@ export function Bench() {
       ...style,
       colourCode: 'WHITE',
       textAspect: aspectOf(style),
-      placement: { anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
+      placement: { side: stateCode, anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
     }
     commit((c) => add(c, el))
   }
@@ -365,6 +394,16 @@ export function Bench() {
       e.preventDefault()
       const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'))
       if (files.length === 0) return
+      // По иллюстративному ракурсу размещать нельзя: силуэт на нём сокращён, и
+      // перевод сантиметров в пиксели по нему соврёт — принт уйдёт на фабрику
+      // не того размера. Показывать на нём можно, и он показывает.
+      if (state?.kind === 'illustrative') {
+        setDropHint(
+          'Это иллюстративный ракурс — по нему нельзя считать размер. ' +
+            'Нанесите на перед или спину, здесь принт будет виден сам.',
+        )
+        return
+      }
       const read = await Promise.all(files.map(readDropped))
       // Файлы уходят в хранилище: ссылка на ступень переживает перезагрузку,
       // а ссылка на blob — нет.
@@ -412,6 +451,7 @@ export function Bench() {
             aspect: d.aspect,
             hasAlpha: d.hasAlpha,
             placement: {
+              side: stateCode,
               anchor: 'neck',
               dxCm: 0,
               // Бросили несколько — раскладываем лесенкой, иначе они лягут
@@ -425,7 +465,10 @@ export function Bench() {
         }, c),
       )
     },
-    [],
+    // Состояние ОБЯЗАНО быть в списке: сторона берётся из него, и с пустым
+    // списком брошенное на спину легло бы на перед — замыкание осталось бы от
+    // первой отрисовки, а ошибку было бы видно только по чужому кадру.
+    [state, stateCode],
   )
 
   if (error) return <main style={S.page}>Изделие не загрузилось: {error}</main>
@@ -455,7 +498,7 @@ export function Bench() {
               state={state}
               frameSrc={frameUrl(product.code, state.code)}
               calibration={calibration}
-              composition={composition}
+              composition={visible}
               params={params}
               renderScale={renderScale}
               onFps={setFps}
@@ -471,8 +514,20 @@ export function Bench() {
               key={imagesVersion}
             />
           </div>
-          {composition.elements.length === 0 && (
-            <p style={S.dim}>Перетащите сюда картинки — можно несколько разом.</p>
+          {visible.elements.length === 0 && (
+            <p style={S.dim}>
+              {state.kind === 'illustrative'
+                ? 'Это иллюстративный ракурс: он показывает, но размещать по нему нельзя — силуэт сокращён, и размер в сантиметрах по нему соврёт.'
+                : 'Перетащите сюда картинки — можно несколько разом.'}
+            </p>
+          )}
+          {Object.keys(elsewhere).length > 0 && (
+            <p style={S.dim}>
+              На других сторонах:{' '}
+              {Object.entries(elsewhere)
+                .map(([code, n]) => `${SIDE_NAMES[code] ?? code} — ${n}`)
+                .join(', ')}
+            </p>
           )}
           {dropHint && <p style={S.warn}>{dropHint}</p>}
           {seen.length + seenCards.length > 0 && (
