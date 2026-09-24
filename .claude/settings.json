@@ -33,7 +33,13 @@
       "Bash(wc:*)",
       "Bash(sort:*)",
       "Bash(xxd:*)",
-      "Bash(netstat:*)"
+      "Bash(netstat:*)",
+      "Bash(docker compose -f infra/compose.yaml:*)",
+      "Bash(cd web:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(npm install:*)",
+      "Bash(uv run:*)"
     ],
     "deny": [
       "Bash(docker compose down -v:*)",
