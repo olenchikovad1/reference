@@ -42,6 +42,37 @@ uniform float uSpecCut;       // порог, выше которого начи�
 uniform float uSpecAmount;    // сила бликов
 uniform float uThrough;       // 1 — показывать перекрытое насквозь
 
+// Объём торса. Принт лежит не на фотографии, а на ткани: развёртка переда и
+// развёртка спинки, а карта говорит, какая точка ткани видна в каждом пикселе.
+// Карта считается на процессоре той же функцией, что перетаскивание и
+// проверки: вторая реализация на GLSL разошлась бы с первой у края.
+uniform float uWrap;          // 1 — через объём, 0 — плоско, как раньше
+uniform sampler2D uLookup;    // r — ткань переда, g — ткань спинки, b — высота (см), a — флаги
+uniform sampler2D uFront;     // развёртка переда
+uniform sampler2D uBack;      // развёртка спинки
+uniform vec2  uSurface;       // x — половина развёртки по ткани, y — её высота, см
+
+vec4 panelAt(sampler2D panel, float u, float h) {
+  vec2 st = vec2((u + uSurface.x) / (2.0 * uSurface.x), 1.0 - h / uSurface.y);
+  // За краем развёртки ткани нет. Без отсечения CLAMP_TO_EDGE тянул бы
+  // крайний столбец принта полосой через весь торс.
+  if (st.x < 0.0 || st.x > 1.0 || st.y < 0.0 || st.y > 1.0) return vec4(0.0);
+  return texture(panel, st);
+}
+
+vec4 printAt(vec2 uv) {
+  if (uWrap < 0.5) return texture(uPrint, uv);
+  vec4 L = texture(uLookup, uv);
+  if (L.a < 0.5) return vec4(0.0);
+  vec4 f = mod(L.a, 2.0) > 0.5 ? panelAt(uFront, L.r, L.b) : vec4(0.0);
+  vec4 b = L.a > 1.5 ? panelAt(uBack, L.g, L.b) : vec4(0.0);
+  // Спинка поверх переда там, где обе заходят на одно место: такое бывает
+  // только у принтов шире своей детали, и тогда проверка шва уже сработала.
+  float a = b.a + f.a * (1.0 - b.a);
+  vec3 rgb = a > 0.0 ? (b.rgb * b.a + f.rgb * f.a * (1.0 - b.a)) / a : vec3(0.0);
+  return vec4(rgb, a);
+}
+
 void main() {
   vec4 garment = texture(uGarment, vUv);
 
@@ -66,7 +97,7 @@ void main() {
            - texture(uBlur, vUv - vec2(0.0, uTexel.y)).r;
   vec2 disp = vec2(lx, ly) * uDisplace * uEffects;
 
-  vec4 print = texture(uPrint, vUv + disp);
+  vec4 print = printAt(vUv + disp);
 
   // Затенение по неразмытой яркости, нормированной на опорный белый изделия.
   // Делить на единицу нельзя: белое у кадра равно 245/255, и принт вышел бы
@@ -130,6 +161,10 @@ export interface Renderer {
   setPrint(source: TexImageSource): void
   /** Что лежит поверх принта на этом состоянии. */
   setOccluder(source: TexImageSource): void
+  /** Карта «пиксель отрисовки → ткань». null — плоский показ, без объёма. */
+  setLookup(map: Float32Array | null, width: number, height: number): void
+  /** Развёртки переда и спинки и их размер по ткани. */
+  setPanels(front: TexImageSource, back: TexImageSource, halfU: number, heightCm: number): void
   setParams(p: RenderParams): void
   draw(): void
   dispose(): void
@@ -156,17 +191,25 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     occluder: makeTexture(gl),
     blur: makeTexture(gl),
     lum: makeTexture(gl),
+    lookup: makeTexture(gl, gl.NEAREST),
+    front: makeTexture(gl),
+    back: makeTexture(gl),
   }
   const u = (name: string) => gl.getUniformLocation(program, name)
   let params = DEFAULT_PARAMS
   let mapSize: [number, number] = [1, 1]
   let white = 1
+  let wrap = false
+  let surface: [number, number] = [1, 1]
 
   bindUnit(gl, program, 'uGarment', 0)
   bindUnit(gl, program, 'uPrint', 1)
   bindUnit(gl, program, 'uBlur', 2)
   bindUnit(gl, program, 'uLum', 3)
   bindUnit(gl, program, 'uOccluder', 4)
+  bindUnit(gl, program, 'uLookup', 5)
+  bindUnit(gl, program, 'uFront', 6)
+  bindUnit(gl, program, 'uBack', 7)
 
   return {
     setGarment(image, blur, lum, w, h, whitePoint) {
@@ -181,6 +224,21 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     },
     setOccluder(source) {
       upload(gl, tex.occluder, 4, source)
+    },
+    setLookup(map, width, height) {
+      wrap = map !== null
+      if (!map) return
+      gl.activeTexture(gl.TEXTURE0 + 5)
+      gl.bindTexture(gl.TEXTURE_2D, tex.lookup)
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4)
+      // Половинная точность хватает с запасом: по ткани это доли миллиметра,
+      // а памяти вдвое меньше — на 3× карта весит десятки мегабайт.
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, map)
+    },
+    setPanels(front, back, halfU, heightCm) {
+      surface = [halfU, heightCm]
+      upload(gl, tex.front, 6, front)
+      upload(gl, tex.back, 7, back)
     },
     setParams(p) {
       params = p
@@ -199,6 +257,8 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       gl.uniform1f(u('uSpecCut'), params.specCut)
       gl.uniform1f(u('uSpecAmount'), params.specAmount)
       gl.uniform1f(u('uThrough'), params.through ? 1 : 0)
+      gl.uniform1f(u('uWrap'), wrap ? 1 : 0)
+      gl.uniform2f(u('uSurface'), surface[0], surface[1])
       gl.clearColor(0, 0, 0, 0)
       gl.clear(gl.COLOR_BUFFER_BIT)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
@@ -211,15 +271,18 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   }
 }
 
-function makeTexture(gl: WebGL2RenderingContext): WebGLTexture | null {
+function makeTexture(gl: WebGL2RenderingContext, filter: number = gl.LINEAR): WebGLTexture | null {
   const t = gl.createTexture()
   gl.bindTexture(gl.TEXTURE_2D, t)
   // CLAMP_TO_EDGE обязателен: смещение уводит выборку за край, и без него
   // принт заворачивался бы с противоположной стороны изделия.
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  // Карту ткани — строго ближайшим пикселем. Сглаживание смешало бы соседние
+  // точки по обе стороны разрыва координаты, и там прошла бы полоса принта с
+  // противоположного края детали.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter)
   return t
 }
 

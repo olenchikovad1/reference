@@ -92,3 +92,16 @@ describe('сохранённое прошлой версией', () => {
     expect(upgrade(c).elements[0].placement.side).toBe('back')
   })
 })
+
+describe('номера элементов', () => {
+  it('повторившийся номер в сохранённом получает новый', () => {
+    // Счётчик номеров после перезагрузки начинался заново, и новый элемент
+    // получал номер уже восстановленного. Правка одного правила оба, удаление
+    // удаляло оба, а React при одинаковых ключах оставлял призрачные рамки.
+    const twin = picture('el-2', 'front')
+    const c = { elements: [twin, picture('el-4', 'back'), { ...twin, name: 'второй' }], selectedId: null }
+    const ids = upgrade(c).elements.map((e) => e.id)
+    expect(new Set(ids).size).toBe(3)
+    expect(ids[0]).toBe('el-2')
+  })
+})

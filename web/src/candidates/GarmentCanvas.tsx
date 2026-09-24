@@ -7,8 +7,8 @@ import { heightCm } from '../shared/composition'
 import type { Calibration } from '../shared/geometry'
 import { cmToPx } from '../shared/geometry'
 import { buildLuminance } from '../shared/luminance'
-import { rasterise } from '../shared/mask'
 import { drawText } from '../shared/text'
+import { anchorOnSurface, buildLookup, halfGirth, type Panel, type Torso } from '../shared/torso'
 import { createRenderer, type RenderParams, type Renderer } from './renderer'
 
 // Холст изделия. В @platform/ui такого нет и не будет — это прикладное знание,
@@ -22,7 +22,16 @@ export interface CanvasProps {
   readonly state: State
   readonly frameSrc: string
   readonly calibration: Calibration
+  /** ВСЯ композиция, всех сторон: на боку видны и перед, и спина. Рамки
+   *  рисуются только у элементов текущей стороны — см. side. */
   readonly composition: Composition
+  /** Сторона, чьи элементы можно двигать на этом кадре. */
+  readonly side: string
+  /** Объём торса. Нет — принт лежит плоско, как раньше. */
+  readonly torso?: Torso | null
+  /** Ориентиры каждой стороны на её собственном кадре: элемент со спины
+   *  привязан к ориентиру спины, даже когда его показывают на боку. */
+  readonly anchorsBySide?: Readonly<Record<string, Record<string, [number, number]>>>
   readonly params: RenderParams
   /** Во сколько раз композиция рисуется крупнее кадра. */
   readonly renderScale: number
@@ -61,6 +70,8 @@ export function GarmentCanvas(props: CanvasProps) {
   const renderer = useRef<Renderer | null>(null)
   const printCanvas = useRef<HTMLCanvasElement | null>(null)
   const occluderCanvas = useRef<HTMLCanvasElement | null>(null)
+  const panels = useRef<Record<Panel, HTMLCanvasElement> | null>(null)
+  const lookupBuffer = useRef<Float32Array | undefined>(undefined)
   const drag = useRef<Drag | null>(null)
   // Скользящее окно последних отрисовок. Счёт за фиксированный промежуток врёт:
   // при редких перерисовках он делит одну отрисовку на секунды простоя и
@@ -68,11 +79,28 @@ export function GarmentCanvas(props: CanvasProps) {
   // критерий плавности перетаскивания, и врать ему нельзя.
   const frames = useRef<number[]>([])
 
+  // Своя сторона: её элементы можно трогать на этом кадре. Остальные
+  // только видны — через объём.
+  const own = useMemo(
+    () => ({
+      ...composition,
+      elements: composition.elements.filter((el) => (el.placement.side ?? 'front') === props.side),
+    }),
+    [composition, props.side],
+  )
+
   const W = Math.round(state.frame.width * renderScale)
   const H = Math.round(state.frame.height * renderScale)
 
   if (!printCanvas.current) printCanvas.current = document.createElement('canvas')
   if (!occluderCanvas.current) occluderCanvas.current = document.createElement('canvas')
+  if (!panels.current) {
+    panels.current = { front: document.createElement('canvas'), back: document.createElement('canvas') }
+  }
+  const torso = props.torso ?? null
+  // Объём есть не у каждого ракурса: у изделия без модели торса или у
+  // кадра, которого модель не знает, показ остаётся плоским.
+  const wrapped = !!torso && !!torso.views[state.code]
 
   // Изделие: грузится и разбирается ОДИН раз на кадр. Оно не меняется, пока
   // двигают принт, и в этом вся скорость — при перетаскивании пересчитывается
@@ -100,8 +128,11 @@ export function GarmentCanvas(props: CanvasProps) {
       r.setGarment(img, map.blurred, map.raw, map.width, map.height, map.white)
       // Маска перекрытия считается один раз на состояние: зона не меняется,
       // пока не сменили кадр.
-      const hood = state.zones.hood ?? []
-      r.setOccluder(rasterise(hood, probe.width, probe.height, occluderCanvas.current ?? undefined))
+      // Всё, что лежит ПОВЕРХ торса: капюшон на спине, рукав на боку. Рукав
+      // висит перед торсом и закрывает его почти во всю глубину, и без него
+      // принт со спины рисовался бы там, где его на изделии не видно.
+      const covers = OCCLUDERS.map((name) => state.zones[name]).filter((z): z is [number, number][] => !!z)
+      r.setOccluder(rasteriseAll(covers, probe.width, probe.height, occluderCanvas.current ?? undefined))
       drawAll()
     }
     img.src = frameSrc
@@ -110,6 +141,72 @@ export function GarmentCanvas(props: CanvasProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameSrc, state.zones])
+
+  /** Размер развёрток: половина обхвата по ткани и высота кадра над низом. */
+  const surface = useMemo(() => {
+    if (!torso) return null
+    let halfU = 0
+    for (let h = 0; h <= 70; h += 5) halfU = Math.max(halfU, halfGirth(torso, h))
+    const heightCm =
+      Math.max(...Object.values(torso.views).map((v) => v.hemY)) / torso.ppc
+    return { halfU: Math.ceil(halfU), heightCm: Math.ceil(heightCm) }
+  }, [torso])
+
+  /** Принт на ткани: по развёртке на деталь, в сантиметрах по ткани.
+   *
+   * Смещение элемента — длина по ткани от ориентира его стороны, поэтому
+   * рисуется он здесь без всякой перспективы, как на лекале. Изгиб даёт
+   * карта, а не рисование: иначе каждый ракурс гнул бы принт по-своему. */
+  function drawPanels() {
+    const pc = panels.current
+    if (!pc || !torso || !surface) return
+    const k = torso.ppc * renderScale
+    const w = Math.round(surface.halfU * 2 * k)
+    const h = Math.round(surface.heightCm * k)
+    for (const panel of ['front', 'back'] as const) {
+      const c = pc[panel]
+      if (c.width !== w || c.height !== h) {
+        c.width = w
+        c.height = h
+      }
+      const ctx = c.getContext('2d')
+      if (!ctx) continue
+      ctx.clearRect(0, 0, w, h)
+      const anchors = props.anchorsBySide?.[panel] ?? {}
+      for (const el of composition.elements) {
+        if ((el.placement.side ?? 'front') !== panel) continue
+        const a = anchorOnSurface(torso, panel, anchors[el.placement.anchor] ?? [0, 0])
+        const u = a.u + el.placement.dxCm
+        const hh = a.h - el.placement.dyCm
+        const ew = el.placement.widthCm * k
+        const eh = heightCm(el) * k
+        ctx.save()
+        ctx.translate((u + surface.halfU) * k, (surface.heightCm - hh) * k)
+        ctx.rotate((el.placement.rotation * Math.PI) / 180)
+        if (el.kind === 'text') drawText(ctx, el, ew)
+        else {
+          const img = props.images.get(el.src)
+          if (img?.complete) ctx.drawImage(img, -ew / 2, -eh / 2, ew, eh)
+        }
+        ctx.restore()
+      }
+    }
+  }
+
+  // Карта «пиксель → ткань» — раз на ракурс, размер и приближение, а не на
+  // каждое движение: при перетаскивании меняется принт, а не изделие.
+  useEffect(() => {
+    const r = renderer.current
+    if (!r) return
+    if (!wrapped || !torso) {
+      r.setLookup(null, 0, 0)
+      return
+    }
+    lookupBuffer.current = buildLookup(torso, state.code, W, H, renderScale, lookupBuffer.current)
+    r.setLookup(lookupBuffer.current, W, H)
+    drawAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [torso, state.code, W, H, renderScale, wrapped])
 
   /** Композиция принта в отдельный холст, потом текстурой в шейдер. */
   function drawPrint() {
@@ -125,7 +222,7 @@ export function GarmentCanvas(props: CanvasProps) {
     const ctx = c.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, W, H)
-    for (const el of composition.elements) {
+    for (const el of own.elements) {
       const [cx, cy] = centreOf(el)
       const w = cmToPx(el.placement.widthCm, calibration) * renderScale
       const h = cmToPx(heightCm(el), calibration) * renderScale
@@ -152,8 +249,13 @@ export function GarmentCanvas(props: CanvasProps) {
       canvas.width = W
       canvas.height = H
     }
-    drawPrint()
-    r.setPrint(printCanvas.current)
+    if (wrapped && surface && panels.current) {
+      drawPanels()
+      r.setPanels(panels.current.front, panels.current.back, surface.halfU, surface.heightCm)
+    } else {
+      drawPrint()
+      r.setPrint(printCanvas.current)
+    }
     r.setParams(props.params)
     r.draw()
 
@@ -178,7 +280,7 @@ export function GarmentCanvas(props: CanvasProps) {
   useEffect(() => {
     drawAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composition, props.params, renderScale, calibration, props.images])
+  }, [composition, props.params, renderScale, calibration, props.images, surface])
 
   function toFrame(e: { clientX: number; clientY: number }): [number, number] {
     const el = svg.current
@@ -248,7 +350,7 @@ export function GarmentCanvas(props: CanvasProps) {
           if (e.target === svg.current) props.onSelect(null)
         }}
       >
-        {composition.elements.map((el) => {
+        {own.elements.map((el) => {
           const [cx, cy] = centreOf(el)
           const w = cmToPx(el.placement.widthCm, calibration)
           const h = cmToPx(heightCm(el), calibration)
@@ -407,4 +509,31 @@ function Anchors({ state }: { state: State }) {
       ))}
     </g>
   )
+}
+
+/** Что лежит поверх торса и закрывает принт. */
+const OCCLUDERS = ['hood', 'sleeve']
+
+function rasteriseAll(
+  polys: readonly (readonly [number, number])[][],
+  width: number,
+  height: number,
+  canvas?: HTMLCanvasElement,
+): HTMLCanvasElement {
+  const c = canvas ?? document.createElement('canvas')
+  c.width = width
+  c.height = height
+  const ctx = c.getContext('2d')
+  if (!ctx) return c
+  ctx.clearRect(0, 0, width, height)
+  ctx.fillStyle = '#fff'
+  for (const poly of polys) {
+    if (poly.length < 3) continue
+    ctx.beginPath()
+    ctx.moveTo(poly[0][0], poly[0][1])
+    for (const [x, y] of poly.slice(1)) ctx.lineTo(x, y)
+    ctx.closePath()
+    ctx.fill()
+  }
+  return c
 }

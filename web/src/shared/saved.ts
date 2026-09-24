@@ -45,7 +45,11 @@ export function load(): SavedState | null {
     if (parsed.version === 1) {
       return { ...parsed, version: 2, composition: upgrade(parsed.composition) }
     }
-    return parsed.version === 2 ? { ...parsed, version: 2 } : null
+    // Через подъём идёт и текущая версия: в ней могли остаться повторы
+    // номеров от счётчика, который после перезагрузки начинался заново.
+    return parsed.version === 2
+      ? { ...parsed, version: 2, composition: upgrade(parsed.composition) }
+      : null
   } catch {
     return null
   }

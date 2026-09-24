@@ -34,7 +34,8 @@ import {
 import type { ReferenceMatch } from '../shared/api/references'
 import { saveReference } from '../shared/api/references'
 import { readDropped } from '../shared/dropped'
-import { onSide, sidesUsed } from '../shared/sides'
+import { newElementId, onSide, sidesUsed } from '../shared/sides'
+import { buildTorso } from '../shared/torso'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones } from '../shared/zones'
@@ -99,7 +100,6 @@ export function Bench() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const viewCanvas = useRef<HTMLCanvasElement | null>(null)
   const measurer = useRef<CanvasRenderingContext2D | null>(null)
-  const seq = useRef(0)
 
   useEffect(() => {
     fetchProduct(PRODUCT).then(setProduct).catch((e: Error) => setError(e.message))
@@ -143,6 +143,16 @@ export function Bench() {
   // Вид на ТЕКУЩУЮ сторону. Правки идут в полную композицию по id, поэтому
   // переключение стороны ничего не теряет: отбор — это взгляд, а не правка.
   const visible = useMemo(() => onSide(composition, stateCode), [composition, stateCode])
+  // Объём торса при калибровке выбранного размера: сантиметры ткани на
+  // 98 и на 164 — разные пиксели одного и того же кадра.
+  const torso = useMemo(
+    () => (product?.torso ? buildTorso(product.torso, calibration.pxPerCm) : null),
+    [product, calibration],
+  )
+  const anchorsBySide = useMemo(
+    () => Object.fromEntries((product?.states ?? []).map((s) => [s.code, s.anchors])),
+    [product],
+  )
   // Что лежит на других сторонах. Без этого про спину забывают и сдают
   // половину работы.
   const elsewhere = useMemo(() => {
@@ -222,11 +232,10 @@ export function Bench() {
   function addFromSet(item: PrintItem) {
     const img = new Image()
     img.onload = () => {
-      seq.current += 1
       cacheImage(img.src)
       commit((c) =>
         add(c, {
-          id: `el-${seq.current}`,
+          id: newElementId(),
           kind: 'image',
           name: item.name,
           src: img.src,
@@ -412,7 +421,6 @@ export function Bench() {
   }
 
   function addLabel() {
-    seq.current += 1
     const style = {
       text: 'ЗИМА 2026',
       fontFamily: DEFAULT_FONT.family,
@@ -420,7 +428,7 @@ export function Bench() {
       rgb: [255, 255, 255] as const,
     }
     const el: TextElement = {
-      id: `el-${seq.current}`,
+      id: newElementId(),
       kind: 'text',
       name: 'надпись',
       ...style,
@@ -519,9 +527,8 @@ export function Bench() {
       )
       commit((c) =>
         read.reduce((acc, d, i) => {
-          seq.current += 1
           const el: ImageElement = {
-            id: `el-${seq.current}`,
+            id: newElementId(),
             kind: 'image',
             name: d.name,
             src: sources[i],
@@ -609,7 +616,10 @@ export function Bench() {
               state={state}
               frameSrc={frameUrl(product.code, state.code)}
               calibration={calibration}
-              composition={visible}
+              composition={composition}
+              side={stateCode}
+              torso={torso}
+              anchorsBySide={anchorsBySide}
               params={params}
               renderScale={renderScale}
               onFps={setFps}

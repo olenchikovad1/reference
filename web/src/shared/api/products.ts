@@ -1,3 +1,5 @@
+import type { TorsoData } from '../torso'
+
 // Клиент описания изделия.
 //
 // Обращения идут по тому же префиксу, что будет в платформе за шлюзом, — в
@@ -30,6 +32,8 @@ export interface State {
 }
 
 export interface Product {
+  /** Упрощённый объём торса. Нет — показ плоский, как раньше. */
+  torso?: TorsoData | null
   code: string
   display_name: string
   kind: string

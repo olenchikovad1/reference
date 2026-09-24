@@ -73,6 +73,35 @@ class PrintRules(BaseModel):
     max_colours: int
 
 
+class TorsoView(BaseModel):
+    """Как торс виден на одном кадре."""
+
+    #: С какой стороны смотрит камера: 0 — спереди, 90 — слева, 180 — сзади.
+    facing_deg: float
+    #: Низ торса на кадре. Общая линия, по которой совмещаются кадры.
+    hem_y: float
+    #: Постоянная ширина — у переда и спины.
+    centre_x: float | None = None
+    half_px: float | None = None
+    #: Построчный габарит [y, левый край, правый край] — у бока, где торс
+    #: заметно сужается кверху.
+    rows: list[list[float]] | None = None
+
+
+class Torso(BaseModel):
+    """Упрощённый объём торса: эллиптический цилиндр, измеренный по кадрам.
+
+    Предварительность обязательна и без умолчания — по той же причине, что у
+    калибровки: модель, выданная за измеренную, делает выводы о том, чего не
+    проверяли.
+    """
+
+    provisional: bool
+    method: str
+    side_seam_deg: float
+    views: dict[str, TorsoView]
+
+
 class Product(BaseModel):
     code: str
     display_name: str
@@ -87,3 +116,4 @@ class Product(BaseModel):
     states_absent: list[str] = Field(default_factory=list)
     print_fields: PrintFields | None = None
     print_rules: PrintRules | None = None
+    torso: Torso | None = None

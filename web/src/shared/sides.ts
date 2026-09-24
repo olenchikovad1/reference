@@ -37,12 +37,28 @@ export function sidesUsed(c: Composition): Record<string, number> {
  * Без него страница, открытая после обновления, показывает пустое изделие, и
  * человек считает, что работа пропала. */
 export function upgrade(c: Composition): Composition {
+  // Номера чинятся здесь же, при чтении: сохранённое раньше могло получить
+  // повтор, и оставлять его значит править два элемента вместо одного.
+  const seen = new Set<string>()
   return {
     ...c,
-    elements: c.elements.map((el) =>
-      el.placement.side
+    elements: c.elements.map((el) => {
+      const sided = el.placement.side
         ? el
-        : { ...el, placement: { ...el.placement, side: DEFAULT_SIDE } },
-    ),
+        : { ...el, placement: { ...el.placement, side: DEFAULT_SIDE } }
+      if (!seen.has(sided.id)) {
+        seen.add(sided.id)
+        return sided
+      }
+      const id = newElementId()
+      seen.add(id)
+      return { ...sided, id }
+    }),
   }
+}
+
+/** Номер нового элемента. Случайный, а не по счётчику: счётчик после
+ *  перезагрузки начинается заново и выдаёт номера уже восстановленных. */
+export function newElementId(): string {
+  return `el-${crypto.randomUUID().slice(0, 8)}`
 }
