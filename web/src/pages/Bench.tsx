@@ -277,7 +277,18 @@ export function Bench() {
 
   /** Принт из набора — одним нажатием. Путь через проводник убивает привычку
    *  на второй день, а эталонами пользуются постоянно. */
-  function addFromSet(item: PrintItem) {
+  async function addFromSet(item: PrintItem) {
+    // Печатный принт из набора — ФАЙЛОМ, тем же путём, что брошенный: в
+    // хранилище, с вектором, узнаванием и тегами. Эталон стенда — сетка,
+    // буквы, линии — остаётся пробой: это не принт, и в библиотеке с тегами
+    // ему не место.
+    if (item.kind !== 'probe') {
+      const blob = await (await fetch(printUrl(item.path))).blob()
+      const file = new File([blob], item.name, { type: blob.type || 'image/png' })
+      await addFiles([file], item.width_cm ?? 18)
+      return
+    }
+    if (refusedHere()) return
     const img = new Image()
     img.onload = () => {
       cacheImage(img.src)
@@ -553,25 +564,29 @@ export function Bench() {
     return () => window.removeEventListener('keydown', onKey)
   }, [composition.selectedId, history])
 
-  const onDrop = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault()
-      const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'))
-      if (files.length === 0) return
-      // По иллюстративному ракурсу размещать нельзя: силуэт на нём сокращён, и
-      // перевод сантиметров в пиксели по нему соврёт — принт уйдёт на фабрику
-      // не того размера. Показывать на нём можно, и он показывает.
-      if (state?.kind === 'illustrative') {
-        setDropHint(
-          'Это иллюстративный ракурс — по нему нельзя считать размер. ' +
-            'Нанесите на перед или спину, здесь принт будет виден сам.',
-        )
-        return
-      }
-      const read = await Promise.all(files.map(readDropped))
+  /** По иллюстративному ракурсу размещать нельзя: силуэт на нём сокращён,
+   *  и перевод сантиметров в пиксели по нему соврёт — принт уйдёт на фабрику
+   *  не того размера. Показывать на нём можно, и он показывает. Проверка
+   *  одна на все входы: из набора добавлять на бок тоже было можно. */
+  function refusedHere(): boolean {
+    if (state?.kind !== 'illustrative') return false
+    setDropHint(
+      'Это иллюстративный ракурс — по нему нельзя считать размер. ' +
+        'Нанесите на перед или спину, здесь принт будет виден сам.',
+    )
+    return true
+  }
+
+  /** Файлы на изделие — один путь для всех входов: брошенные с диска и
+   *  принты из набора. Отдельный путь для набора и оставлял его принты без
+   *  хранилища, вектора и узнавания. */
+  async function addFiles(files: File[], widthCm = 18) {
+    if (files.length === 0 || refusedHere()) return
+    const read = await Promise.all(files.map(readDropped))
       // Файлы уходят в хранилище: ссылка на ступень переживает перезагрузку,
       // а ссылка на blob — нет.
       let sources = read.map((d) => d.src)
+      let refusal: string | null = null
       try {
         const stored = await uploadAssets(files)
         sources = stored.map((a) => assetUrl(a.digest, 'preview'))
@@ -596,20 +611,22 @@ export function Bench() {
         // Если оно отказало с причиной — показываем причину: «не ответило»
         // про слишком большой файл увело бы человека не туда.
         const reason = e instanceof UploadRefused ? e.reason : null
-        setDropHint(
+        refusal =
           (reason ?? 'Файлы не сохранились: хранилище не ответило.') +
-            ' Работа продолжается, но перезагрузка их потеряет.',
-        )
+          ' Работа продолжается, но перезагрузка их потеряет.'
       }
       sources.forEach((s) => cacheImage(s))
       const opaque = read.filter((d) => !d.hasAlpha)
-      setDropHint(
+      const opaqueHint =
         opaque.length === 0
           ? null
           : `Фон не вырезан: ${opaque.map((d) => d.name).join(', ')}. ` +
-              'Такая картинка ляжет на изделие прямоугольником — это не поломка, ' +
-              'а то, как выглядит непрозрачный файл.',
-      )
+            'Такая картинка ляжет на изделие прямоугольником — это не поломка, ' +
+            'а то, как выглядит непрозрачный файл.'
+      // Подсказки ставятся ОДИН раз и вместе. Раньше вторая затирала первую:
+      // причина отказа хранилища пропадала сразу, потому что подсказка про
+      // фон у обычной картинки пустая.
+      setDropHint([refusal, opaqueHint].filter(Boolean).join(' ') || null)
       commit((c) =>
         read.reduce((acc, d, i) => {
           const el: ImageElement = {
@@ -626,17 +643,24 @@ export function Bench() {
               // Бросили несколько — раскладываем лесенкой, иначе они лягут
               // друг на друга и выбрать нижний будет нечем.
               dyCm: 12 + i * 2,
-              widthCm: 18,
+              widthCm,
               rotation: 0,
             },
           }
           return add(acc, el)
         }, c),
       )
+  }
+
+  const onDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault()
+      await addFiles([...e.dataTransfer.files].filter((f) => f.type.startsWith('image/')))
     },
     // Состояние ОБЯЗАНО быть в списке: сторона берётся из него, и с пустым
     // списком брошенное на спину легло бы на перед — замыкание осталось бы от
     // первой отрисовки, а ошибку было бы видно только по чужому кадру.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [state, stateCode],
   )
 
@@ -1063,7 +1087,7 @@ export function Bench() {
                 .map((item) => (
                   <button
                     key={item.path}
-                    onClick={() => addFromSet(item)}
+                    onClick={() => void addFromSet(item)}
                     title={[item.subject ?? item.name, item.answers].filter(Boolean).join(' — ')}
                     style={item.kind === 'probe' ? S.setProbe : S.setArtwork}
                   >
