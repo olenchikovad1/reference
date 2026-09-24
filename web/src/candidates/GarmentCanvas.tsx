@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 
 import type { State } from '../shared/api/products'
 import type { Composition, PrintElement } from '../shared/composition'
+import type { Polygon } from '../shared/mask'
 import { heightCm } from '../shared/composition'
 import type { Calibration } from '../shared/geometry'
 import { cmToPx } from '../shared/geometry'
@@ -26,6 +27,10 @@ export interface CanvasProps {
   /** Во сколько раз композиция рисуется крупнее кадра. */
   readonly renderScale: number
   readonly showZones: boolean
+  /** Печатное поле выбранного размера. Есть — рисуется ВМЕСТО зоны печати:
+   *  зона нарисована для отрисованного изделия, а печатают на выбранном. */
+  readonly field?: Polygon | null
+  readonly fieldLabel?: string | null
   readonly showAnchors: boolean
   readonly onSelect: (id: string | null) => void
   readonly onMove: (id: string, dxCm: number, dyCm: number) => void
@@ -321,18 +326,47 @@ export function GarmentCanvas(props: CanvasProps) {
           )
         })}
 
-        {props.showZones && <Zones state={state} />}
+        {props.showZones && (
+          <Zones state={state} field={props.field ?? null} fieldLabel={props.fieldLabel ?? null} />
+        )}
         {props.showAnchors && <Anchors state={state} />}
       </svg>
     </div>
   )
 }
 
-function Zones({ state }: { state: State }) {
+function Zones({
+  state,
+  field,
+  fieldLabel,
+}: {
+  state: State
+  field: Polygon | null
+  fieldLabel: string | null
+}) {
   const paint: Record<string, string> = { print: '#3b82f6', hood: '#f97316', pocket: '#a855f7' }
+  // Два контура печати сразу — зона кадра и поле размера — читаются как
+  // два разных правила. Правило одно: при выбранном размере это поле.
+  const zones = Object.entries(state.zones).filter(([name]) => !(field && name === 'print'))
   return (
     <g pointerEvents="none">
-      {Object.entries(state.zones).map(([name, points]) => (
+      {field && (
+        <g>
+          <polygon
+            points={field.map(([x, y]) => `${x},${y}`).join(' ')}
+            fill="none"
+            stroke="#2563eb"
+            strokeWidth={2}
+            strokeDasharray="8 5"
+          />
+          {fieldLabel && (
+            <text x={field[0][0] + 4} y={field[0][1] - 6} fontSize={14} fill="#2563eb">
+              {fieldLabel}
+            </text>
+          )}
+        </g>
+      )}
+      {zones.map(([name, points]) => (
         <polygon
           key={name}
           points={points.map(([x, y]) => `${x},${y}`).join(' ')}

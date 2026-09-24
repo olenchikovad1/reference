@@ -38,7 +38,7 @@ import { onSide, sidesUsed } from '../shared/sides'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones } from '../shared/zones'
-import { fieldFor, sizesWithField } from '../shared/fields'
+import { calibrationFor, fieldFor, sizesWithField } from '../shared/fields'
 import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
 import { useHistoryState } from '../shared/useHistory'
 
@@ -51,6 +51,9 @@ const PRODUCT = 'B-HDY-14'
 /** Сторона окна показа, пиксели. Приближение увеличивает полотно внутри
  *  него, а само окно не растёт — иначе страница разъезжается. */
 const BOX = 620
+
+/** Ширина плитки панели, пиксели. Одна на все группы. */
+const TILE = 300
 
 // Имена сторон по-русски. Коды уходят на фабрику, имена — человеку.
 const SIDE_NAMES: Record<string, string> = { front: 'перед', back: 'спина', left: 'левый бок' }
@@ -125,9 +128,17 @@ export function Bench() {
   }, [])
 
   const state = product?.states.find((s) => s.code === stateCode) ?? product?.states[0] ?? null
+  // Калибровка ВЫБРАННОГО размера: от неё зависят и показ, и проверки, и
+  // перетаскивание. Одна на всех — разложенная по местам, она разошлась бы, и
+  // принт на экране оказался бы не того размера, что в проверке.
   const calibration = useMemo(
-    () => ({ pxPerCm: product?.calibration.px_per_cm ?? 1, provisional: true }),
-    [product],
+    () =>
+      calibrationFor(
+        { pxPerCm: product?.calibration.px_per_cm ?? 1, provisional: true },
+        size,
+        product?.rendered_size ?? product?.rendered_size_assumed ?? 134,
+      ),
+    [product, size],
   )
   // Вид на ТЕКУЩУЮ сторону. Правки идут в полную композицию по id, поэтому
   // переключение стороны ничего не теряет: отбор — это взгляд, а не правка.
@@ -603,6 +614,8 @@ export function Bench() {
               renderScale={renderScale}
               onFps={setFps}
               showZones={overlay === 'zones' || overlay === 'all'}
+              field={field}
+              fieldLabel={size ? `поле ${size}` : null}
               showAnchors={overlay === 'anchors' || overlay === 'all'}
               onSelect={(id) => setComposition((c) => select(c, id))}
               onMove={(id, dxCm, dyCm) => setComposition((c) => place(c, id, { dxCm, dyCm }))}
@@ -757,9 +770,11 @@ export function Bench() {
             <button
               onClick={() => setParams((p) => ({ ...p, through: !p.through }))}
               style={params.through ? S.btnOn : S.btn}
-              title="Показать то, что скрыто капюшоном. По умолчанию выключено: картинка не должна врать в состоянии, в котором её открыли"
+              title="Часть принта, которую закрывает капюшон. Обычно скрыта — так, как это будет на изделии. Включите, чтобы увидеть бледно, где она лежит под капюшоном"
             >
-              {params.through ? 'перекрытое насквозь' : 'перекрытое скрыто'}
+              {/* Подпись называет ЧТО видно, а не режим отрисовки: «перекрытое
+                  насквозь» владелец не понял, и это было правильно. */}
+              {params.through ? 'под капюшоном: видно бледно' : 'под капюшоном: скрыто'}
             </button>
             <Slider
               label="смещение"
@@ -828,7 +843,7 @@ export function Bench() {
             ))}
           </Group>
 
-          <Group title={`Проверки (${open.length})`} wide>
+          <Group title={`Проверки (${open.length})`}>
             {open.length === 0 && composition.elements.length > 0 && (
               <p style={S.dim}>находок нет</p>
             )}
@@ -919,7 +934,7 @@ export function Bench() {
             <p style={S.dim}>Ctrl+Z и Ctrl+Shift+Z. Ползунки подбора не откатываются</p>
           </Group>
 
-          <Group title="Набор принтов" wide>
+          <Group title="Набор принтов">
             <div style={S.list}>
               {prints
                 .slice()
@@ -928,7 +943,7 @@ export function Bench() {
                   <button
                     key={item.path}
                     onClick={() => addFromSet(item)}
-                    title={item.answers ?? item.subject ?? item.name}
+                    title={[item.subject ?? item.name, item.answers].filter(Boolean).join(' — ')}
                     style={item.kind === 'probe' ? S.setProbe : S.setArtwork}
                   >
                     <span style={S.itemName}>{item.subject ?? item.name}</span>
@@ -951,7 +966,9 @@ export function Bench() {
                   onClick={() => setComposition((c) => select(c, el.id))}
                   style={el.id === visible.selectedId ? S.itemOn : S.item}
                 >
-                  <span style={S.itemName}>{el.name}</span>
+                  <span style={S.itemName} title={el.name}>
+                    {el.name}
+                  </span>
                   {/* Шрифт виден у КАЖДОЙ надписи, а не только у выделенной:
                       иначе, чтобы сравнить две, приходится тыкать в каждую. */}
                   {el.kind === 'text' && (
@@ -1157,11 +1174,9 @@ function Num({
   )
 }
 
-function Group({ title, wide, children }: { title: string; wide?: boolean; children: React.ReactNode }) {
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    // wide — для групп, которые в узкой ячейке нечитаемы: список принтов,
-    // находки проверок. Они занимают всю ширину плитки, остальные делят её.
-    <section style={{ ...S.group, ...(wide ? { gridColumn: '1 / -1' } : null) }}>
+    <section style={S.group}>
       <h2 style={S.h2}>{title}</h2>
       <div style={S.row}>{children}</div>
     </section>
@@ -1280,7 +1295,12 @@ const S: Record<string, React.CSSProperties> = {
     // настроек уезжает в соседний столбец — это хуже длинной колонки, потому
     // что искать приходится в двух местах вместо одного.
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+    // Ширина плитки одна на всех. 300 — самый широкий ряд управления,
+    // образцы шрифтов, помещается без переноса каждого образца на свою строку,
+    // а три плитки встают рядом с окном изделия на экране от 1600. Резиновая
+    // ширина растягивала плитку за длинным именем, и соседние оказывались
+    // разными — это и был баг.
+    gridTemplateColumns: `repeat(auto-fill, ${TILE}px)`,
     alignItems: 'start',
     gap: 14,
     flex: 1,
@@ -1289,7 +1309,7 @@ const S: Record<string, React.CSSProperties> = {
     // переставленные местами настройки заставляли бы искать заново при каждом
     // изменении окна.
   },
-  group: { marginBottom: 14 },
+  group: { marginBottom: 14, minWidth: 0 },
   h2: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: '#666', margin: '0 0 6px' },
   row: { display: 'flex', flexWrap: 'wrap', gap: 6 },
   list: { display: 'flex', flexDirection: 'column', gap: 4, width: '100%' },
@@ -1301,11 +1321,13 @@ const S: Record<string, React.CSSProperties> = {
   btn: { padding: '5px 10px', border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, cursor: 'pointer' },
   btnOn: { padding: '5px 10px', border: '1px solid #111', background: '#111', color: '#fff', borderRadius: 6, cursor: 'pointer' },
   tag: { color: '#9ca3af', fontStyle: 'normal', fontSize: 11 },
-  findingBlocking: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', width: '100%' },
-  findingWarning: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #fde68a', background: '#fffbeb', width: '100%' },
-  findingText: { flex: 1, fontSize: 12, lineHeight: 1.35 },
-  setProbe: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #bfdbfe', background: '#eff6ff', cursor: 'pointer', textAlign: 'left', width: '100%' },
-  setArtwork: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%' },
+  findingBlocking: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', width: '100%', boxSizing: 'border-box' },
+  findingWarning: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #fde68a', background: '#fffbeb', width: '100%', boxSizing: 'border-box' },
+  // Находка — фраза, её читают целиком: переносится, а не обрезается. Длинное
+  // имя файла без пробелов внутри фразы иначе выталкивает плашку из плитки.
+  findingText: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.35, overflowWrap: 'anywhere' },
+  setProbe: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #bfdbfe', background: '#eff6ff', cursor: 'pointer', textAlign: 'left', width: '100%', boxSizing: 'border-box' },
+  setArtwork: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', textAlign: 'left', width: '100%', boxSizing: 'border-box' },
   textInput: { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 6, marginBottom: 6 },
   swatches: { display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 },
   swatch: { width: 26, height: 26, borderRadius: 5, border: 'none', cursor: 'pointer', padding: 0 },
