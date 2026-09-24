@@ -34,7 +34,9 @@ def test_calibration_says_it_is_provisional(client: TestClient) -> None:
     фабрику печать в полтора раза не того размера.
     """
     body = client.get("/reference/api/products/B-HDY-14").json()
-    assert body["calibration"]["px_per_cm"] == pytest.approx(8.2)
+    # 7.38 — не измерено на этом изделии, а принято: типовая длина спинки на 134
+    # из табелей Cosmic на 388 пикселей кадра. Поэтому пометка и обязательна.
+    assert body["calibration"]["px_per_cm"] == pytest.approx(7.38)
     assert body["calibration"]["provisional"] is True
     assert body["rendered_size"] is None
 
