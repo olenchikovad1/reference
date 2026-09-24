@@ -46,6 +46,10 @@ import { useHistoryState } from '../shared/useHistory'
 
 const PRODUCT = 'B-HDY-14'
 
+/** Сторона окна показа, пиксели. Приближение увеличивает полотно внутри
+ *  него, а само окно не растёт — иначе страница разъезжается. */
+const BOX = 620
+
 // Имена сторон по-русски. Коды уходят на фабрику, имена — человеку.
 const SIDE_NAMES: Record<string, string> = { front: 'перед', back: 'спина', left: 'левый бок' }
 type Overlay = 'none' | 'anchors' | 'zones' | 'all'
@@ -72,6 +76,11 @@ export function Bench() {
   const images = useRef(new Map<string, HTMLImageElement>())
   const [imagesVersion, setImagesVersion] = useState(0)
   const [restored, setRestored] = useState(false)
+  // Приближение показа. НЕ размер принта: приблизить показ и увеличить принт —
+  // разные действия, и второе уходит на фабрику.
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const panFrom = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
   // Узнанное. Пусто — окна нет вовсе: окно «совпадений нет» превращает
   // подсказку в помеху, и его перестают читать вместе с полезными.
   const [seen, setSeen] = useState<Match[]>([])
@@ -212,6 +221,38 @@ export function Bench() {
     img.onload = () => setImagesVersion((v) => v + 1)
     img.src = src
     images.current.set(src, img)
+  }
+
+  /** Приблизить показ.
+   *
+   * Разрешение отрисовки растёт ВМЕСТЕ с приближением: иначе увеличенное
+   * изображение — это увеличенные пиксели, по которым о печати судить нельзя,
+   * а именно ради этого его и приближают.
+   */
+  function zoomTo(next: number, around?: { x: number; y: number }) {
+    const z = Math.min(6, Math.max(1, Number(next.toFixed(2))))
+    setZoom(z)
+    setRenderScale(Math.min(3, Math.ceil(z)))
+    if (z === 1) {
+      setPan({ x: 0, y: 0 })
+      return
+    }
+    // Приближение к точке под курсором, а не к центру: иначе разглядываемая
+    // деталь уезжает из окна ровно в тот момент, когда её увеличили.
+    setPan((p) => {
+      if (!around) return clampPan(p, z)
+      const k = z / zoom
+      return clampPan({ x: around.x - (around.x - p.x) * k, y: around.y - (around.y - p.y) * k }, z)
+    })
+  }
+
+  /** Не даёт увести изделие за край окна: уехавшую часть вернуть нечем. */
+  function clampPan(p: { x: number; y: number }, z: number) {
+    const limit = (BOX * (z - 1)) / 2
+    return {
+      x: Math.min(limit, Math.max(-limit, p.x)),
+      y: Math.min(limit, Math.max(-limit, p.y)),
+    }
   }
 
   /** Сохранить собранный принт и узнать, не собирали ли такой раньше.
@@ -493,7 +534,41 @@ export function Bench() {
             style={S.canvasBox}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => void onDrop(e)}
+            onWheel={(e) => {
+              e.preventDefault()
+              const box = e.currentTarget.getBoundingClientRect()
+              zoomTo(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), {
+                x: e.clientX - box.left - box.width / 2,
+                y: e.clientY - box.top - box.height / 2,
+              })
+            }}
+            onPointerDownCapture={(e) => {
+              // Тянем ФОН или средней кнопкой — двигаем вид. Тянем элемент —
+              // двигаем принт. Одно движение мышью, два разных смысла, и
+              // различает их то, за что взялись.
+              const background = (e.target as Element).tagName.toLowerCase() === 'svg'
+              if (zoom === 1 || !(background || e.button === 1)) return
+              e.stopPropagation()
+              panFrom.current = { x: pan.x, y: pan.y, px: e.clientX, py: e.clientY }
+              e.currentTarget.setPointerCapture(e.pointerId)
+            }}
+            onPointerMove={(e) => {
+              const from = panFrom.current
+              if (!from) return
+              setPan(clampPan({ x: from.x + (e.clientX - from.px), y: from.y + (e.clientY - from.py) }, zoom))
+            }}
+            onPointerUp={() => (panFrom.current = null)}
+            onPointerCancel={() => (panFrom.current = null)}
           >
+            <div
+              style={{
+                width: BOX * zoom,
+                height: BOX * zoom,
+                position: 'relative',
+                transform: `translate(${pan.x - (BOX * (zoom - 1)) / 2}px, ${pan.y - (BOX * (zoom - 1)) / 2}px)`,
+                cursor: zoom > 1 ? 'grab' : 'default',
+              }}
+            >
             <GarmentCanvas
               state={state}
               frameSrc={frameUrl(product.code, state.code)}
@@ -513,6 +588,7 @@ export function Bench() {
               images={images.current}
               key={imagesVersion}
             />
+            </div>
           </div>
           {visible.elements.length === 0 && (
             <p style={S.dim}>
@@ -640,10 +716,13 @@ export function Bench() {
             />
             <div style={S.row}>
               {[1, 2, 3].map((s) => (
-                <button key={s} onClick={() => setRenderScale(s)} style={s === renderScale ? S.btnOn : S.btn}>
+                <button key={s} onClick={() => zoomTo(s)} style={s === zoom ? S.btnOn : S.btn}>
                   {s}×
                 </button>
               ))}
+              <button onClick={() => zoomTo(1)} style={S.btn}>
+                по размеру
+              </button>
               <button onClick={() => download(params)} style={S.btn}>
                 выгрузить
               </button>
@@ -1102,7 +1181,16 @@ const S: Record<string, React.CSSProperties> = {
   h1: { fontSize: 18, margin: 0 },
   code: { color: '#666', fontSize: 13 },
   body: { display: 'flex', gap: 18, alignItems: 'flex-start' },
-  canvasBox: { width: 620, height: 620, background: '#f3f4f6', borderRadius: 8, padding: 6 },
+  canvasBox: {
+    width: BOX,
+    height: BOX,
+    background: '#f3f4f6',
+    borderRadius: 8,
+    // Обрезает приближённое полотно: без этого увеличенное изделие
+    // расталкивает панель и ломает раскладку страницы.
+    overflow: 'hidden',
+    touchAction: 'none',
+  },
   panel: { minWidth: 280, maxWidth: 330 },
   group: { marginBottom: 14 },
   h2: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: '#666', margin: '0 0 6px' },
