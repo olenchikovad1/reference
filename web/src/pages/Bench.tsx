@@ -60,6 +60,11 @@ const BOX = 620
 /** Ширина плитки панели, пиксели. Одна на все группы. */
 const TILE = 300
 
+/** Масштаб миниатюры стороны к кадру. Кадр — около тысячи точек, миниатюра
+ *  на экране — меньше сотни; четверть оставляет запас на плотный экран. */
+const THUMB_SCALE = 0.25
+const noop = () => undefined
+
 // Имена сторон по-русски. Коды уходят на фабрику, имена — человеку.
 const SIDE_NAMES: Record<string, string> = { front: 'перед', back: 'спина', left: 'левый бок' }
 type Overlay = 'none' | 'anchors' | 'zones' | 'all'
@@ -180,6 +185,14 @@ export function Bench() {
   // Вид на ТЕКУЩУЮ сторону. Правки идут в полную композицию по id, поэтому
   // переключение стороны ничего не теряет: отбор — это взгляд, а не правка.
   const visible = useMemo(() => onSide(sized, stateCode), [sized, stateCode])
+  // Миниатюры сторон идут за работой с задержкой, а не на каждом кадре
+  // перетаскивания: три отрисовки сверх основной на каждое движение руки —
+  // цена, а миниатюре достаточно показать, где рука остановилась.
+  const [thumbWork, setThumbWork] = useState(sized)
+  useEffect(() => {
+    const t = setTimeout(() => setThumbWork(sized), 150)
+    return () => clearTimeout(t)
+  }, [sized])
   // Объём торса при калибровке выбранного размера: сантиметры ткани на
   // 98 и на 164 — разные пиксели одного и того же кадра.
   const torso = useMemo(
@@ -807,16 +820,44 @@ export function Bench() {
           </Group>
 
           <Group title="Состояние">
-            {product.states.map((s) => (
-              <button
-                key={s.code}
-                onClick={() => setStateCode(s.code)}
-                style={s.code === state.code ? S.btnOn : S.btn}
-              >
-                {s.display_name}
-                {s.kind === 'illustrative' && <em style={S.tag}> только показ</em>}
-              </button>
-            ))}
+            {/* Миниатюрами с принтом, а не словами: что лежит на спине, видно
+                до нажатия, и принт, заходящий со спины на бок, виден на боку. */}
+            <div style={S.thumbs}>
+              {product.states.map((s) => (
+                <button
+                  key={s.code}
+                  onClick={() => setStateCode(s.code)}
+                  style={s.code === state.code ? S.thumbOn : S.thumb}
+                  aria-pressed={s.code === state.code}
+                  title={s.kind === 'illustrative' ? `${s.display_name} — только показ, размещать по нему нельзя` : s.display_name}
+                >
+                  <GarmentCanvas
+                    preview
+                    state={s}
+                    frameSrc={frameUrl(product.code, s.code)}
+                    calibration={calibration}
+                    composition={thumbWork}
+                    side={s.code}
+                    torso={torso}
+                    anchorsBySide={anchorsBySide}
+                    params={params}
+                    renderScale={THUMB_SCALE}
+                    showZones={false}
+                    showAnchors={false}
+                    onSelect={noop}
+                    onMove={noop}
+                    onResize={noop}
+                    onRotate={noop}
+                    images={images.current}
+                    key={`${s.code}-${imagesVersion}`}
+                  />
+                  <span style={S.thumbCaption}>
+                    {s.display_name}
+                    {s.kind === 'illustrative' && <em style={S.tag}> · только показ</em>}
+                  </span>
+                </button>
+              ))}
+            </div>
           </Group>
 
           <Group title="Размер">
@@ -1580,6 +1621,16 @@ const S: Record<string, React.CSSProperties> = {
   btn: { padding: '5px 10px', border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, cursor: 'pointer' },
   btnOn: { padding: '5px 10px', border: '1px solid #111', background: '#111', color: '#fff', borderRadius: 6, cursor: 'pointer' },
   tag: { color: '#9ca3af', fontStyle: 'normal', fontSize: 11 },
+  thumbs: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, width: '100%' },
+  thumb: {
+    display: 'flex', flexDirection: 'column', gap: 4, padding: 4, minWidth: 0,
+    border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, cursor: 'pointer',
+  },
+  thumbOn: {
+    display: 'flex', flexDirection: 'column', gap: 4, padding: 3, minWidth: 0,
+    border: '2px solid #111', background: '#f3f4f6', borderRadius: 6, cursor: 'pointer',
+  },
+  thumbCaption: { fontSize: 11, lineHeight: 1.2, textAlign: 'center', color: '#111' },
   findingBlocking: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', width: '100%', boxSizing: 'border-box' },
   findingWarning: { display: 'flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 6, border: '1px solid #fde68a', background: '#fffbeb', width: '100%', boxSizing: 'border-box' },
   // Находка — фраза, её читают целиком: переносится, а не обрезается. Длинное

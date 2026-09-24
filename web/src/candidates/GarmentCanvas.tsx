@@ -66,6 +66,9 @@ export interface CanvasProps {
   readonly onCommit?: () => void
   /** Сколько кадров в секунду выходит при перетаскивании. */
   readonly onFps?: (fps: number) => void
+  /** Только показ: ни рамок, ни ручек, ни зон — миниатюра стороны. Нажатие
+   *  проходит насквозь, к тому, в чём миниатюра лежит. */
+  readonly preview?: boolean
 }
 
 type Drag =
@@ -480,6 +483,7 @@ export function GarmentCanvas(props: CanvasProps) {
           props.onCanvas?.(el)
         }}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+      {!props.preview && (
       <svg
         ref={svg}
         viewBox={`0 0 ${state.frame.width} ${state.frame.height}`}
@@ -582,6 +586,7 @@ export function GarmentCanvas(props: CanvasProps) {
         )}
         {props.showAnchors && <Anchors state={state} />}
       </svg>
+      )}
     </div>
   )
 }
