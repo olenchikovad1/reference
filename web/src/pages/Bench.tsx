@@ -36,6 +36,7 @@ import { saveReference } from '../shared/api/references'
 import { readDropped } from '../shared/dropped'
 import { newElementId, onSide, sidesUsed } from '../shared/sides'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
+import { gradeOf, graded, toBase } from '../shared/grading'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones } from '../shared/zones'
@@ -131,18 +132,22 @@ export function Bench() {
   // Калибровка ВЫБРАННОГО размера: от неё зависят и показ, и проверки, и
   // перетаскивание. Одна на всех — разложенная по местам, она разошлась бы, и
   // принт на экране оказался бы не того размера, что в проверке.
+  const grid = product?.size_grid ?? null
+  const grade = gradeOf(grid, size)
   const calibration = useMemo(
-    () =>
-      calibrationFor(
-        { pxPerCm: product?.calibration.px_per_cm ?? 1, provisional: true },
-        size,
-        product?.rendered_size ?? product?.rendered_size_assumed ?? 134,
-      ),
-    [product, size],
+    () => calibrationFor({ pxPerCm: product?.calibration.px_per_cm ?? 1, provisional: true }, grade),
+    [product, grade],
   )
+  // Работа на выбранном размере. Хранится она в базовом, а показ, проверки
+  // и печатный лист смотрят на неё в сантиметрах выбранного размера.
+  const sized = useMemo(() => graded(composition, grid, size), [composition, grid, size])
+  /** Правка на размере — в единицах базы: иначе переключение размера тихо
+   *  переписывало бы то, от чего считаются все остальные. */
+  const placeSized = (c: typeof composition, id: string, patch: Parameters<typeof place>[2]) =>
+    place(c, id, toBase(patch, grid, size))
   // Вид на ТЕКУЩУЮ сторону. Правки идут в полную композицию по id, поэтому
   // переключение стороны ничего не теряет: отбор — это взгляд, а не правка.
-  const visible = useMemo(() => onSide(composition, stateCode), [composition, stateCode])
+  const visible = useMemo(() => onSide(sized, stateCode), [sized, stateCode])
   // Объём торса при калибровке выбранного размера: сантиметры ткани на
   // 98 и на 164 — разные пиксели одного и того же кадра.
   const torso = useMemo(
@@ -367,7 +372,7 @@ export function Bench() {
   }
 
   function downloadSheetOf(side: string) {
-    const only = onSide(composition, side)
+    const only = onSide(sized, side)
     if (only.elements.length === 0) return
     // 120 пикселей на сантиметр — около 300 точек на дюйм, обычное печатное
     // разрешение. Число названо здесь, а не спрятано: оно уйдёт на фабрику.
@@ -378,7 +383,9 @@ export function Bench() {
     // напечатают вместе с ней. Она уходит в имя файла и в сопроводительную
     // спецификацию — от файла они не отвяжутся, а на ткань не попадут.
     const mark = cal.provisional ? '-PREDVARITELNO' : ''
-    const stem = PRODUCT + '-' + side + mark
+    // Размер — в имени файла: на фабрику уходит лист каждого размера, и
+    // безымянный лист на 98 неотличим от листа на 164.
+    const stem = PRODUCT + '-' + side + '-' + (size ?? grid?.base ?? 'baza') + mark
 
     const save = (blob: Blob, name: string) => {
       const a = document.createElement('a')
@@ -646,7 +653,7 @@ export function Bench() {
               state={state}
               frameSrc={frameUrl(product.code, state.code)}
               calibration={calibration}
-              composition={composition}
+              composition={sized}
               side={stateCode}
               torso={torso}
               anchorsBySide={anchorsBySide}
@@ -658,8 +665,8 @@ export function Bench() {
               fieldLabel={size ? `поле ${size}` : null}
               showAnchors={overlay === 'anchors' || overlay === 'all'}
               onSelect={(id) => setComposition((c) => select(c, id))}
-              onMove={(id, dxCm, dyCm) => setComposition((c) => place(c, id, { dxCm, dyCm }))}
-              onResize={(id, widthCm) => setComposition((c) => place(c, id, { widthCm }))}
+              onMove={(id, dxCm, dyCm) => setComposition((c) => placeSized(c, id, { dxCm, dyCm }))}
+              onResize={(id, widthCm) => setComposition((c) => placeSized(c, id, { widthCm }))}
               onRotate={(id, rotation) => setComposition((c) => place(c, id, { rotation }))}
               onCommit={() => commit()}
               onCanvas={(el) => (viewCanvas.current = el)}
@@ -929,9 +936,13 @@ export function Bench() {
             </button>
             {composition.elements.length > 0 && (
               <p style={S.dim}>
-                {describeSheet(composition).widthCm.toFixed(1)} ×{' '}
-                {describeSheet(composition).heightCm.toFixed(1)} см, элементов{' '}
-                {describeSheet(composition).items.length}
+                {/* Габарит ЭТОЙ стороны на ВЫБРАННОМ размере: лист выгружается
+                    по сторонам и по размеру, и число обеих сторон вместе на
+                    базе не совпадало ни с одним файлом, который уйдёт. */}
+                {SIDE_NAMES[stateCode] ?? stateCode}
+                {size ? `, ${size}` : ''}: {describeSheet(visible).widthCm.toFixed(1)} ×{' '}
+                {describeSheet(visible).heightCm.toFixed(1)} см, элементов{' '}
+                {describeSheet(visible).items.length}
                 {cal.provisional && ' · калибровка предварительная, числа уточнятся'}
               </p>
             )}
@@ -1099,17 +1110,17 @@ export function Bench() {
               <Num
                 label="от горловины вниз"
                 value={selected.placement.dyCm}
-                onChange={(v) => commit((c) => place(c, selected.id, { dyCm: v }))}
+                onChange={(v) => commit((c) => placeSized(c, selected.id, { dyCm: v }))}
               />
               <Num
                 label="от центра вбок"
                 value={selected.placement.dxCm}
-                onChange={(v) => commit((c) => place(c, selected.id, { dxCm: v }))}
+                onChange={(v) => commit((c) => placeSized(c, selected.id, { dxCm: v }))}
               />
               <Num
                 label="ширина"
                 value={selected.placement.widthCm}
-                onChange={(v) => commit((c) => place(c, selected.id, { widthCm: Math.max(0.5, v) }))}
+                onChange={(v) => commit((c) => placeSized(c, selected.id, { widthCm: Math.max(0.5, v) }))}
               />
               <Num
                 label="поворот, °"
@@ -1119,6 +1130,33 @@ export function Bench() {
               />
               <p style={S.dim}>высота {formatCm(heightCm(selected))} — следует за пропорцией</p>
               <p style={S.dim}>стрелки двигают на 1 мм, с Shift — на 1 см</p>
+            </Group>
+          )}
+
+          {selected && grid && (
+            <Group title="Градация">
+              {/* Таблица по всем размерам сразу: технолог сверяет её с
+                  размерной сеткой, а не перебирает размеры по одному. */}
+              <table style={S.gradeTable}>
+                <tbody>
+                  {product.size_set.sizes.map((s) => {
+                    const g = gradeOf(grid, s)
+                    const base = composition.elements.find((e) => e.id === selected.id)
+                    const w = (base?.placement.widthCm ?? 0) * g
+                    return (
+                      <tr key={s} style={s === size ? S.gradeRowOn : undefined}>
+                        <td>{s}</td>
+                        <td style={S.dim}>×{g.toFixed(3)}</td>
+                        <td>{w.toFixed(1)} см</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <p style={S.dim}>
+                база — {grid.base}
+                {grid.provisional ? ' · сетка предварительная: ' + grid.method : ''}
+              </p>
             </Group>
           )}
         </aside>
@@ -1401,6 +1439,8 @@ const S: Record<string, React.CSSProperties> = {
     border: '1px solid #e5e7eb',
     borderRadius: 6,
   },
+  gradeTable: { fontSize: 12, borderCollapse: 'collapse', width: '100%' },
+  gradeRowOn: { background: '#eff6ff', fontWeight: 600 },
   warn: { color: '#b45309', fontSize: 13, lineHeight: 1.4, maxWidth: 620 },
   dim: { color: '#666', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4 },
 }

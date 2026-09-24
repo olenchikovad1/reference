@@ -73,6 +73,20 @@ class PrintRules(BaseModel):
     max_colours: int
 
 
+class SizeGrid(BaseModel):
+    """Размерная сетка: во сколько раз размер больше базового.
+
+    Отдельна от полей печати (запрет №8): поле ограничивает, сетка
+    преобразует. Предварительность без умолчания — по той же причине, что у
+    калибровки.
+    """
+
+    provisional: bool
+    base: int
+    method: str
+    by_size: dict[int, float]
+
+
 class TorsoView(BaseModel):
     """Как торс виден на одном кадре."""
 
@@ -117,3 +131,4 @@ class Product(BaseModel):
     print_fields: PrintFields | None = None
     print_rules: PrintRules | None = None
     torso: Torso | None = None
+    size_grid: SizeGrid | None = None

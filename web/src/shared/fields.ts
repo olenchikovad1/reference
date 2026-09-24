@@ -65,22 +65,14 @@ export function sizesWithField(fields: PrintFields | null, side: string): number
 /**
  * Калибровка кадра для выбранного размера.
  *
- * Кадр один — отрисован на одном размере, — но изделие на нём означает изделие
- * ВЫБРАННОГО размера. Тот же принт в сантиметрах на 98 занимает большую долю
- * груди, чем на 164, и именно это человек и хочет увидеть, выбирая размер.
- *
- * Допущение названо: изделие градуируется пропорционально росту, а детский
- * размер и есть рост в сантиметрах. На деле ширина растёт медленнее длины,
- * поэтому пересчёт всегда предварительный — даже если калибровка кадра
- * когда-нибудь станет измеренной.
+ * Кадр один — отрисован на базовом размере, — но изделие на нём означает
+ * изделие ВЫБРАННОГО размера. Во сколько раз оно больше базового, говорит
+ * размерная сетка; во столько же раз меньше пикселей приходится на сантиметр.
+ * Пересчёт всегда предварительный: сетка пока посчитана по росту.
  */
-export function calibrationFor(
-  base: Calibration,
-  size: number | null,
-  renderedSize: number,
-): Calibration {
-  if (size === null || size === renderedSize) return base
-  return { pxPerCm: (base.pxPerCm * renderedSize) / size, provisional: true }
+export function calibrationFor(base: Calibration, grade: number): Calibration {
+  if (grade === 1) return base
+  return { pxPerCm: base.pxPerCm / grade, provisional: true }
 }
 
 /** Поле размера [ширина, высота] в сантиметрах ткани. null — поля нет. */

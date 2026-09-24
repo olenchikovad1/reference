@@ -1,3 +1,4 @@
+import type { SizeGrid } from '../grading'
 import type { TorsoData } from '../torso'
 
 // Клиент описания изделия.
@@ -34,6 +35,8 @@ export interface State {
 export interface Product {
   /** Упрощённый объём торса. Нет — показ плоский, как раньше. */
   torso?: TorsoData | null
+  /** Размерная сетка. Нет — размер меняет только поле печати. */
+  size_grid?: SizeGrid | null
   code: string
   display_name: string
   kind: string
