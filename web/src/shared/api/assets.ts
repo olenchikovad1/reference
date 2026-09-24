@@ -69,15 +69,31 @@ export interface Tag {
   model: string
 }
 
+/** Что за изделие на картинке, и откуда это известно. */
+export interface Named {
+  name: string
+  /** catalog — подпись в каталоге набора; inherited — от той же картинки.
+   *  Незнакомое значение показывается как есть. */
+  source: string
+  from_digest: string | null
+}
+
 export interface Recognised {
   digest: string
   matches: Match[]
   /** Теги, поставленные сами. Пусто — модель ничего уверенно не увидела. */
   tags: Tag[]
+  /** Нет — названия никто не знает. Догадки модели не бывает. */
+  name: Named | null
+}
+
+export interface FileTags {
+  tags: Tag[]
+  name: Named | null
 }
 
 /** Теги уже лежащих файлов — без повторной загрузки картинок. */
-export async function fetchTags(digests: string[]): Promise<Record<string, Tag[]>> {
+export async function fetchTags(digests: string[]): Promise<Record<string, FileTags>> {
   if (digests.length === 0) return {}
   const r = await fetch(`${BASE}assets/tags`, {
     method: 'POST',
@@ -85,8 +101,8 @@ export async function fetchTags(digests: string[]): Promise<Record<string, Tag[]
     body: JSON.stringify(digests),
   })
   if (!r.ok) throw new Error(`Теги: ${r.status}`)
-  const rows = (await r.json()) as { digest: string; tags: Tag[] }[]
-  return Object.fromEntries(rows.map((x) => [x.digest, x.tags]))
+  const rows = (await r.json()) as ({ digest: string } & FileTags)[]
+  return Object.fromEntries(rows.map((x) => [x.digest, { tags: x.tags, name: x.name ?? null }]))
 }
 
 /** Узнавание. Отдельным запросом: модель считает около 90 мс на картинку, и

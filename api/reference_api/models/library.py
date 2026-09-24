@@ -73,3 +73,22 @@ class AssetTag(Base):
         # Поиск идёт по коду тега: «все снежные» — это все строки с code=snow.
         Index("ix_asset_tags_code", "code"),
     )
+
+
+class AssetName(Base):
+    """Что за изделие на картинке: «Т-72», «ИС-3».
+
+    Одно на файл, и всегда с источником: подпись из каталога и название,
+    унаследованное от той же картинки, — разная надёжность, и человек должен
+    видеть, какая перед ним. Догадки модели здесь не бывает: названий машин
+    модель не различает (замер US-0479).
+    """
+
+    __tablename__ = "asset_names"
+
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    #: catalog — подпись в каталоге набора; inherited — от той же картинки.
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: От какого файла унаследовано. У подписи из каталога пусто.
+    from_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)

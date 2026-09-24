@@ -23,7 +23,7 @@ import {
 import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
-import type { Match, Tag } from '../shared/api/assets'
+import type { FileTags, Match, Named } from '../shared/api/assets'
 import {
   assetUrl,
   digestOf,
@@ -109,7 +109,7 @@ export function Bench() {
   const [cards, setCards] = useState<Card[]>([])
   // Теги файлов по имени файла. Ставятся сами при узнавании; для уже
   // лежащих — досчитываются по сохранённому вектору.
-  const [tagsOf, setTagsOf] = useState<Record<string, Tag[]>>({})
+  const [tagsOf, setTagsOf] = useState<Record<string, FileTags>>({})
   const [opened, setOpened] = useState<string | null>(null)
   useEffect(() => {
     const missing = [
@@ -634,7 +634,10 @@ export function Bench() {
         void recogniseAssets(stored.map((a) => a.digest))
           .then((rows) => {
             setSeen([...repeats, ...rows.flatMap((r) => r.matches)])
-            setTagsOf((m) => ({ ...m, ...Object.fromEntries(rows.map((r) => [r.digest, r.tags])) }))
+            setTagsOf((m) => ({
+              ...m,
+              ...Object.fromEntries(rows.map((r) => [r.digest, { tags: r.tags, name: r.name ?? null }])),
+            }))
           })
           .catch(() => {
             // Не узналось из-за сбоя — молчим. Сообщение о неработающем
@@ -1187,11 +1190,14 @@ export function Bench() {
                   {el.kind === 'image' && !el.hasAlpha && (
                     <span style={S.badge}>фон не вырезан</span>
                   )}
-                  {el.kind === 'image' && (tagsOf[digestOf(el.src)] ?? []).length > 0 && (
+                  {el.kind === 'image' && tagsOf[digestOf(el.src)]?.name && (
+                    <NameChip named={tagsOf[digestOf(el.src)]!.name!} />
+                  )}
+                  {el.kind === 'image' && (tagsOf[digestOf(el.src)]?.tags ?? []).length > 0 && (
                     <span style={S.tags}>
                       {/* Уверенность рядом с тегом: человек сам решает, верить ли
                           «Снег 0.32», — порог ставит машина, судит он. */}
-                      {(tagsOf[digestOf(el.src)] ?? []).map((tg) => (
+                      {(tagsOf[digestOf(el.src)]?.tags ?? []).map((tg) => (
                         <span key={tg.code} style={S.tagChip} title={`уверенность ${tg.score.toFixed(2)} · ${tg.model}`}>
                           {tg.name} <span style={S.tagScore}>{tg.score.toFixed(2)}</span>
                         </span>
@@ -1570,6 +1576,26 @@ function Recognised({ rows, onClose }: { rows: Row[]; onClose: () => void }) {
   )
 }
 
+/** Источник названия словами. Подпись из каталога и унаследованное — разная
+ *  надёжность: второе перепроверяют, и различать их надо с одного взгляда. */
+const NAME_SOURCES: Record<string, string> = { catalog: 'из каталога', inherited: 'как у той же картинки' }
+
+function NameChip({ named }: { named: Named }) {
+  const from = NAME_SOURCES[named.source] ?? named.source
+  return (
+    <span
+      style={named.source === 'catalog' ? S.name : S.nameInherited}
+      title={
+        named.from_digest
+          ? `Название взято у той же картинки, загруженной раньше (${named.from_digest.slice(0, 8)}…)`
+          : 'Подпись принта в каталоге набора'
+      }
+    >
+      {named.name} <span style={S.nameSource}>· {from}</span>
+    </span>
+  )
+}
+
 const S: Record<string, React.CSSProperties> = {
   page: { fontFamily: 'system-ui, sans-serif', padding: 16, color: '#111' },
   head: { display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10 },
@@ -1675,6 +1701,9 @@ const S: Record<string, React.CSSProperties> = {
   gradeRowOn: { background: '#eff6ff', fontWeight: 600 },
   manual: { fontSize: 11, color: '#b45309' },
   tags: { display: 'flex', flexWrap: 'wrap', gap: 3, width: '100%' },
+  name: { fontSize: 11, fontWeight: 600, background: '#ecfdf5', color: '#065f46', padding: '1px 6px', borderRadius: 4 },
+  nameInherited: { fontSize: 11, fontWeight: 600, background: '#fffbeb', color: '#92400e', padding: '1px 6px', borderRadius: 4 },
+  nameSource: { fontWeight: 400, opacity: 0.8 },
   tagChip: { fontSize: 10, background: '#eef2ff', color: '#3730a3', padding: '1px 5px', borderRadius: 4 },
   tagScore: { color: '#818cf8' },
   warn: { color: '#b45309', fontSize: 13, lineHeight: 1.4, maxWidth: 620 },

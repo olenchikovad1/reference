@@ -6,9 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from reference_api.db import session
 from reference_api.schemas.assets import AssetOut, DerivativeOut
 from reference_api.repositories import tags as tag_repo
-from reference_api.schemas.library import FileTagsOut, MatchOut, RecognisedOut, TagOut
+from reference_api.schemas.library import FileTagsOut, MatchOut, NameOut, RecognisedOut, TagOut
 from reference_api.services import assets as service
 from reference_api.services import library
+from reference_api.services import names as naming
 from reference_api.services import tags as tagging
 
 router = APIRouter(prefix="/assets", tags=["assets"])
@@ -91,6 +92,7 @@ async def recognise(
         # модель не нужна.
         found = tagging.tag(emb.vector)
         await tag_repo.replace(db, digest, tagging.MODEL_NAME, [(x.code, x.name, x.score) for x in found])
+        named = await naming.name_of(db, digest, seen)
         out.append(
             RecognisedOut(
                 digest=digest,
@@ -99,9 +101,14 @@ async def recognise(
                     for m in seen
                 ],
                 tags=[TagOut(code=x.code, name=x.name, score=x.score, model=tagging.MODEL_NAME) for x in found],
+                name=_name_out(named),
             )
         )
     return out
+
+
+def _name_out(n: naming.Name | None) -> NameOut | None:
+    return None if n is None else NameOut(name=n.name, source=n.source, from_digest=n.from_digest)
 
 
 @router.post("/tags", response_model=list[FileTagsOut])
@@ -111,6 +118,7 @@ async def file_tags(digests: list[str], db: AsyncSession = Depends(session)) -> 
     from reference_api.services.embeddings import MODEL_NAME as IMAGE_MODEL
 
     stored = await tag_repo.of(db, digests, tagging.MODEL_NAME)
+    named = await naming.stored(db, digests)
     out: list[FileTagsOut] = []
     for d in digests:
         rows = stored.get(d, [])
@@ -124,6 +132,7 @@ async def file_tags(digests: list[str], db: AsyncSession = Depends(session)) -> 
             FileTagsOut(
                 digest=d,
                 tags=[TagOut(code=r.code, name=r.name, score=r.score, model=r.model) for r in rows],
+                name=_name_out(named.get(d)),
             )
         )
     return out

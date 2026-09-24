@@ -20,9 +20,22 @@ class TagOut(BaseModel):
     model: str
 
 
+class NameOut(BaseModel):
+    """Что за изделие на картинке, и откуда это известно."""
+
+    name: str
+    #: catalog — подпись в каталоге набора; inherited — от той же картинки.
+    #: Незнакомое значение клиент показывает как есть, а не падает.
+    source: str
+    #: От какого файла унаследовано. У подписи из каталога пусто.
+    from_digest: str | None = None
+
+
 class FileTagsOut(BaseModel):
     digest: str
     tags: list[TagOut]
+    #: Нет — названия никто не знает. Догадки модели здесь не бывает.
+    name: NameOut | None = None
 
 
 class RecognisedOut(BaseModel):
@@ -36,3 +49,5 @@ class RecognisedOut(BaseModel):
     matches: list[MatchOut]
     #: Теги, поставленные сами. Пусто — модель ничего уверенно не увидела.
     tags: list[TagOut] = []
+    #: Что за изделие на картинке. Нет — никто не знает; догадки не бывает.
+    name: NameOut | None = None
