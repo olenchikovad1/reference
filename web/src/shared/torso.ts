@@ -402,3 +402,15 @@ export function projectRect(
   }
   return out
 }
+
+/**
+ * Длина по ткани от центра детали до бокового шва на высоте h, см.
+ *
+ * Дальше шва деталь кончается: у переда шов на угле `seam` от его центра, у
+ * спинки — на π − seam от своего. Глубина торса меняется по высоте, поэтому
+ * и до шва по ткани на уровне груди ближе, чем у низа.
+ */
+export function seamArc(t: Torso, panel: Panel, h: number): number {
+  const table = arcTable(t.a, t.depthAt(h))
+  return arcFromTable(table, panel === 'front' ? t.seam : Math.PI - t.seam)
+}

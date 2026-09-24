@@ -10,7 +10,7 @@ import { heightCm } from './composition'
 import type { Finding } from './checks'
 import { type Calibration, cmToPx } from './geometry'
 import { coverage, type Point, type Polygon } from './mask'
-import { anchorOnSurface, toSurface, type Panel, type Torso } from './torso'
+import { anchorOnSurface, seamArc, toSurface, type Panel, type Torso } from './torso'
 
 export interface FrameState {
   readonly code: string
@@ -272,6 +272,32 @@ export function checkZones(
           message:
             `«${el.name}» пересекает ${LINE_NAMES[name] ?? name}. ` +
             'Там принт разрезается, а не обрезается — половинки не сойдутся.',
+        })
+      }
+    }
+
+    if (onFabric && surface && panel) {
+      // Шов меряется по самому узкому месту элемента по высоте: глубина торса
+      // меняется, и у груди до шва ближе, чем у низа. Верх, низ и середина —
+      // достаточно, изгиб по высоте плавный.
+      const top = -rect.y
+      const bottom = -(rect.y + rect.height)
+      const limit = Math.min(
+        seamArc(surface.torso, panel, top),
+        seamArc(surface.torso, panel, bottom),
+        seamArc(surface.torso, panel, (top + bottom) / 2),
+      )
+      const over = Math.max(rect.x + rect.width - limit, -limit - rect.x)
+      if (over > 0.05) {
+        found.push({
+          rule: 'crosses-side-seam',
+          // Блокирующая: за швом другая деталь, и напечатать там этим
+          // прогоном нечем. На экране принт огибает бок — это и обманывает.
+          weight: 'blocking',
+          elementId: el.id,
+          message:
+            `«${el.name}» заходит за боковой шов на ${over.toFixed(1).replace('.', ',')} см. ` +
+            'За швом другая деталь — эта часть не напечатается.',
         })
       }
     }

@@ -203,3 +203,48 @@ describe('проверки по ткани, а не по кадру', () => {
     expect(Number(out!.message.match(/(\d+)%/)?.[1])).toBeGreaterThanOrEqual(10)
   })
 })
+
+describe('боковой шов', () => {
+  // Круглый торс радиусом 10 см, шов на боку: от центра спинки до шва по
+  // ткани — четверть окружности, 15.7 см.
+  const round = buildTorso(
+    {
+      provisional: true,
+      method: 'тест',
+      side_seam_deg: 90,
+      views: {
+        front: { facing_deg: 0, centre_x: 300, half_px: 100, hem_y: 500 },
+        back: { facing_deg: 180, centre_x: 300, half_px: 100, hem_y: 500 },
+        left: { facing_deg: 90, hem_y: 500, rows: [[100, 200, 400], [500, 200, 400]] },
+      },
+    },
+    10,
+  )!
+  const state = {
+    code: 'back',
+    kind: 'precise' as const,
+    anchors: { neck: [300, 200] as [number, number] },
+    zones: {},
+    lines: {},
+  }
+  const at = (dxCm: number, widthCm: number) =>
+    add(EMPTY, {
+      ...picture('принт', 0, 0, widthCm),
+      placement: { side: 'back', anchor: 'neck', dxCm, dyCm: 10, widthCm, rotation: 0 },
+      aspect: 4,
+    })
+
+  it('до шва — находок нет', () => {
+    const found = checkZones(at(0, 30), state, CAL, null, { torso: round, anchors: state.anchors })
+    expect(found.map((f) => f.rule)).not.toContain('crosses-side-seam')
+  })
+
+  it('за шов — блокирующая находка с сантиметрами', () => {
+    // За швом другая деталь, и печатать на ней этим прогоном нечем.
+    const found = checkZones(at(10, 20), state, CAL, null, { torso: round, anchors: state.anchors })
+    const seam = found.find((f) => f.rule === 'crosses-side-seam')
+    expect(seam?.weight).toBe('blocking')
+    // Край на 20 см по ткани, шов на 15.7 — заходит на 4.3 см.
+    expect(seam?.message).toMatch(/4[.,]3 см/)
+  })
+})

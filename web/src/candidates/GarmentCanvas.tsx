@@ -14,6 +14,7 @@ import {
   halfGirth,
   projectLocal,
   projectRect,
+  seamArc,
   toSurface,
   type Panel,
   type Torso,
@@ -197,6 +198,19 @@ export function GarmentCanvas(props: CanvasProps) {
       if (!ctx) continue
       ctx.clearRect(0, 0, w, h)
       const anchors = props.anchorsBySide?.[panel] ?? {}
+      // За боковым швом детали нет — и рисовать там нечего. Показ, огибающий
+      // бок дальше шва, обещал бы то, чего не напечатают. Граница не прямая:
+      // глубина торса меняется, и до шва на уровне груди ближе, чем у низа.
+      ctx.save()
+      ctx.beginPath()
+      for (let hh = 0; hh <= surface.heightCm; hh += 2) {
+        ctx.lineTo((surface.halfU + seamArc(torso, panel, hh)) * k, (surface.heightCm - hh) * k)
+      }
+      for (let hh = surface.heightCm; hh >= 0; hh -= 2) {
+        ctx.lineTo((surface.halfU - seamArc(torso, panel, hh)) * k, (surface.heightCm - hh) * k)
+      }
+      ctx.closePath()
+      ctx.clip()
       for (const el of composition.elements) {
         if ((el.placement.side ?? 'front') !== panel) continue
         const a = anchorOnSurface(torso, panel, anchors[el.placement.anchor] ?? [0, 0])
@@ -214,6 +228,7 @@ export function GarmentCanvas(props: CanvasProps) {
         }
         ctx.restore()
       }
+      ctx.restore()
       r.setPanel(panel, c)
     }
   }
