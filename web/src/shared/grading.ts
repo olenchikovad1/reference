@@ -33,31 +33,36 @@ export function gradeOf(grid: SizeGrid | null | undefined, size: number | null):
   return grid.by_size[String(size)] ?? 1
 }
 
-/** Размещение на размере: положение по сетке, ширина — по сетке или по
- *  исключению, если на этом размере её вписали руками. */
-function onSize(p: Placement, g: number, size: number | null): Placement {
-  const manual = manualAt(p, size)
-  if (g === 1 && manual === null) return p
+/** Коэффициент принта на размере: вписанный руками или по сетке. */
+export function scaleAt(
+  p: Placement,
+  grid: SizeGrid | null | undefined,
+  size: number | null,
+): { k: number; manual: boolean; byGrid: number } {
+  const byGrid = gradeOf(grid, size)
+  const manual = size === null ? undefined : p.scaleBySize?.[String(size)]
+  return manual === undefined ? { k: byGrid, manual: false, byGrid } : { k: manual, manual: true, byGrid }
+}
+
+/** Размещение на размере: положение по сетке, ширина — по коэффициенту
+ *  размера, вписанному руками или по сетке. */
+function onSize(p: Placement, grid: SizeGrid | null | undefined, size: number | null): Placement {
+  const g = gradeOf(grid, size)
+  const { k } = scaleAt(p, grid, size)
+  if (g === 1 && k === 1) return p
   // Положение идёт за изделием: 12 см от горловины на 134 — это 8.8 на 98.
   // Иначе принт, стоящий на груди на базовом, на маленьком уехал бы на живот.
-  return { ...p, dxCm: p.dxCm * g, dyCm: p.dyCm * g, widthCm: manual ?? p.widthCm * g }
+  return { ...p, dxCm: p.dxCm * g, dyCm: p.dyCm * g, widthCm: p.widthCm * k }
 }
 
 /** Композиция на выбранном размере. Исходная не меняется. */
 export function graded(c: Composition, grid: SizeGrid | null | undefined, size: number | null): Composition {
-  const g = gradeOf(grid, size)
-  return { ...c, elements: c.elements.map((el) => ({ ...el, placement: onSize(el.placement, g, size) })) }
+  return { ...c, elements: c.elements.map((el) => ({ ...el, placement: onSize(el.placement, grid, size) })) }
 }
 
-/** Ширина, вписанная на этом размере руками. null — по сетке. */
-export function manualAt(p: Placement, size: number | null): number | null {
-  if (size === null) return null
-  return p.widthBySize?.[String(size)] ?? null
-}
-
-/** Сколько было бы по сетке — рядом с исключением, чтобы видеть отступ. */
-export function byGrid(p: Placement, grid: SizeGrid | null | undefined, size: number | null): number {
-  return p.widthCm * gradeOf(grid, size)
+/** Вписать коэффициент принта для размера. */
+export function setScale(p: Placement, size: number, k: number): Partial<Placement> {
+  return { scaleBySize: { ...(p.scaleBySize ?? {}), [String(size)]: k } }
 }
 
 /**
@@ -65,8 +70,8 @@ export function byGrid(p: Placement, grid: SizeGrid | null | undefined, size: nu
  *
  * Положение переводится в базу: принт двигают на изделии, а не на одном
  * размере. Ширина на БАЗОВОМ размере меняет базу, на любом другом — пишет
- * исключение для этого размера: база и остальные размеры остаются по сетке, а
- * у референса видно, что здесь наносят не по сетке и нарочно.
+ * исключение коэффициентом: база и остальные размеры остаются по сетке, а у
+ * референса видно, что здесь наносят не по сетке и нарочно.
  */
 export function editAtSize(
   p: Placement,
@@ -76,18 +81,18 @@ export function editAtSize(
 ): Partial<Placement> {
   const onBase = size === null || !grid || size === grid.base
   const out: { -readonly [K in keyof Placement]?: Placement[K] } = { ...toBase(patch, grid, size) }
-  if (patch.widthCm !== undefined && !onBase && size !== null) {
+  if (patch.widthCm !== undefined && !onBase && size !== null && p.widthCm > 0) {
     delete out.widthCm
-    out.widthBySize = { ...(p.widthBySize ?? {}), [String(size)]: patch.widthCm }
+    out.scaleBySize = setScale(p, size, patch.widthCm / p.widthCm).scaleBySize
   }
   return out
 }
 
 /** Вернуть размер к сетке: исключение снимается целиком. */
 export function resetAtSize(p: Placement, size: number): Partial<Placement> {
-  const rest = { ...(p.widthBySize ?? {}) }
+  const rest = { ...(p.scaleBySize ?? {}) }
   delete rest[String(size)]
-  return { widthBySize: rest }
+  return { scaleBySize: rest }
 }
 
 /** Правка, сделанная на размере, — в единицах базы. */

@@ -36,7 +36,7 @@ import { listReferences, openReference, saveReference, type Card } from '../shar
 import { readDropped } from '../shared/dropped'
 import { newElementId, onSide, sidesUsed, upgrade } from '../shared/sides'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
-import { byGrid, editAtSize, gradeOf, graded, manualAt, resetAtSize } from '../shared/grading'
+import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../shared/grading'
 import { forget, load, save } from '../shared/saved'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones } from '../shared/zones'
@@ -1184,6 +1184,37 @@ export function Bench() {
                 value={selected.placement.widthCm}
                 onChange={(v) => commit((c) => placeSized(c, selected.id, { widthCm: Math.max(0.5, v) }))}
               />
+              {size !== null && grid && size !== grid.base && (() => {
+                const base = composition.elements.find((e) => e.id === selected.id)
+                if (!base) return null
+                const sc = scaleAt(base.placement, grid, size)
+                return (
+                  <>
+                    {/* Коэффициент ТЕКУЩЕГО размера к базе. Вписанный — это
+                        исключение: на этом размере принт наносят не по сетке. */}
+                    <Num
+                      label={`коэффициент на ${size}`}
+                      value={sc.k}
+                      unit=""
+                      step={0.01}
+                      digits={3}
+                      onChange={(v) => commit((c) => place(c, base.id, setScale(base.placement, size, Math.max(0.05, v))))}
+                    />
+                    <p style={sc.manual ? S.manual : S.dim}>
+                      {sc.manual ? `вручную · по сетке ×${sc.byGrid.toFixed(3)} ` : `по сетке, база ${grid.base}`}
+                      {sc.manual && (
+                        <button
+                          style={S.x}
+                          title="вернуть к сетке"
+                          onClick={() => commit((c) => place(c, base.id, resetAtSize(base.placement, size)))}
+                        >
+                          ↺
+                        </button>
+                      )}
+                    </p>
+                  </>
+                )
+              })()}
               <Num
                 label="поворот, °"
                 value={selected.placement.rotation}
@@ -1202,23 +1233,21 @@ export function Bench() {
               <table style={S.gradeTable}>
                 <tbody>
                   {product.size_set.sizes.map((s) => {
-                    const g = gradeOf(grid, s)
                     const base = composition.elements.find((e) => e.id === selected.id)
                     if (!base) return null
-                    const manual = manualAt(base.placement, s)
-                    const auto = byGrid(base.placement, grid, s)
+                    const sc = scaleAt(base.placement, grid, s)
                     return (
                       <tr key={s} style={s === size ? S.gradeRowOn : undefined}>
                         <td>{s}</td>
-                        <td style={S.dim}>×{g.toFixed(3)}</td>
-                        <td>{(manual ?? auto).toFixed(1)} см</td>
+                        <td style={sc.manual ? S.manual : S.dim}>×{sc.k.toFixed(3)}</td>
+                        <td>{(base.placement.widthCm * sc.k).toFixed(1)} см</td>
                         <td>
                           {/* Исключение видно ВМЕСТЕ с тем, что было бы по сетке:
                               иначе технолог, сверяя с сеткой, «исправит» его
                               обратно, не зная, что это нарочно. */}
-                          {manual !== null && (
+                          {sc.manual && (
                             <>
-                              <span style={S.manual}>вручную · по сетке {auto.toFixed(1)}</span>{' '}
+                              <span style={S.manual}>вручную · по сетке ×{sc.byGrid.toFixed(3)}</span>{' '}
                               <button
                                 style={S.x}
                                 title="вернуть этот размер к сетке"
@@ -1313,11 +1342,15 @@ function Num({
   label,
   value,
   unit = ' см',
+  step = 0.1,
+  digits = 1,
   onChange,
 }: {
   label: string
   value: number
   unit?: string
+  step?: number
+  digits?: number
   onChange: (v: number) => void
 }) {
   return (
@@ -1325,8 +1358,8 @@ function Num({
       <span style={S.numLabel}>{label}</span>
       <input
         type="number"
-        step={0.1}
-        value={Number(value.toFixed(1))}
+        step={step}
+        value={Number(value.toFixed(digits))}
         onChange={(e) => onChange(Number(e.target.value))}
         style={S.input}
       />

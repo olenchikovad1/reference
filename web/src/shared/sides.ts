@@ -43,9 +43,20 @@ export function upgrade(c: Composition): Composition {
   return {
     ...c,
     elements: c.elements.map((el) => {
-      const sided = el.placement.side
+      let sided = el.placement.side
         ? el
         : { ...el, placement: { ...el.placement, side: DEFAULT_SIDE } }
+      // Исключения размеров раньше хранились сантиметрами; теперь —
+      // коэффициентом к базе. Переводим при чтении: иначе исключение, сделанное
+      // до этой правки, молча пропало бы.
+      const cm = sided.placement.widthBySize
+      if (cm && sided.placement.widthCm > 0) {
+        const scale: Record<string, number> = { ...(sided.placement.scaleBySize ?? {}) }
+        for (const [size, w] of Object.entries(cm)) scale[size] ??= w / sided.placement.widthCm
+        const { widthBySize: _gone, ...rest } = sided.placement
+        void _gone
+        sided = { ...sided, placement: { ...rest, scaleBySize: scale } }
+      }
       if (!seen.has(sided.id)) {
         seen.add(sided.id)
         return sided
