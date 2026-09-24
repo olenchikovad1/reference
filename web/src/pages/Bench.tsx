@@ -35,6 +35,7 @@ import {
 import type { ReferenceMatch } from '../shared/api/references'
 import { listReferences, openReference, saveReference, type Card } from '../shared/api/references'
 import { readDropped } from '../shared/dropped'
+import { historyKey } from '../shared/keys'
 import { newElementId, onSide, sidesUsed, upgrade } from '../shared/sides'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../shared/grading'
@@ -521,10 +522,10 @@ export function Bench() {
   // нельзя, а это основной способ работы.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const mod = e.ctrlKey || e.metaKey
-      if (mod && e.key.toLowerCase() === 'z') {
+      const asked = historyKey(e)
+      if (asked) {
         e.preventDefault()
-        if (e.shiftKey) history.redo()
+        if (asked === 'redo') history.redo()
         else history.undo()
         return
       }
