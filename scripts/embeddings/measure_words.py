@@ -12,11 +12,11 @@
 - жадное вычитание: двадцать шагов, на каждом берётся самое сильное слово и
   его направление вычитается из остатка.
 
-    docker compose cp ../api/scripts/measure_words.py api:/tmp/measure_words.py
-    MSYS_NO_PATHCONV=1 docker compose exec -T -e PYTHONPATH=/app api python /tmp/measure_words.py
+    docker compose -f infra/compose.yaml exec -T api python -m scripts.embeddings.measure_words
 """
 
 import pathlib
+import sys
 
 import numpy as np
 import yaml
@@ -43,7 +43,15 @@ for f in prints:
 for d in ["a7ccff40d80aef903585d44cb0c34e96aba00343b1171af11cf62a4a9e63aa32",
           "e3fb1fae2696c7e58d6d06b9d2bf49e7751aa6de5ebf432f87bea83a4dcd2bb7"]:
     c = assets.original(d)
-    if c:
+    # Надписи живут в хранилище стенда (MinIO), а не в томе: на другой
+    # машине их нет. Молча считать без них нельзя — числа выйдут другими
+    # и сравнятся с записанными как ни в чём не бывало (25.09.2026).
+    if not c:
+        if "--partial" not in sys.argv:
+            sys.exit(f"нет надписи {d[:12]}… в хранилище стенда: замер на неполном наборе "
+                     f"с записанными числами не сравним. Считать без надписей — ключ --partial")
+        print(f"# НЕПОЛНЫЙ НАБОР: нет надписи {d[:12]}…, с записанными числами не сравнивать")
+    else:
         cases.append((f"надпись {d[:4]}", np.array(embed_image(c).vector, dtype=np.float32), {"надпись"}))
 cases.append(("худи front", np.array(embed_image((FILES / "products/B-HDY-14/states/front.png").read_bytes()).vector,
                                      dtype=np.float32), {"толстовка"}))

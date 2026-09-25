@@ -4,11 +4,11 @@
 соревнуется с другими картинками: снежный танк против надписи и белой худи.
 Печатается порядок картинок по похожести на запрос.
 
-    docker compose cp ../api/scripts/probe_query_ranking.py api:/tmp/probe_query_ranking.py
-    MSYS_NO_PATHCONV=1 docker compose exec -T -e PYTHONPATH=/app api python /tmp/probe_query_ranking.py
+    docker compose -f infra/compose.yaml exec -T api python -m scripts.embeddings.probe_query_ranking
 """
 
 import pathlib
+import sys
 
 import numpy as np
 import yaml
@@ -28,7 +28,15 @@ for d in ["a7ccff40d80aef903585d44cb0c34e96aba00343b1171af11cf62a4a9e63aa32",
           "e3fb1fae2696c7e58d6d06b9d2bf49e7751aa6de5ebf432f87bea83a4dcd2bb7",
           "d84c590b7339cf09a5391ca2745899356d7b894c692a1449a13d6b18cb638277"]:
     c = assets.original(d)
-    if c:
+    # Надписи живут в хранилище стенда (MinIO), а не в томе: на другой
+    # машине их нет. Молча считать без них нельзя — числа выйдут другими
+    # и сравнятся с записанными как ни в чём не бывало (25.09.2026).
+    if not c:
+        if "--partial" not in sys.argv:
+            sys.exit(f"нет надписи {d[:12]}… в хранилище стенда: замер на неполном наборе "
+                     f"с записанными числами не сравним. Считать без надписей — ключ --partial")
+        print(f"# НЕПОЛНЫЙ НАБОР: нет надписи {d[:12]}…, с записанными числами не сравнивать")
+    else:
         items.append((f"надпись {d[:4]}", np.array(embed_image(c).vector, dtype=np.float32)))
 for code in ("front", "back"):
     items.append((f"худи {code}", np.array(embed_image((FILES / f"products/B-HDY-14/states/{code}.png").read_bytes()).vector,

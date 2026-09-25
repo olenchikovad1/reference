@@ -4,8 +4,7 @@
 картинке — это свойство пространства (hubness), а не картинки. Проверяется:
 вычесть из векторов слов их среднее; вычесть ещё и среднее по картинкам.
 
-    docker compose cp ../api/scripts/probe_words_centering.py api:/tmp/probe_words_centering.py
-    MSYS_NO_PATHCONV=1 docker compose exec -T -e PYTHONPATH=/app api python /tmp/probe_words_centering.py
+    docker compose -f infra/compose.yaml exec -T api python -m scripts.embeddings.probe_words_centering
 """
 
 import pathlib
