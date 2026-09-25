@@ -63,6 +63,297 @@ tuning_set:
       картинке.
     sha256: 5236839b927350c65da0c2318e3a464456e80a23e1605d9453967a804a94a761
 
+  # Двадцать пять принтов с Wikimedia Commons (план 076, US-0520): сюжеты, на
+  # которых видно, где модель ошибается, — игрушки, аниме, надписи, животные,
+  # цветы, машины, космос, еда, спорт, праздники. Право и автор — у каждого.
+  # Ожидания записаны 25.09.2026 по листу миниатюр (scripts/prints/
+  # contact_sheet.py), а не по именам файлов, и до любого замера на них.
+  - name: teddy-bear-toy.png
+    subject: плюшевый мишка с бантом
+    category: игрушка
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Teddybear_jarno_vasamaa.svg
+    license: CC0
+    author: не указан
+    tags_expected: [медведь, игрушка, бант]
+    search_expected: [мишка, медведь, игрушка, плюшевый]
+    sha256: 414b8097f1a3205642760c7e8745e2c06f6b64b430b69ec37a0ddf058e90b4d9
+  - name: teddy-bear-with-ball.png
+    subject: плюшевый мишка с мячом
+    category: игрушка
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Teddy_bear_with_a_ball.svg
+    license: CC0
+    author: gnokii at openclipart.org
+    tags_expected: [медведь, игрушка, мяч]
+    search_expected: [мишка, игрушка, мяч]
+    sha256: 501c17fa3feab5c878b111d51e844f9f5f24651a8088da9a375e070583b15022
+  - name: teddy-bear-photo.png
+    subject: серый плюшевый мишка на красном
+    category: игрушка
+    note: рисунок в прямоугольнике, фон не вырезан
+    source: https://commons.wikimedia.org/wiki/File:Teddy-5119317.png
+    license: CC0
+    author: ConmonGt
+    tags_expected: [медведь, игрушка]
+    search_expected: [мишка, игрушка, плюшевый]
+    sha256: a302a349f563213e0b94a52502ef3f9db0ceced18d206136fcb058b710b96cf1
+  - name: robot-kawaii.png
+    subject: робот в стиле каваи
+    category: игрушка
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Kawaii_robot_power_clipart.svg
+    license: CC0
+    author: Mvolz
+    tags_expected: [робот, игрушка]
+    search_expected: [робот, игрушка]
+    sha256: 69886bb1752d7bdc7f6db09fcd169ca05a02151504e6602e385f7c0bfd0eb03d
+  - name: rubber-duck-photo.png
+    subject: синий резиновый утёнок
+    category: игрушка
+    note: фотография, фон не вырезан; сведён к 8 битам на канал (исходник 16)
+    source: https://commons.wikimedia.org/wiki/File:NIND_dustyrubberduck_ISO200.png
+    license: CC BY 4.0
+    author: Trougnouf (Benoit Brummer)
+    tags_expected: [утка, игрушка]
+    search_expected: [утёнок, утка, игрушка, резиновый]
+    sha256: 5de4d98e63f8e0b81ff4ba1207605cec1808f0fe21b15a26b4af6b051c326cd2
+  - name: anime-wikipe-tan.png
+    subject: Wikipe-tan в платье горничной с флагом
+    category: аниме
+    note: набросок, фон светлый
+    source: https://commons.wikimedia.org/wiki/File:Wikipe-tan_by_Dronebogus.png
+    license: CC BY-SA 4.0
+    author: Dronebogus + User:Niklitov (flag only)
+    tags_expected: [девочка, аниме, флаг]
+    search_expected: [аниме, девочка, персонаж]
+    sha256: 73ca712ad24ec81e9ea0109d3691a21ffe08e0a1515fcc18ab60ccd090e35b71
+  - name: anime-wikipe-tan-kagome.png
+    subject: Wikipe-tan в школьной форме с портфелем
+    category: аниме
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Wikipe-tan_dressed_as_Kagome_Higurashi.png
+    license: CC BY-SA 4.0
+    author: 'Original:  ja:利用者:Kasuga~jawiki
+
+
+      Derivative work: Xillegas'
+    tags_expected: [девочка, аниме, портфель]
+    search_expected: [аниме, девочка, школьница]
+    sha256: e4dca9a3e1dca31cd057415f14524355f2f6116c8860e5e684ba105ffaa14dda
+  - name: anime-girl.png
+    subject: девушка с кошачьими ушами на фоне неба
+    category: аниме
+    note: фон не вырезан
+    source: https://commons.wikimedia.org/wiki/File:Anime_Girl.png
+    license: CC BY 3.0
+    author: User:Niabot
+    tags_expected: [девушка, аниме, небо]
+    search_expected: [аниме, девушка, небо]
+    sha256: a8765fefce1bc3b2ba4e0f092ae2bf97643143b8d51a00d2fafb56372fa4df72
+  - name: text-keep-calm.png
+    subject: плакат KEEP CALM AND CARRY ON с короной
+    category: надпись
+    note: красный прямоугольник
+    source: https://commons.wikimedia.org/wiki/File:Keep-calm-and-carry-on.svg
+    license: Public domain
+    author: Anonymous civil servant. Vector conversion by User:Evilandi
+    tags_expected: [надпись, плакат, корона]
+    search_expected: [надпись, плакат, корона, текст]
+    sha256: 93f4402c5f1e7f59929310cc28c3b8cfaa3ca65866c520e3c00e80f0dd1c688d
+  - name: text-happy-birthday.png
+    subject: радужная надпись HAPPY BIRTHDAY
+    category: надпись
+    note: только буквы, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Happy_Birthday_word_art_(1301860).svg
+    license: CC0
+    author: GDJ (Gordon Johnson)
+    tags_expected: [надпись, праздник]
+    search_expected: [надпись, день рождения, праздник, текст]
+    sha256: fef8123d33e66169ef1d1ec3a9a6934f850d005474689b5874e734438aa9fa33
+  - name: owl-cartoon.png
+    subject: сова со скучающим взглядом
+    category: животное
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Owl_bored.svg
+    license: CC0
+    author: rones
+    tags_expected: [сова, птица]
+    search_expected: [сова, птица]
+    sha256: f279b26427ad753d8c79f764b8dfd786c9585aa22f9455784d47d0254f8f322a
+  - name: cat-felix.png
+    subject: кот Феликс с надписью HA HA
+    category: животное
+    note: чёрно-белый, вырезан; и животное, и надпись
+    source: https://commons.wikimedia.org/wiki/File:Felix_Cat-Haha.svg
+    license: Public domain
+    author: Pat Sullivan, or Otto Messmer
+    tags_expected: [кот, надпись]
+    search_expected: [кот, кошка, мультфильм, смех]
+    sha256: f8266b75b92aecc75aa287cb8b5eff897036eaf9a92b08e6cba653ab0487295d
+  - name: unicorn-heraldic.png
+    subject: геральдический единорог, контур
+    category: животное
+    note: контурный рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:H%C3%A9raldique_meuble_licorne_01.svg
+    license: CC BY-SA 3.0
+    author: не указан
+    tags_expected: [единорог, лошадь]
+    search_expected: [единорог, лошадь, герб]
+    sha256: 4487790a1832f9816fe262af7be21f5d864d49e0dc5c873fcafa70d219a0d872
+  - name: butterfly.png
+    subject: сиреневая бабочка
+    category: животное
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Butterfly-clipart.svg
+    license: Public domain
+    author: png file by User:Dvortygirl, converted to svg by User:Amada44
+    tags_expected: [бабочка, насекомое]
+    search_expected: [бабочка, насекомое]
+    sha256: f81a0df7e3f3272dd4d822dcd96a5ae7ffa8de8a9707e20dfc2d1fdde1eeafc2
+  - name: rose-red.png
+    subject: красная роза с листьями
+    category: цветы
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:RedRose2.svg
+    license: CC0
+    author: OpenClipartVectors
+    tags_expected: [роза, цветок]
+    search_expected: [роза, цветок]
+    sha256: 93a769ba3145e66004aa2843551d4c1517c76f4d13f64dff776707b116177ed1
+  - name: flower-ornament.png
+    subject: девять разноцветных цветков в сетке
+    category: цветы
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Retro-flower-ornaments.svg
+    license: Public domain
+    author: AnonMoos
+    tags_expected: [цветок, узор]
+    search_expected: [цветы, узор, орнамент]
+    sha256: cb748b9fcac505251fcb98d940f88962cd47de5a9e55448a4ca5fc9f4c6f45c7
+  - name: car-red-sports.png
+    subject: красный кабриолет
+    category: машина
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:RedSportsCar.svg
+    license: CC0
+    author: OpenClipartVectors
+    tags_expected: [автомобиль, машина]
+    search_expected: [машина, автомобиль, кабриолет]
+    sha256: 18fbf7a1addcc401c361b1136fcbb176cf27f086df3220d415ee15f68515753a
+  - name: car-blue-sports.png
+    subject: синий спортивный родстер
+    category: машина
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:BlueSportsCar.svg
+    license: CC0
+    author: OpenClipartVectors
+    tags_expected: [автомобиль, машина]
+    search_expected: [машина, автомобиль, спорткар]
+    sha256: 033cb135c1ed7f82fd7dbc743b75fbee446db6eb04ff408fa3f0894ad7b0e06e
+  - name: rocket.png
+    subject: ракета, контурный рисунок
+    category: космос
+    note: чёрный контур, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Space-ship-763493.svg
+    license: CC BY 3.0
+    author: Felix Brönnimann
+    tags_expected: [ракета, космос]
+    search_expected: [ракета, космос]
+    sha256: 393b0d3fb721a775aec64e28850c9b70aa22aaccb946e88ef24998ccd1c25131
+  - name: pizza.png
+    subject: кусок пиццы
+    category: еда
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Cheese_pizza_graphic.svg
+    license: CC0
+    author: Unknown authorUnknown author
+    tags_expected: [пицца, еда]
+    search_expected: [пицца, еда]
+    sha256: 7e95e5adf883a946ef9d57a09799ab8048601e319c810f20d68f0d3237267a8a
+  - name: ice-cream.png
+    subject: мороженое в рожке
+    category: еда
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Ice-cream.svg
+    license: CC0
+    author: Gerald_G
+    tags_expected: [мороженое, еда]
+    search_expected: [мороженое, сладкое, еда]
+    sha256: edeb005d07586fdfc41d4fe7f50dec643dbd1f52cd9c1b99fd802ba6bf9b3e07
+  - name: soccer-ball.png
+    subject: футбольный мяч
+    category: спорт
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Football_(soccer_ball).svg
+    license: CC0
+    author: flomar
+    tags_expected: [мяч, футбол]
+    search_expected: [мяч, футбол, спорт]
+    sha256: e9c7e59794427757c953a77c45345db15c405ec7a2a721ab309a0fd7d772cc8e
+  - name: soccer-ball-flaming.png
+    subject: футбольный мяч в огне
+    category: спорт
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Flaming_soccer_ball_01.svg
+    license: CC0
+    author: не указан
+    tags_expected: [мяч, футбол, огонь]
+    search_expected: [мяч, футбол, огонь]
+    sha256: b2a540bcb59c4b37e2638f1c6d8ac7323086a5592edab138f41c967c67913d53
+  - name: christmas-tree.png
+    subject: наряженная ёлка со звездой
+    category: праздник
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Christmas_tree_02.svg
+    license: CC0
+    author: Aaron Spike / Anonymous
+    tags_expected: [ёлка, праздник, звезда]
+    search_expected: [ёлка, новый год, рождество, праздник]
+    sha256: dad40c4c1ab43773ef08418163531caf8fb8343c5b98dc354c0ed5acc36ac15f
+  - name: pumpkin-halloween.png
+    subject: тыква-фонарь на Хэллоуин
+    category: праздник
+    note: рисунок, вырезан
+    source: https://commons.wikimedia.org/wiki/File:Jack-o-lantern.svg
+    license: CC BY-SA 3.0
+    author: Cary Bass
+    tags_expected: [тыква, праздник]
+    search_expected: [тыква, хэллоуин, праздник]
+    sha256: f0d5efa3d157be5aaa9d21d5cd526f6b0c8cfbbaf246605bec70caa9c46e0cf9
+
+  # Пары для настройки узнавания — записаны вместе с ожиданиями, до замера.
+tuning_expectations:
+  - level: тот же объект
+    must_match: true
+    pairs:
+      - [anime-wikipe-tan.png, anime-wikipe-tan-kagome.png]   # один персонаж, разные рисунки
+  - level: та же категория
+    must_match: false
+    pairs:
+      - [car-red-sports.png, car-blue-sports.png]
+      - [teddy-bear-toy.png, teddy-bear-with-ball.png]
+      - [teddy-bear-toy.png, teddy-bear-photo.png]
+      - [soccer-ball.png, soccer-ball-flaming.png]
+      - [text-keep-calm.png, text-happy-birthday.png]
+      - [anime-girl.png, anime-wikipe-tan.png]
+  - level: чужое
+    must_match: false
+    pairs:
+      - [pizza.png, t72-winter-print.png]
+      - [rose-red.png, rocket.png]
+      - [christmas-tree.png, car-red-sports.png]
+      - [rubber-duck-photo.png, mi8-cloud-sharp-clean-print.png]
+
+# Поиск по смыслу: слово запроса обязано поднять эти картинки выше остальных —
+# «новый год» оба новогодних принта, крейсер и ёлку; «мяч» — оба мяча и мишку
+# с мячом. Записано 25.09.2026 до замера (план 071, US-0480).
+tuning_search_groups:
+  новый год: [ustinov-newyear-print.png, christmas-tree.png]
+  мяч: [soccer-ball.png, soccer-ball-flaming.png, teddy-bear-with-ball.png]
+  игрушка: [teddy-bear-toy.png, teddy-bear-with-ball.png, teddy-bear-photo.png, robot-kawaii.png, rubber-duck-photo.png]
+  надпись: [text-keep-calm.png, text-happy-birthday.png, cat-felix.png]
+
 # Чего ждём от узнавания. Три уровня, и порог обязан их разделять: если между
 # «тот же объект» и «та же категория» он не различает, узнавание будет
 # срабатывать на каждом втором танке и его перестанут читать.

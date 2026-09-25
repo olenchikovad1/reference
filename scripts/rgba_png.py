@@ -5,8 +5,9 @@
 контейнере дала бы те же пиксели, но держать два чтения ради одного и того же
 незачем.
 
-Поддержано то, что реально приходит: 8 бит на канал, без чересстрочности,
-серый, RGB, серый с альфой, RGBA. Палитровый PNG — отказ с причиной.
+Поддержано то, что реально приходит: 8 и 16 бит на канал (16 сводятся к 8 —
+старший байт), без чересстрочности, серый, RGB, серый с альфой, RGBA.
+Палитровый PNG — отказ с причиной.
 """
 
 import pathlib
@@ -30,10 +31,11 @@ def read(path: pathlib.Path) -> tuple[int, int, bytes]:
         elif typ == b"IDAT":
             idat += body
         i += 12 + ln
-    if depth != 8 or interlace or colour not in _CHANNELS:
+    if depth not in (8, 16) or interlace or colour not in _CHANNELS:
         raise ValueError(f"{path.name}: {depth} бит, тип цвета {colour}, чересстрочность {interlace} — не поддержано")
-    n = _CHANNELS[colour]
-    raw, stride = zlib.decompress(bytes(idat)), w * n
+    # bpp — байт на пиксель: по нему фильтры берут соседа слева.
+    n, bpp = _CHANNELS[colour], _CHANNELS[colour] * depth // 8
+    raw, stride = zlib.decompress(bytes(idat)), w * bpp
     plane, prev, pos = bytearray(h * stride), bytearray(stride), 0
     for y in range(h):
         f = raw[pos]
@@ -42,24 +44,26 @@ def read(path: pathlib.Path) -> tuple[int, int, bytes]:
         pos += stride
         # Фильтры строк PNG: разность с соседом слева, сверху, средним, Paeth.
         if f == 1:
-            for x in range(n, stride):
-                line[x] = (line[x] + line[x - n]) & 255
+            for x in range(bpp, stride):
+                line[x] = (line[x] + line[x - bpp]) & 255
         elif f == 2:
             for x in range(stride):
                 line[x] = (line[x] + prev[x]) & 255
         elif f == 3:
             for x in range(stride):
-                a = line[x - n] if x >= n else 0
+                a = line[x - bpp] if x >= bpp else 0
                 line[x] = (line[x] + ((a + prev[x]) >> 1)) & 255
         elif f == 4:
             for x in range(stride):
-                a = line[x - n] if x >= n else 0
-                b, c = prev[x], (prev[x - n] if x >= n else 0)
+                a = line[x - bpp] if x >= bpp else 0
+                b, c = prev[x], (prev[x - bpp] if x >= bpp else 0)
                 p = a + b - c
                 pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
                 line[x] = (line[x] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
         plane[y * stride:(y + 1) * stride] = line
         prev = line
+    if depth == 16:
+        plane = plane[0::2]
     if n == 4:
         return w, h, bytes(plane)
     out = bytearray(w * h * 4)
@@ -78,6 +82,11 @@ def write(path: pathlib.Path, w: int, h: int, rgba: bytes) -> None:
 
     path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
                      + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
+
+
+def depth(path: pathlib.Path) -> int:
+    """Бит на канал — из заголовка, не разбирая картинку."""
+    return path.read_bytes()[24]
 
 
 def opaque(rgba: bytes, w: int, x: int, y: int, threshold: int = 128) -> bool:
