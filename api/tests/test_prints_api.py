@@ -41,6 +41,19 @@ def test_real_prints_are_listed_even_without_description(client: TestClient) -> 
     assert any(i["kind"] == "artwork" for i in items)
 
 
+def test_tuning_set_prints_are_described_like_the_owners(client: TestClient) -> None:
+    """Принт из набора для настройки описан так же, как принты владельца.
+
+    Набор записан в описании отдельным разделом, чтобы старые замеры
+    воспроизводились на своих восьми принтах. Для показа разница не видна:
+    без подписи крейсер на странице выглядел бы безымянным файлом.
+    """
+    items = {i["path"]: i for i in client.get("/reference/api/prints").json()}
+    cruiser = items["ustinov-newyear-print.png"]
+    assert cruiser["kind"] == "artwork"
+    assert cruiser["subject"] == "крейсер «Маршал Устинов»"
+
+
 def test_print_content_is_served(client: TestClient) -> None:
     items = client.get("/reference/api/prints").json()
     r = client.get(f"/reference/api/prints/{items[0]['path']}")

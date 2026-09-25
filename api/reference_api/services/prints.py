@@ -15,8 +15,11 @@ class PrintMissing(Exception):
 
 
 def catalogue() -> list[dict[str, Any]]:
-    described = {d["name"]: d for d in repo.descriptions().get("files", [])}
-    probes = {d["name"]: d for d in repo.descriptions().get("probes", [])}
+    desc = repo.descriptions()
+    # Набор для настройки описан отдельно от принтов владельца ради
+    # воспроизводимости старых замеров; для показа это один и тот же набор.
+    described = {d["name"]: d for d in [*desc.get("files", []), *desc.get("tuning_set", [])]}
+    probes = {d["name"]: d for d in desc.get("probes", [])}
     out: list[dict[str, Any]] = []
     for path in repo.list_files():
         name = path.rsplit("/", 1)[-1]

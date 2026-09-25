@@ -103,7 +103,7 @@ def products() -> None:
 def prints() -> None:
     data = yaml.safe_load((FIXTURES / "prints.yaml").read_text(encoding="utf-8")) or {}
     print("принты набора:")
-    for f in data.get("files", []):
+    for f in [*data.get("files", []), *data.get("tuning_set", [])]:
         rel = f"prints/{f['name']}"
         if f.get("sha256"):
             check_hashed(rel, f["sha256"], required=True, hint="файл от владельца, файлом, не фото")
