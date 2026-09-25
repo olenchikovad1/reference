@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     platform_core_url: str | None = None
     platform_jwks_url: str | None = None
     platform_app_code: str = "reference"
+    #: Удостоверение приложения `pfc_…` — выдаётся платформой один раз при
+    #: регистрации. Нет его — описание не публикуется, сервис работает.
+    platform_credential: str | None = None
+    #: Манифест для платформы: файл в корне репозитория, в контейнер подключён
+    #: томом — одно описание на всех, второго в коде нет.
+    manifest_path: str = "/app/manifest.reference.yaml"
 
     s3_region: str = "ru-central1"
     amqp_url: str | None = None

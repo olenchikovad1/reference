@@ -23,6 +23,12 @@ export default defineConfig({
     allowedHosts: ['reference-web'],
     // Запросы к сервису идут по тому же префиксу, что и в платформе за шлюзом.
     proxy: {
+      // Ядро платформы читает манифест по адресу приложения + /manifest, то
+      // есть в корне, мимо /reference/. Отдаёт его сервис.
+      '/manifest': {
+        target: 'http://api:8000',
+        rewrite: () => '/reference/api/manifest',
+      },
       '/reference/api': {
         target: 'http://api:8000',
         changeOrigin: true,

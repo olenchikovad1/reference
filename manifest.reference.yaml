@@ -1,99 +1,121 @@
-# Манифест приложения для платформы. Единственный способ, которым платформа
+# Манифест приложения для платформы — единственный способ, которым платформа
 # узнаёт о «Референсе». Платформа его не редактирует: правка состава разделов
-# в базе платформы — нарушение И-1, после неё истина лежит в двух местах.
-code: reference          # неизменен: стоит в каждой сохранённой ссылке
-display_name: Референс
-icon: "◈"
-contract_version: 1
-
-# Приложение внутреннее: доступ внешним субъектам не выдаётся вовсе, поэтому
-# вторая ось прав (область видимости) к его разделам не применяется.
+# в её базе — нарушение И-1, после неё истина лежит в двух местах.
+#
+# Формат — строгая схема ядра платформы (platform_core/schemas/manifests.py,
+# контракт 1): неизвестное поле ядро отвергает. Сервис отдаёт этот файл JSON-ом
+# по GET /manifest (ядро читает его по адресу приложения при регистрации) и
+# публикует при старте PUT-ом с удостоверением (план 072, US-0484).
+#
+# Значки — только из ICON_NAMES @platform/ui, тоны — из TONES; незнакомое рамка
+# заменит нейтральным, и приложение выпадет из общего вида. Коды — латиница,
+# цифры и дефис (^[a-z][a-z0-9-]{1,63}$): подчёркивание ядро отвергает.
+# Строки с запятой — в кавычках: в строчной записи YAML запятая делит поля.
+contract: "1"
+code: reference            # неизменен: стоит в каждой сохранённой ссылке и гранте
+name: Референс
+full_name: Референс — принт от картинки до файла на фабрику
+icon: layers
+# Логический адрес в сети платформы: фронтенд под этим именем входит в сеть
+# platform_default (infra/compose.platform.yaml), шлюз шлёт туда путь целиком.
+address: http://reference-web:5173
+# Приложение внутреннее: внешним субъектам доступ не выдаётся вовсе.
 available_to_external: false
 
+# Первая страница — нынешний экран примерки принта. Прав на неё не выдают: она
+# есть у каждого, кому открыто приложение. Заменится рабочим окном (план 073).
+home: {code: bench, name: Примерка принта, icon: house, tone: slate}
+
+# Разделы — ровно страницы меню (US-0484). Коды меняются свободно, пока
+# приложение не зарегистрировано: на них ещё нет ни одного гранта. После
+# регистрации код неизменен. Подпункты — не разделы: право на подпункт — право
+# на раздел.
 sections:
   - code: references
-    display_name: Референсы
+    name: Референсы
+    shareable: false
+    icon: layout-grid
+    tone: blue
     actions: [view, write, delete]
-    shared: false
-  - code: library
-    display_name: Библиотека
+    # Функции — то, что нельзя выразить правкой записи: маршрут объявляет
+    # функцию, а не write на разделе, иначе всякий, кто вправе поправить
+    # карточку, сможет и выгрузить техпакет на фабрику.
+    functions:
+      - {code: export-techpack, name: Выгрузить техпакет}
+      - {code: purge-trash, name: Очистить корзину}
+      - {code: delete-forever, name: "Удалить насовсем, минуя корзину"}
+    children:
+      - {code: trash, name: Корзина, icon: trash}
+  - code: prints
+    name: Принты
+    shareable: false
+    icon: copy
+    tone: violet
     actions: [view, write, delete]
-    shared: false
+    functions:
+      - {code: mark-defect, name: Отметить картинку браком}
+  - code: texts
+    name: Тексты
+    shareable: false
+    icon: quote
+    tone: amber
+    actions: [view, write, delete]
   - code: products
-    display_name: Справочник изделий
+    name: Изделия
+    shareable: false
+    icon: cube
+    tone: teal
     actions: [view, write, delete]
-    shared: false
-  - code: collections
-    display_name: Коллекции
+  - code: drops
+    name: Дропы
+    shareable: false
+    icon: calendar-days
+    tone: green
     actions: [view, write, delete]
-    shared: false
   - code: review
-    display_name: Согласование
+    name: Согласование
+    shareable: false
+    icon: list-checks
+    tone: rose
     actions: [view, write]
-    shared: false
+    functions:
+      - {code: approve-final, name: Окончательное принятие}
+    children:
+      - {code: my-tasks, name: Мои задачи, icon: clipboard-list}
+  - code: dictionaries
+    name: Справочники
+    shareable: false
+    icon: book
+    tone: slate
+    actions: [view, write]
   - code: archive
-    display_name: Архив
-    actions: [view, write]
-    shared: false
+    name: Архив
+    shareable: false
+    icon: archive
+    tone: slate
+    actions: [view]
 
-# Именованные операции, не выражаемые как создание, изменение или удаление
-# записи. Маршрут объявляет функцию, а не write на разделе: иначе всякий, кто
-# вправе поправить карточку, сможет и выгрузить техпакет на фабрику.
-functions:
-  - code: export_techpack
-    display_name: Выгрузить техпакет
-    section: references
-  - code: approve_final
-    display_name: Окончательное принятие
-    section: review
-  - code: rebuild_derivatives
-    display_name: Пересобрать производные
-    section: products
-  - code: mark_archive
-    display_name: Проставить итоги архива
-    section: archive
-
-permission_sets:
+# Наборы прав — предложение для назначения; публикация прав не раздаёт.
+right_sets:
   - code: designer
-    display_name: Дизайнер
-    grants:
-      - {section: references, action: write}
-      - {section: library, action: write}
-      - {section: collections, action: view}
-      - {section: products, action: view}
-      - {section: review, action: view}
+    name: Дизайнер
+    grants: [references:view, references:write, prints:view, prints:write, texts:view, texts:write,
+             drops:view, products:view, review:view, dictionaries:view]
   - code: editor
-    display_name: Редактор
-    grants:
-      - {section: references, action: view}
-      - {section: review, action: write}
-      - {section: library, action: view}
-      - {section: collections, action: view}
-  - code: chief_editor
-    display_name: Суперредактор
-    grants:
-      - {section: references, action: write}
-      - {section: review, action: write}
-      - {section: collections, action: write}
-      - {section: archive, action: write}
-      - {section: review, function: approve_final}
-      - {section: references, function: export_techpack}
-      - {section: archive, function: mark_archive}
+    name: Редактор
+    grants: [references:view, review:view, review:write, prints:view, texts:view, drops:view,
+             dictionaries:view]
+  - code: chief-editor
+    name: Суперредактор
+    grants: [references:view, references:write, review:view, review:write, prints:view, prints:write,
+             texts:view, texts:write, drops:view, drops:write, dictionaries:view, dictionaries:write,
+             archive:view, review:approve-final, references:export-techpack, references:purge-trash,
+             references:delete-forever, prints:mark-defect]
   - code: technologist
-    display_name: Технолог
-    grants:
-      - {section: products, action: write}
-      - {section: references, action: view}
-      - {section: products, function: rebuild_derivatives}
+    name: Технолог
+    grants: [products:view, products:write, references:view, dictionaries:view,
+             references:export-techpack]
 
-entry_points:
-  frontend: /reference/
-  service: /reference/api/
-
-consumed_services:
-  - files          # общий сервис файлов платформы
-  - audit
-
-probes:
-  liveness: /reference/api/health/live
-  readiness: /reference/api/health/ready
+# Общие сервисы платформы, которые приложение зовёт: обмен токена разрешается
+# только на объявленное. Пока никаких — файлы в своём хранилище (решение 0009).
+consumes: []

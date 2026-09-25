@@ -10,6 +10,13 @@
 # адрес приложения в реестре платформы (http://reference-web:5173). Не через
 # хозяйскую машину: адрес внутри сети не зависит от проброса портов.
 services:
+  # Сервис в сеть платформы НЕ входит: там свой postgres, и имя postgres из
+  # строки подключения разрешилось в чужую базу («password authentication
+  # failed», 25.09.2026). К ядру — публикация манифеста и ключи для токенов —
+  # он ходит через шлюз платформы на хозяйской машине, как любой внешний
+  # клиент: PLATFORM_CORE_URL=http://host.docker.internal:8100/platform/api/core.
+  api:
+    extra_hosts: ["host.docker.internal:host-gateway"]
   web:
     networks:
       default: {}
