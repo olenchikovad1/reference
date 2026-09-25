@@ -4,7 +4,7 @@
 
 - assets
 - checks
-- collections
+- drops
 - library
 - people — снимок людей из платформы, не таблица пользователей (И-5)
 - products

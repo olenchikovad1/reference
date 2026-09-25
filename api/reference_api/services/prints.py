@@ -29,7 +29,7 @@ def catalogue() -> list[dict[str, Any]]:
                 "path": path,
                 "name": name,
                 # Эталонные принты лежат в своей папке и помечены: они отвечают
-                # на вопрос про печать, а не изображают коллекцию.
+                # на вопрос про печать, а не изображают выпуск.
                 "kind": "probe" if path.startswith("probes/") else "artwork",
                 "subject": meta.get("subject"),
                 "answers": meta.get("answers"),

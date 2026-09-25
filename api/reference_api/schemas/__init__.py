@@ -4,7 +4,7 @@
 
 - assets
 - checks
-- collections
+- drops
 - library
 - products
 - references
