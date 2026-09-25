@@ -23,7 +23,7 @@ async def client():
     async with app.router.lifespan_context(app):
         async with engine.begin() as conn:
             await conn.execute(
-                text("truncate table asset_embeddings, reference_cards, reference_versions, reference_texts")
+                text("truncate table asset_embeddings, reference_cards, reference_versions, reference_texts cascade")
             )
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://stand"
