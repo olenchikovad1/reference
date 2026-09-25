@@ -7,6 +7,7 @@ import { heightCm } from '../shared/composition'
 import type { Calibration } from '../shared/geometry'
 import { cmToPx } from '../shared/geometry'
 import { buildLuminance } from '../shared/luminance'
+import { drawLooked } from '../shared/look'
 
 /** Кадр изделия и его карта рельефа — по адресу кадра, один раз на вкладку.
  *  Изделие на всех карточках одно и то же (худи — везде худи): грузить и
@@ -259,7 +260,7 @@ export function GarmentCanvas(props: CanvasProps) {
         if (el.kind === 'text') drawText(ctx, el, ew)
         else {
           const img = props.images.get(el.src)
-          if (img?.complete) ctx.drawImage(img, -ew / 2, -eh / 2, ew, eh)
+          if (img?.complete) drawLooked(ctx, img, el.look, -ew / 2, -eh / 2, ew, eh)
         }
         ctx.restore()
       }
@@ -310,7 +311,7 @@ export function GarmentCanvas(props: CanvasProps) {
         drawText(ctx, el, w)
       } else {
         const img = props.images.get(el.src)
-        if (img?.complete) ctx.drawImage(img, -w / 2, -h / 2, w, h)
+        if (img?.complete) drawLooked(ctx, img, el.look, -w / 2, -h / 2, w, h)
       }
       ctx.restore()
     }

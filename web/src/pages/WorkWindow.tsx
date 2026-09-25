@@ -16,6 +16,7 @@ import {
   heightCm,
   nudge,
   place,
+  relook,
   remove,
   select,
   type Composition,
@@ -1554,6 +1555,46 @@ export function WorkWindow() {
           ×
         </button>
       </div>
+      {selected.kind === 'image' && (
+        <Section title="Цвет и прозрачность">
+          {/* Исходник не меняется: хранятся краска и прозрачность (US-0502). */}
+          <div style={S.swatches}>
+            {colours.map((c) => (
+              <button
+                key={c.code}
+                title={`${c.name} · ${c.code}`}
+                aria-label={`перекрасить в ${c.group}`}
+                onClick={() => commit((comp) => relook(comp, selected.id, { tint: { code: c.code, rgb: c.rgb } }))}
+                style={{
+                  ...S.swatch,
+                  background: toCss(c),
+                  outline: c.code === selected.look?.tint?.code ? '2px solid currentColor' : undefined,
+                }}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {selected.look?.tint
+              ? `перекрашен в ${colours.find((c) => c.code === selected.look?.tint?.code)?.group ?? selected.look.tint.code} — форма и полутона те же`
+              : 'исходный цвет — для одноцветного принта выберите краску'}
+          </p>
+          {selected.look?.tint && (
+            <button className={small()} onClick={() => commit((comp) => relook(comp, selected.id, { tint: null }))}>
+              вернуть исходный цвет
+            </button>
+          )}
+          <Slider
+            label="прозрачность"
+            hint="насколько сквозь принт видна ткань: 0 — принт закрывает её полностью"
+            value={Math.round((1 - (selected.look?.opacity ?? 1)) * 100) / 100}
+            min={0}
+            max={0.9}
+            step={0.05}
+            digits={2}
+            onChange={(v) => commit((comp) => relook(comp, selected.id, { opacity: 1 - v }))}
+          />
+        </Section>
+      )}
       {selected.kind === 'image' && (
         <div className="mb-2 flex flex-wrap gap-1">
           {!selected.hasAlpha && <span style={S.badge}>фон не вырезан</span>}

@@ -9,6 +9,7 @@
 // печатный файл не влияет никак. Можно выключить показ целиком, и лист выйдет
 // тем же.
 
+import { drawLooked } from './look'
 import type { Composition, PrintElement } from './composition'
 import { heightCm } from './composition'
 import { drawText } from './text'
@@ -108,7 +109,9 @@ export function render(
       drawText(ctx, el, w)
     } else {
       const img = images.get(el.src)
-      if (img?.complete) ctx.drawImage(img, -w / 2, -h / 2, w, h)
+      // С видом элемента: на фабрику уходит перекрашенное и полупрозрачное
+      // ровно так, как утвердили на экране (US-0502).
+      if (img?.complete) drawLooked(ctx, img, el.look, -w / 2, -h / 2, w, h)
     }
     ctx.restore()
   }

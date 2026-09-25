@@ -6,6 +6,7 @@
 // придётся пересчитывать. Сантиметры переживают всё это, потому что они
 // принадлежат лекалу, а не картинке.
 
+import type { Look } from './look'
 export type ElementKind = 'image' | 'text'
 
 export interface Placement {
@@ -49,6 +50,9 @@ export interface ImageElement {
   /** Есть ли у картинки прозрачность. Нет — значит ляжет прямоугольником. */
   readonly hasAlpha: boolean
   readonly placement: Placement
+  /** Краска и прозрачность без новой картинки (US-0502): исходник тот же,
+   *  хранятся параметры. Нет — картинка как есть. */
+  readonly look?: Look
 }
 
 export interface TextElement {
@@ -78,6 +82,15 @@ export interface Composition {
 }
 
 export const EMPTY: Composition = { elements: [], selectedId: null }
+
+/** Поменять вид картинки — краску и прозрачность; `null` в краске — вернуть
+ *  исходный цвет. Исходник не трогается. */
+export function relook(c: Composition, id: string, patch: Partial<Look>): Composition {
+  return {
+    ...c,
+    elements: c.elements.map((el) => (el.id === id && el.kind === 'image' ? { ...el, look: { ...el.look, ...patch } } : el)),
+  }
+}
 
 /**
  * Высота элемента в сантиметрах.
