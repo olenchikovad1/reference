@@ -36,6 +36,11 @@ class Reference(Base):
     #: массивов (оператор &&) есть только у него, а поиск «карточки, где
     #: встречается хоть одна из этих картинок» — это ровно пересечение.
     image_digests: Mapped[list[str]] = mapped_column(ARRAY(String(64)), default=list)
+    #: Кто сохранил — id субъекта платформы из токена. Не ссылка на таблицу
+    #: людей: её здесь нет и не будет (И-5); имя для показа — из снимка людей
+    #: приложения (US-0508). Пусто — сохранено без входа (стенд без платформы
+    #: или до US-0486).
+    author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

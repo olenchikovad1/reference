@@ -29,10 +29,30 @@ dependencies = [
     # Разбор слов для текстовой половины CLIP — автотеги (решение 0011).
     "tokenizers>=0.23,<0.24",
     "numpy",
+    # Разбор токена платформы, объявление прав на маршрутах, проверка при старте,
+    # что изменяющего маршрута без права нет (план 072, US-0486, US-0487).
+    "platform-client==0.4.0",
+    # Зависимость platform-client — прямой строкой: `uv pip install` привязывает
+    # индекс (tool.uv.sources) только к прямым зависимостям, и транзитивный
+    # service-kit искался бы на PyPI, где его нет.
+    "service-kit==0.2.0",
 ]
 
 [dependency-groups]
 dev = ["pytest", "pytest-asyncio", "httpx", "ruff", "mypy"]
+
+# Пакет платформы — ТОЛЬКО из её индекса и по-пакетно, как у plm: одноимённый
+# platform-client есть в общедоступном PyPI, это чужой пакет, и без привязки в
+# сборку уехал бы он. Остальные зависимости — с PyPI, поэтому индекс по
+# умолчанию не подменяется.
+[[tool.uv.index]]
+name = "platform"
+url = "https://platform.toribrands.ru/platform/pypi/simple/"
+explicit = true
+
+[tool.uv.sources]
+platform-client = { index = "platform" }
+service-kit = { index = "platform" }
 
 [build-system]
 requires = ["hatchling"]

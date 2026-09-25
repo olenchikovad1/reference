@@ -10,6 +10,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
+from platform_client.subjects import install_subject_reading
+from platform_client.tokens import KeySet
 
 from reference_api.api import assets, colours, health, platform, prints, products, references
 from reference_api.config import settings
@@ -28,14 +30,32 @@ async def _publish() -> None:
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Публикация в фоне: недоступное ядро не должно держать подъём сервиса, а
     # стенд без платформы (решение 0006) поднимается вовсе без неё.
-    task = asyncio.create_task(_publish())
+    tasks = [asyncio.create_task(_publish())]
+    cfg = settings()
+    # Ключи ядра для токенов. Тест подставляет свои заранее — их не трогаем.
+    if getattr(app.state, "keys", None) is None and cfg.platform_jwks_url:
+        app.state.keys = publishing.PlatformKeys(cfg.platform_jwks_url)
+        tasks.append(asyncio.create_task(app.state.keys.keep_fresh()))
     yield
-    task.cancel()
+    for task in tasks:
+        task.cancel()
+
+
+def _current_keys(app: FastAPI) -> KeySet:
+    """Ключи на каждый запрос: посредник ставится при сборке, а ключи приходят
+    от ядра позже, в lifespan. Нет их — не принимается ни один токен."""
+    keys = getattr(app.state, "keys", None)
+    return keys.current() if keys is not None else KeySet(by_key_id={})
 
 
 def create_app() -> FastAPI:
     """Собирает приложение. Отдельной функцией — чтобы тест поднимал своё."""
     cfg = settings()
+    # Журнал приложения. Uvicorn настраивает только свои журналы, и без этой
+    # строки всё уровня INFO из reference.* пропадало: настройка log_level
+    # была, а не действовала (25.09.2026).
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=cfg.log_level, format="%(levelname)s %(name)s: %(message)s")
     app = FastAPI(
         title="Референс",
         docs_url=cfg.base_path + "/docs",
@@ -52,6 +72,9 @@ def create_app() -> FastAPI:
     root.include_router(assets.router)
     root.include_router(references.router)
     app.include_router(root)
+    # Кто пришёл — из токена платформы, аудитория — код приложения: токен под
+    # «Референс» выдаётся только тому, у кого к нему доступ (US-0486).
+    install_subject_reading(app, keys=lambda: _current_keys(app), audience=cfg.platform_app_code)
     return app
 
 

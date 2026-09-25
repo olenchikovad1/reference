@@ -1,6 +1,6 @@
 """Собранный принт: вход по HTTP."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
@@ -18,10 +18,14 @@ router = APIRouter(prefix="/references", tags=["references"])
 
 
 @router.post("", response_model=SavedOut)
-async def save(body: SaveIn, db: AsyncSession = Depends(session)) -> SavedOut:
+async def save(body: SaveIn, request: Request, db: AsyncSession = Depends(session)) -> SavedOut:
     """Сохраняет собранный принт и сразу говорит, что узналось."""
+    # Субъекта кладёт посредник платформы (app.py); нет токена или он не
+    # принят — None: отказ без права делает объявление на маршруте (US-0487).
+    subject = getattr(request.state, "subject", None)
     card_id, found = await service.save(
-        db, body.name, body.sheet_digest, body.image_digests, body.texts, body.work
+        db, body.name, body.sheet_digest, body.image_digests, body.texts, body.work,
+        author_id=subject.id if subject else None,
     )
     return SavedOut(
         id=card_id,
@@ -53,7 +57,8 @@ async def search(q: str, db: AsyncSession = Depends(session)) -> list[FoundOut]:
 @router.get("", response_model=list[CardOut])
 async def latest(db: AsyncSession = Depends(session)) -> list[CardOut]:
     """Сохранённые карточки, свежие первыми."""
-    return [CardOut(id=c.id, name=c.name, created_at=c.created_at) for c in await service.latest(db)]
+    return [CardOut(id=c.id, name=c.name, created_at=c.created_at, author_id=c.author_id)
+            for c in await service.latest(db)]
 
 
 # Объявлен ПОСЛЕ /search: иначе «search» разбирался бы как номер карточки и
@@ -65,4 +70,4 @@ async def open_card(card_id: int, db: AsyncSession = Depends(session)) -> CardWo
     card = await service.open_card(db, card_id)
     if card is None:
         raise HTTPException(404, "карточки с таким номером нет")
-    return CardWorkOut(id=card.id, name=card.name, created_at=card.created_at, work=card.work)
+    return CardWorkOut(id=card.id, name=card.name, created_at=card.created_at, author_id=card.author_id, work=card.work)

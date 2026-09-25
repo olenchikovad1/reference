@@ -49,6 +49,7 @@ async def save(
     image_digests: list[str],
     texts: list[str],
     work: dict | None = None,
+    author_id: str | None = None,
 ) -> tuple[int, list[Match]]:
     """Сохраняет собранный принт и говорит, что узналось.
 
@@ -57,7 +58,8 @@ async def save(
     """
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=0)
     card = await repo.save(
-        db, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts], work
+        db, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts], work,
+        author_id=author_id,
     )
 
     # Вектор листа считается ПОСЛЕ поиска и по тому же оригиналу, что у картинок.

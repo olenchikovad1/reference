@@ -44,6 +44,8 @@ class CardOut(BaseModel):
     id: int
     name: str
     created_at: datetime
+    #: Кто сохранил — id субъекта платформы; пусто — сохранено без входа.
+    author_id: str | None = None
 
 
 class CardWorkOut(CardOut):

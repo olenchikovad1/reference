@@ -8,15 +8,21 @@
 запрос — здесь, по контракту ядра: PUT /applications/{код}/manifest.
 """
 
+import asyncio
+import logging
 import pathlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
 import httpx
 import yaml
+from platform_client.tokens import KeySet
 
 from reference_api.config import settings
+
+log = logging.getLogger("reference.platform")
 
 #: Сколько ждать ядро. Публикация идёт в фоне и подъём сервиса не держит, но
 #: зависший запрос не должен висеть вечно.
@@ -65,3 +71,42 @@ async def publish(
     note = "; ".join(f"раздел {o['section']} убран, у {o['holders']} человек на нём были права" for o in orphaned)
     return Publication(True, f"опубликован {answer.get('published_at')}, разделов {len(answer.get('sections', []))}"
                              + (f"; ВНИМАНИЕ: {note}" if note else ""))
+
+
+#: Ротация ключей у ядра идёт с перекрытием: новый публикуется раньше, чем
+#: начинает подписывать. Десяти минут хватает с запасом — как у plm.
+KEYS_REFRESH_SECONDS = 600.0
+
+
+class PlatformKeys:
+    """Действующие публичные ключи ядра, по которым проверяется токен.
+
+    Недоступное ядро не роняет сервис: без ключей не принимается ни один токен,
+    но сервис поднят и получит их при следующем перечитывании. Сбой
+    перечитывания не стирает прежние ключи — подписанные ими токены настоящие.
+    """
+
+    def __init__(self, url: str, fetch: Callable[[str], Awaitable[KeySet]] = KeySet.fetched_from) -> None:
+        self.url = url
+        self._fetch = fetch
+        self._current = KeySet(by_key_id={})
+
+    def current(self) -> KeySet:
+        return self._current
+
+    async def refresh(self) -> bool:
+        try:
+            fresh = await self._fetch(self.url)
+        except Exception as failure:  # noqa: BLE001 — любой сбой ядра здесь одинаков: прежние ключи остаются
+            level = logging.WARNING if self._current.by_key_id else logging.ERROR
+            log.log(level, "ключи ядра не получены (%s): %s; действует набор из %d ключей",
+                    self.url, type(failure).__name__, len(self._current.by_key_id))
+            return False
+        self._current = fresh
+        log.info("ключи ядра получены: %d", len(fresh.by_key_id))
+        return True
+
+    async def keep_fresh(self, every: float = KEYS_REFRESH_SECONDS) -> None:
+        while True:
+            await self.refresh()
+            await asyncio.sleep(every)
