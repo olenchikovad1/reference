@@ -1,6 +1,7 @@
 """Собранный принт: вход по HTTP."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from platform_client import Action, requires
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
@@ -17,7 +18,7 @@ from reference_api.services import references as service
 router = APIRouter(prefix="/references", tags=["references"])
 
 
-@router.post("", response_model=SavedOut)
+@router.post("", response_model=SavedOut, dependencies=[requires("references", Action.WRITE)])
 async def save(body: SaveIn, request: Request, db: AsyncSession = Depends(session)) -> SavedOut:
     """Сохраняет собранный принт и сразу говорит, что узналось."""
     # Субъекта кладёт посредник платформы (app.py); нет токена или он не

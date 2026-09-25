@@ -1,6 +1,7 @@
 """Файлы: вход по HTTP."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
+from platform_client import Action, requires
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
@@ -15,7 +16,8 @@ from reference_api.services import tags as tagging
 router = APIRouter(prefix="/assets", tags=["assets"])
 
 
-@router.post("", response_model=list[AssetOut])
+# Загрузка кладёт файл в библиотеку — это запись в «Принтах».
+@router.post("", response_model=list[AssetOut], dependencies=[requires("prints", Action.WRITE)])
 async def upload(files: list[UploadFile]) -> list[AssetOut]:
     """Несколько файлов одной операцией.
 
@@ -88,7 +90,8 @@ def derivative(digest: str, preset: str) -> Response:
     return Response(content, media_type=content_type)
 
 
-@router.post("/recognise", response_model=list[RecognisedOut])
+# Узнавание запоминает векторы, теги и названия файлов — тоже запись.
+@router.post("/recognise", response_model=list[RecognisedOut], dependencies=[requires("prints", Action.WRITE)])
 async def recognise(
     digests: list[str], db: AsyncSession = Depends(session)
 ) -> list[RecognisedOut]:
@@ -134,7 +137,8 @@ def _name_out(n: naming.Name | None) -> NameOut | None:
     return None if n is None else NameOut(name=n.name, source=n.source, from_digest=n.from_digest)
 
 
-@router.post("/tags", response_model=list[FileTagsOut])
+# POST только ради списка хешей в теле: данные не меняются — нужен просмотр.
+@router.post("/tags", response_model=list[FileTagsOut], dependencies=[requires("prints", Action.VIEW)])
 async def file_tags(digests: list[str], db: AsyncSession = Depends(session)) -> list[FileTagsOut]:
     """Теги файлов. Нет — досчитываются по уже лежащему вектору; нет и
     вектора — у файла пусто, пока его не узнавали."""

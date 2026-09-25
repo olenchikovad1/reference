@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     platform_core_url: str | None = None
     platform_jwks_url: str | None = None
     platform_app_code: str = "reference"
+    #: Стенд без платформы (решение 0006): запрос без токена получает
+    #: стендового субъекта со всеми грантами манифеста. Только явно — и с
+    #: предупреждением в журнале старта: забытый включённым, он открыл бы всё
+    #: всем. На экране — плашка (VITE_WITHOUT_PLATFORM в web/.env).
+    without_platform: bool = False
     #: Удостоверение приложения `pfc_…` — выдаётся платформой один раз при
     #: регистрации. Нет его — описание не публикуется, сервис работает.
     platform_credential: str | None = None

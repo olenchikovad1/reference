@@ -12,15 +12,12 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import { Bench } from '../pages/Bench'
 import { NotFound, Placeholder } from '../pages/Placeholder'
-import { useProfile, useSections } from '../shared/api/platform'
+import { useProfile, useSections, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { BASE, SECTIONS, type SectionPlace } from './sections'
 import { CODE, Shell } from './shell'
 
 const queries = new QueryClient()
 
-/** Стенд без платформы (решение 0006) включается явно — и тогда на экране
- *  плашка: забыть его включённым и принять за настоящий вход нельзя. */
-const WITHOUT_PLATFORM = import.meta.env.VITE_WITHOUT_PLATFORM === 'true'
 /** Где открывать «Референс» по-настоящему — для экрана «откройте через платформу». */
 const PLATFORM_URL = import.meta.env.VITE_PLATFORM_URL ?? 'http://localhost:8100'
 

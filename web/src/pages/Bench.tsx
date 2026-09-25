@@ -36,6 +36,8 @@ import {
 } from '../shared/api/assets'
 import type { ReferenceMatch } from '../shared/api/references'
 import { listReferences, openReference, saveReference, type Card } from '../shared/api/references'
+import { CODE } from '../app/shell'
+import { useCan } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
 import { historyKey } from '../shared/keys'
 import { newElementId, onSide, sidesUsed, upgrade } from '../shared/sides'
@@ -108,6 +110,9 @@ export function Bench() {
   const [seenCards, setSeenCards] = useState<ReferenceMatch[]>([])
   // Сохранённые карточки. Грузятся при открытии и после каждого сохранения.
   const [cards, setCards] = useState<Card[]>([])
+  // Нет права записи на «Референсах» — кнопки сохранения нет вовсе, а не
+  // есть и отказывает; сервис и сам ответит «нет такого пути» (US-0487).
+  const canSave = useCan(CODE, 'references', 'write')
   // Поиск по смыслу (US-0480). null — ещё не искали: тогда показывается
   // подсказка, а не «ничего не нашлось», которого ещё не было.
   const [query, setQuery] = useState('')
@@ -1123,9 +1128,11 @@ export function Bench() {
           </Group>
 
           <Group title="Правка">
-            <button onClick={() => void saveCard()} style={S.btn}>
-              сохранить принт
-            </button>
+            {canSave && (
+              <button onClick={() => void saveCard()} style={S.btn}>
+                сохранить принт
+              </button>
+            )}
             <button
               onClick={() => {
                 forget()

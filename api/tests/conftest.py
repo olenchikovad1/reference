@@ -16,6 +16,12 @@ import os
 
 _SUFFIX = "_test"
 
+# Тесты по умолчанию — стенд без платформы (решение 0006): запрос без токена
+# получает стендового субъекта со всеми грантами манифеста. Иначе каждый тест
+# сохранения и загрузки упирался бы в «нет такого пути». Права проверяют
+# отдельные тесты, собирая приложение с without_platform=False (test_rights.py).
+os.environ.setdefault("WITHOUT_PLATFORM", "true")
+
 
 def _switch_to_test_database() -> None:
     url = os.environ["DATABASE_URL"]

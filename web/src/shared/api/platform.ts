@@ -13,6 +13,10 @@ import { useQuery } from '@tanstack/react-query'
 
 const CORE = '/platform/api/core'
 
+/** Стенд без платформы (решение 0006) включается явно, в web/.env: платформу
+ *  тогда не спрашивают вовсе, прав нет — показывается всё, на экране плашка. */
+export const WITHOUT_PLATFORM = import.meta.env.VITE_WITHOUT_PLATFORM === 'true'
+
 export type PlatformApplication = {
   code: string
   name: string
@@ -65,7 +69,7 @@ async function ask<T>(path: string, signal?: AbortSignal): Promise<T> {
 
 // Повторять отказ платформы незачем: 404 от своего порта не пройдёт от того,
 // что его спросить трижды, а экран «откройте через платформу» ждал бы повторов.
-const once = { retry: false } as const
+const once = { retry: false, enabled: !WITHOUT_PLATFORM } as const
 
 /** Приложения, куда человек вхож, — содержимое рельсы. */
 export function useApplications() {
@@ -93,4 +97,13 @@ export function useProfile() {
     queryFn: ({ signal }) => ask(`${CORE}/me`, signal),
     ...once,
   })
+}
+
+/** Можно ли человеку действие в разделе. Нет права — действия нет и на
+ *  экране: кнопка не показывается, а не показывается и отказывает (US-0487).
+ *  Пока платформа не ответила — нельзя: мигнуть кнопкой и спрятать хуже. */
+export function useCan(application: string, section: string, action: string): boolean {
+  const own = useSections(application)
+  if (WITHOUT_PLATFORM) return true
+  return own.data?.some((s) => s.code === section && s.actions.includes(action)) ?? false
 }
