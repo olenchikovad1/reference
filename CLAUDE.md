@@ -134,7 +134,7 @@ scripts/
 
 ### Стенд
 
-Всё в докере, включая приложение. Поднимается из `infra/`:
+Всё в докере, включая приложение. Поднимается из корня репозитория:
 
 ```bash
 py scripts/stand/fetch_models.py && cp api/.env.example api/.env && cp web/.env.example web/.env && cp infra/.env.example infra/.env && docker compose -f infra/compose.yaml up -d --build
@@ -144,6 +144,10 @@ py scripts/stand/fetch_models.py && cp api/.env.example api/.env && cp web/.env.
 с которыми история перестаёт клонироваться за разумное время. Пропустить шаг
 нельзя — стенд соберётся, а узнавание свалится в `FileNotFoundError` из недр
 onnxruntime, то есть откажет невнятно. Повторный запуск ничего не качает.
+
+**Кадры, принты и эталоны приходят с клоном** (решение 0012); вне git только
+исходники моделей и нейросети. Что в томе на месте, а что подменено или
+отсутствует, говорит `py scripts/stand/verify_volume.py` — до подъёма стенда.
 
 **Порог узнавания меняется в `api/.env`, но контейнер надо пересоздать:**
 `env_file` читается при создании, а не при каждом старте. `docker compose up -d

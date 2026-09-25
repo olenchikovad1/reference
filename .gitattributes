@@ -12,6 +12,9 @@
 # поэтому отказ объявляется заранее.
 *.png binary
 *.jpg binary
+*.jpeg binary
+*.webp binary
+*.woff2 binary
 *.tif binary
 *.bw  binary
 *.fbx binary
