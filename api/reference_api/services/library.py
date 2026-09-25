@@ -14,7 +14,10 @@ from reference_api.config import settings
 from reference_api.models.references import Reference
 from reference_api.repositories import library as repo
 from reference_api.repositories import references as cards
+from reference_api.repositories import tags as tag_repo
 from reference_api.services import embeddings, words
+from reference_api.services import names as naming
+from reference_api.services import tags as tagging
 
 
 @dataclass(frozen=True)
@@ -108,4 +111,83 @@ async def search(db: AsyncSession, query: str) -> list[Found]:
     return [
         Found(d, n, s, w, [c for c, images in used if d in images])
         for d, n, s, w in shown
+    ]
+
+
+@dataclass(frozen=True)
+class TagView:
+    code: str
+    name: str
+    score: float
+    #: Сильный — граница из весов тем же правилом, что при постановке.
+    strong: bool
+    model: str
+
+
+@dataclass(frozen=True)
+class FileTags:
+    digest: str
+    tags: list[TagView]
+    #: Что за изделие на картинке — из каталога или от той же картинки; нет —
+    #: никто не знает.
+    name: naming.Name | None
+
+
+async def put_tags(db: AsyncSession, digest: str, vector) -> list:
+    """Теги картинки по её вектору — записать и вернуть. Модель второй раз не
+    нужна: картинку уже посмотрели, когда считали вектор."""
+    found = tagging.tag(vector)
+    await tag_repo.replace(db, digest, tagging.model_name(), [(x.code, x.name, x.score) for x in found])
+    return found
+
+
+async def tags_of_files(db: AsyncSession, digests: list[str]) -> list[FileTags]:
+    """Теги файлов. Нет — досчитываются по уже лежащему вектору; нет и вектора
+    — у файла пусто, пока его не узнавали.
+
+    Хранятся веса, а не пометка «сильный»: граница считается из весов тем же
+    правилом, что при постановке, и смена доли не требует пересчёта тегов.
+    """
+    model = tagging.model_name()
+    stored = await tag_repo.of(db, digests, model)
+    named = await naming.stored(db, digests)
+    out: list[FileTags] = []
+    for d in digests:
+        rows = stored.get(d, [])
+        if not rows:
+            vec = await tag_repo.vector_of(db, d, embeddings.MODEL_NAME)
+            if vec is not None:
+                found = tagging.tag(vec)
+                await tag_repo.replace(db, d, model, [(x.code, x.name, x.score) for x in found])
+                rows = (await tag_repo.of(db, [d], model))[d]
+        strong = tagging.strong_of([r.score for r in rows])
+        out.append(FileTags(
+            d,
+            [TagView(r.code, r.name, r.score, st, r.model) for r, st in zip(rows, strong, strict=True)],
+            named.get(d),
+        ))
+    return out
+
+
+@dataclass(frozen=True)
+class LibraryItem:
+    digest: str
+    #: Имя последнего загруженного файла с таким содержимым.
+    file_name: str
+    tags: FileTags
+    #: Референсы, где картинка стоит, — «где использован». Удалённые в корзину
+    #: сюда не попадают (решение 0014).
+    references: list[Reference]
+
+
+async def catalogue(db: AsyncSession) -> list[LibraryItem]:
+    """Библиотека целиком: картинки, свежие первыми, с тегами, названием и
+    референсами, где стоят. Одна картинка в десятке референсов — одна плитка."""
+    files = await repo.images(db, embeddings.MODEL_NAME)
+    digests = [d for d, _ in files]
+    tags = {t.digest: t for t in await tags_of_files(db, digests)}
+    used = await cards.by_image(db, digests, exclude=0)
+    return [
+        LibraryItem(d, n, tags[d], [c for c, images in used if d in images])
+        for d, n in files
     ]

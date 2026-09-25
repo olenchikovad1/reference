@@ -74,3 +74,14 @@ async def nearest(
         .limit(limit)
     )
     return [(r.digest, r.name, float(r.similarity)) for r in rows]
+
+
+async def images(db: AsyncSession, model: str) -> list[tuple[str, str]]:
+    """Картинки библиотеки — файлы с вектором картинки этой модели, свежие
+    первыми. Лист целиком (kind=sheet) — не картинка библиотеки."""
+    rows = await db.execute(
+        select(AssetEmbedding.digest, AssetEmbedding.name)
+        .where(AssetEmbedding.model == model, AssetEmbedding.kind == "image")
+        .order_by(AssetEmbedding.id.desc())
+    )
+    return [(d, n) for d, n in rows]

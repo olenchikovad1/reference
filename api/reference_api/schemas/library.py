@@ -65,6 +65,17 @@ class FoundCardOut(BaseModel):
     name: str
 
 
+class LibraryItemOut(BaseModel):
+    """Картинка библиотеки на странице «Принты»."""
+
+    digest: str
+    file_name: str
+    tags: list[TagOut]
+    name: NameOut | None = None
+    #: «Где использован» — референсы с этой картинкой.
+    references: list[FoundCardOut]
+
+
 class FoundOut(BaseModel):
     """Картинка, найденная словом."""
 

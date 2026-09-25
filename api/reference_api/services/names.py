@@ -16,12 +16,17 @@
 
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.repositories import names as repo
 from reference_api.services import assets, prints
-from reference_api.services.library import Match
+
+if TYPE_CHECKING:
+    # Только аннотация: библиотека сама берёт названия отсюда (страница
+    # «Принты»), и импорт во время выполнения замкнул бы круг.
+    from reference_api.services.library import Match
 
 CATALOG = "catalog"
 INHERITED = "inherited"
@@ -49,7 +54,7 @@ def _catalogue() -> dict[str, str]:
     return out
 
 
-async def name_of(db: AsyncSession, digest: str, seen: list[Match]) -> Name | None:
+async def name_of(db: AsyncSession, digest: str, seen: "list[Match]") -> Name | None:
     """Название файла: из каталога, иначе уже известное, иначе от той же
     картинки среди узнанных. Нет ни одного — названия нет, и это честнее
     догадки."""

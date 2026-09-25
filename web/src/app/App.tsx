@@ -13,6 +13,7 @@ import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 're
 import { WorkWindow } from '../pages/WorkWindow'
 import { Drops } from '../pages/Drops'
 import { Products } from '../pages/Products'
+import { Prints } from '../pages/Prints'
 import { Showcase } from '../pages/Showcase'
 import { Trash } from '../pages/Trash'
 import { NotFound, Placeholder } from '../pages/Placeholder'
@@ -28,6 +29,7 @@ const PLATFORM_URL = import.meta.env.VITE_PLATFORM_URL ?? 'http://localhost:8100
 /** Сделанные страницы разделов; остальные — заглушки со смыслом. */
 const PAGES: Record<string, () => ReactElement> = {
   references: () => <Showcase />,
+  prints: () => <Prints />,
   'references/trash': () => <Trash />,
   drops: () => <Drops />,
   products: () => <Products />,

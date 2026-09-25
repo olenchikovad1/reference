@@ -6,8 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
 from reference_api.schemas.assets import AssetOut, DerivativeOut
-from reference_api.repositories import tags as tag_repo
-from reference_api.schemas.library import FileTagsOut, FoundCardOut, FoundOut, MatchOut, NameOut, RecognisedOut, TagOut
+from reference_api.schemas.library import (
+    FileTagsOut,
+    FoundCardOut,
+    FoundOut,
+    LibraryItemOut,
+    MatchOut,
+    NameOut,
+    RecognisedOut,
+    TagOut,
+)
 from reference_api.services import assets as service
 from reference_api.services import library
 from reference_api.services import names as naming
@@ -113,8 +121,7 @@ async def recognise(
         seen, emb = await library.remember(db, digest, service.name_of(digest), content)
         # Теги — из того же вектора: картинку уже посмотрели, второй раз
         # модель не нужна.
-        found = tagging.tag(emb.vector)
-        await tag_repo.replace(db, digest, tagging.model_name(), [(x.code, x.name, x.score) for x in found])
+        found = await library.put_tags(db, digest, emb.vector)
         named = await naming.name_of(db, digest, seen)
         out.append(
             RecognisedOut(
@@ -142,32 +149,24 @@ def _name_out(n: naming.Name | None) -> NameOut | None:
 async def file_tags(digests: list[str], db: AsyncSession = Depends(session)) -> list[FileTagsOut]:
     """Теги файлов. Нет — досчитываются по уже лежащему вектору; нет и
     вектора — у файла пусто, пока его не узнавали."""
-    from reference_api.services.embeddings import MODEL_NAME as IMAGE_MODEL
+    return [
+        FileTagsOut(digest=f.digest, tags=[_tag_out(x) for x in f.tags], name=_name_out(f.name))
+        for f in await library.tags_of_files(db, digests)
+    ]
 
-    model = tagging.model_name()
-    stored = await tag_repo.of(db, digests, model)
-    named = await naming.stored(db, digests)
-    out: list[FileTagsOut] = []
-    for d in digests:
-        rows = stored.get(d, [])
-        if not rows:
-            vec = await tag_repo.vector_of(db, d, IMAGE_MODEL)
-            if vec is not None:
-                found = tagging.tag(vec)
-                await tag_repo.replace(db, d, model, [(x.code, x.name, x.score) for x in found])
-                rows = (await tag_repo.of(db, [d], model))[d]
-        # Хранятся веса, а не пометка «сильный»: граница считается из весов
-        # тем же правилом, что при постановке, и смена доли не требует
-        # пересчёта тегов.
-        strong = tagging.strong_of([r.score for r in rows])
-        out.append(
-            FileTagsOut(
-                digest=d,
-                tags=[
-                    TagOut(code=r.code, name=r.name, score=r.score, strong=st, model=r.model)
-                    for r, st in zip(rows, strong, strict=True)
-                ],
-                name=_name_out(named.get(d)),
-            )
+
+def _tag_out(x: library.TagView) -> TagOut:
+    return TagOut(code=x.code, name=x.name, score=x.score, strong=x.strong, model=x.model)
+
+
+@router.get("/library", response_model=list[LibraryItemOut])
+async def catalogue(db: AsyncSession = Depends(session)) -> list[LibraryItemOut]:
+    """Библиотека для страницы «Принты»: картинки, свежие первыми, с тегами,
+    названием и «где использован»."""
+    return [
+        LibraryItemOut(
+            digest=i.digest, file_name=i.file_name, tags=[_tag_out(x) for x in i.tags.tags],
+            name=_name_out(i.tags.name), references=[FoundCardOut(id=c.id, name=c.name) for c in i.references],
         )
-    return out
+        for i in await library.catalogue(db)
+    ]

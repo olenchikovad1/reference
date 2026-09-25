@@ -153,3 +153,22 @@ export async function searchAssets(q: string): Promise<Found[]> {
   if (!r.ok) throw new Error(`поиск не ответил: ${r.status}`)
   return r.json()
 }
+
+/** Картинка библиотеки на странице «Принты» (US-0495). */
+export interface LibraryItem {
+  digest: string
+  /** Имя последнего загруженного файла с таким содержимым. */
+  file_name: string
+  tags: Tag[]
+  /** Что за изделие на картинке; нет — никто не знает. */
+  name: Named | null
+  /** «Где использован» — референсы с этой картинкой. */
+  references: { id: number; name: string }[]
+}
+
+/** Библиотека целиком, свежие первыми. */
+export async function fetchLibrary(): Promise<LibraryItem[]> {
+  const r = await fetch(`${BASE}assets/library`)
+  if (!r.ok) throw new Error(`библиотека не ответила: ${r.status}`)
+  return r.json()
+}

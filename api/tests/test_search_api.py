@@ -87,3 +87,20 @@ async def test_blank_query_is_refused(stand) -> None:
     client, _ = stand
     r = await client.get("/reference/api/assets/search", params={"q": "  "})
     assert r.status_code == 422
+
+
+async def test_library_page_is_pictures_with_tags_names_and_where_used(stand) -> None:
+    """Страница «Принты» (US-0495): картинка одна, сколько бы референсов её ни
+    брали; у каждой теги и название, у взятой — «где использован»."""
+    client, digests = stand
+    heli = digests["mi8-cloud-sharp-clean-print.png"]
+    for name in ("вертолёт на спине", "вертолёт на груди"):
+        r = await client.post("/reference/api/references", json={
+            "name": name, "sheet_digest": heli, "image_digests": [heli], "texts": []})
+        assert r.status_code == 200, r.text
+    library = (await client.get("/reference/api/assets/library")).json()
+    assert {i["digest"] for i in library} == set(digests.values()), "в библиотеке не те картинки"
+    item = next(i for i in library if i["digest"] == heli)
+    assert sorted(c["name"] for c in item["references"]) == ["вертолёт на груди", "вертолёт на спине"]
+    assert any(t["strong"] for t in item["tags"]), "у картинки нет сильных тегов"
+    assert item["name"] and item["name"]["name"] == "Ми-8", f"название не пришло: {item['name']}"
