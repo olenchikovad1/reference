@@ -9,7 +9,7 @@ FileNotFoundError из недр onnxruntime.
 
 Запускается на голой машине, до docker compose up:
 
-    py infra/stand/fetch_models.py
+    py scripts/stand/fetch_models.py
 
 Повторный запуск ничего не скачивает: файл на месте и совпал по размеру.
 """
@@ -19,7 +19,8 @@ import pathlib
 import sys
 import urllib.request
 
-HERE = pathlib.Path(__file__).resolve().parent
+#: Пути моделей ниже — относительно этой папки, как их видит том стенда.
+HERE = pathlib.Path(__file__).resolve().parents[2] / "infra/stand"
 
 #: Зрительная часть CLIP в onnx, квантованная. Почему своя модель, а не чужой
 #: сервис — решение 0008 в docs/decisions.
