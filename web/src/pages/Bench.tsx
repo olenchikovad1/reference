@@ -90,7 +90,16 @@ export function Bench() {
   const [renderScale, setRenderScale] = useState(2)
   const [fps, setFps] = useState<number | null>(null)
   const [colours, setColours] = useState<Colour[]>([])
-  const [colourCode, setColourCode] = useState('WHITE')
+  // Цвет из ячейки дропа главнее восстановленной прошлой работы: человек
+  // пришёл рисовать именно на этой цветомодели.
+  const colourFromDrop = new URLSearchParams(window.location.search).get('colour')
+  const [colourCode, setColourCode] = useState(colourFromDrop ?? 'WHITE')
+  // Цветомодель из ячейки дропа (US-0489): примерка открывается в её цвете и
+  // запоминает её при сохранении. Нет — референс пока без цветомодели.
+  const [colourModelId] = useState<number | null>(() => {
+    const v = new URLSearchParams(window.location.search).get('colour_model')
+    return v ? Number(v) : null
+  })
   const [fontsReady, setFontsReady] = useState(false)
   const [prints, setPrints] = useState<PrintItem[]>([])
   // Кэш картинок один на страницу: им пользуются и холст, и печатный лист.
@@ -160,7 +169,7 @@ export function Bench() {
     const was = load()
     if (was) {
       setStateCode(was.stateCode)
-      setColourCode(was.colourCode)
+      if (!colourFromDrop) setColourCode(was.colourCode)
       setSize(was.size ?? null)
       for (const el of was.composition.elements) {
         if (el.kind === 'image') cacheImage(el.src)
@@ -436,6 +445,7 @@ export function Bench() {
       // цвет. Лист и надписи выше — для узнавания; открывается карточка
       // вот этим.
       work: { version: 2, stateCode, colourCode, size, composition },
+      colour_model_id: colourModelId,
     })
     setSeenCards(found.matches)
     void listReferences().then(setCards).catch(() => undefined)

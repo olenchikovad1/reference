@@ -41,6 +41,9 @@ class Reference(Base):
     #: приложения (US-0508). Пусто — сохранено без входа (стенд без платформы
     #: или до US-0486).
     author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: На какой цветомодели референс — изделие в цвете; от неё он берёт дроп и
+    #: адресата (US-0489). Пусто — сохранён до справочников.
+    colour_model_id: Mapped[int | None] = mapped_column(ForeignKey("colour_models.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

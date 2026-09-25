@@ -14,13 +14,14 @@ async def save(
     texts: list[tuple[str, str]],
     work: dict | None = None,
     author_id: str | None = None,
+    colour_model_id: int | None = None,
 ) -> Reference:
     """Кладёт НОВУЮ карточку вместе с её надписями. Пути обновления нет
     вовсе (И-6): сохранить ещё раз — это новая карточка, прошлая остаётся как
     была. Надписи приходят парами «как написано, нормализовано»."""
     card = Reference(
         name=name, sheet_digest=sheet_digest, image_digests=list(image_digests), work=work,
-        author_id=author_id,
+        author_id=author_id, colour_model_id=colour_model_id,
     )
     card.texts = [ReferenceText(text=t, normalised=n) for t, n in texts]
     db.add(card)

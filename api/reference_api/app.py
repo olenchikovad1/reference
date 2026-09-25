@@ -15,7 +15,7 @@ from platform_client.subjects import install_subject_reading
 from platform_client.tokens import KeySet, Subject, Visibility
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from reference_api.api import assets, colours, health, people, platform, prints, products, references
+from reference_api.api import assets, colours, drops, health, people, platform, prints, products, references
 from reference_api.config import settings
 from reference_api.schedulers import people as people_schedule
 from reference_api.services import platform as publishing
@@ -100,6 +100,7 @@ def create_app(without_platform: bool | None = None) -> FastAPI:
     root.include_router(assets.router)
     root.include_router(references.router)
     root.include_router(people.router)
+    root.include_router(drops.router)
     app.include_router(root)
     if stand:
         # Добавлен раньше посредника платформы — значит, исполняется после него.

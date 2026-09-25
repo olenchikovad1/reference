@@ -26,6 +26,8 @@ export async function saveReference(body: {
   sheet_digest: string
   image_digests: string[]
   texts: string[]
+  /** Цветомодель, на которой референс (US-0489). */
+  colour_model_id?: number | null
   /** Работа целиком: без неё карточка — снимок для узнавания, открыть
    *  который нечем. */
   work?: unknown

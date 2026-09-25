@@ -13,7 +13,7 @@ from reference_api.schemas.references import (
     SavedOut,
     SaveIn,
 )
-from reference_api.services import people
+from reference_api.services import drops, people
 from reference_api.services import references as service
 
 router = APIRouter(prefix="/references", tags=["references"])
@@ -25,9 +25,15 @@ async def save(body: SaveIn, request: Request, db: AsyncSession = Depends(sessio
     # Субъекта кладёт посредник платформы (app.py); нет токена или он не
     # принят — None: отказ без права делает объявление на маршруте (US-0487).
     subject = getattr(request.state, "subject", None)
+    if body.colour_model_id is not None:
+        # Цветомодель без кадров — работу на ней не начать, и причина названа.
+        try:
+            await drops.colour_model_for_work(db, body.colour_model_id)
+        except drops.CannotWork as refusal:
+            raise HTTPException(status_code=422, detail=str(refusal)) from None
     card_id, found = await service.save(
         db, body.name, body.sheet_digest, body.image_digests, body.texts, body.work,
-        author_id=subject.id if subject else None,
+        author_id=subject.id if subject else None, colour_model_id=body.colour_model_id,
     )
     return SavedOut(
         id=card_id,

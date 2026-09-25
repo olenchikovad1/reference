@@ -7,10 +7,12 @@
 
 import { readAppearance, type Appearance } from '@platform/shell'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useState, type ReactNode } from 'react'
+import { useState, type ReactElement, type ReactNode } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 
 import { Bench } from '../pages/Bench'
+import { Drops } from '../pages/Drops'
+import { Products } from '../pages/Products'
 import { NotFound, Placeholder } from '../pages/Placeholder'
 import { useProfile, useSections, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { BASE, SECTIONS, type SectionPlace } from './sections'
@@ -21,12 +23,20 @@ const queries = new QueryClient()
 /** Где открывать «Референс» по-настоящему — для экрана «откройте через платформу». */
 const PLATFORM_URL = import.meta.env.VITE_PLATFORM_URL ?? 'http://localhost:8100'
 
+/** Сделанные страницы разделов; остальные — заглушки со смыслом. */
+const PAGES: Record<string, () => ReactElement> = {
+  drops: () => <Drops />,
+  products: () => <Products />,
+}
+
 function Guarded({ section }: { section: SectionPlace }) {
   const own = useSections(CODE)
-  if (WITHOUT_PLATFORM) return <Placeholder section={section} name={section.title} />
+  const page = PAGES[section.code]
+  if (WITHOUT_PLATFORM) return page ? page() : <Placeholder section={section} name={section.title} />
   if (own.isPending) return null
   const allowed = own.data?.find((s) => s.code === section.code)
-  return allowed ? <Placeholder section={section} name={allowed.name} /> : <NotFound />
+  if (!allowed) return <NotFound />
+  return page ? page() : <Placeholder section={section} name={allowed.name} />
 }
 
 function Pages() {
