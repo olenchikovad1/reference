@@ -76,6 +76,14 @@ describe('число цветов', () => {
     const found = check(add(EMPTY, picture))
     expect(found.some((f) => f.rule === 'colour-count' && /не посчитаны/.test(f.message))).toBe(true)
   })
+
+  it('у картинки с объявленными красками они считаются по тому, что получилось (US-0503)', () => {
+    const ink = (code: string) => ({ code, rgb: [0, 0, 0] as const })
+    const duo = { ...picture, look: { duotone: [ink('A'), ink('B')] } }
+    expect(check(add(EMPTY, duo)).some((f) => /не посчитаны/.test(f.message))).toBe(false)
+    const five = { ...picture, look: { duotone: [ink('A'), ink('B'), ink('C'), ink('D'), ink('E')] } }
+    expect(check(add(EMPTY, five)).some((f) => f.rule === 'colour-count' && /Красок 5/.test(f.message))).toBe(true)
+  })
 })
 
 describe('вес находок', () => {

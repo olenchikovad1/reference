@@ -8,6 +8,7 @@
 // куда он помещается. Поэтому линтер начинает работать раньше, чем технолог
 // пришлёт таблицу.
 
+import { declaredInks } from './look'
 import type { Composition, PrintElement } from './composition'
 import { heightCm } from './composition'
 
@@ -99,21 +100,23 @@ export function check(c: Composition, t: Thresholds = DEFAULT_THRESHOLDS): Findi
   // растра: сглаживание даёт ложные цвета, а в шелкографии палитра известна
   // заранее. Угаданное число дороже спрошенного.
   //
-  // У картинок палитра пока не объявляется — и это названо прямо, а не
-  // подменено догадкой: такая находка была бы хуже её отсутствия.
-  const declared = new Set(
-    c.elements.filter((e) => e.kind === 'text').map((e) => e.colourCode),
-  )
+  // У картинки палитру объявляет человек (US-0503): перекраской в одну
+  // краску, дуотоном или заменой всех основных красок — и тогда её краски
+  // считаются по тому, что получилось, а не по исходнику.
+  const declared = new Set<string>(c.elements.filter((e) => e.kind === 'text').map((e) => e.colourCode))
+  for (const el of c.elements) {
+    if (el.kind === 'image') for (const ink of declaredInks(el.look) ?? []) declared.add(ink)
+  }
   if (declared.size > t.maxColours) {
     found.push({
       rule: 'colour-count',
       weight: 'warning',
       elementId: null,
-      message: `Цветов в надписях ${declared.size} при пороге ${t.maxColours} — каждый печатается отдельно`,
+      message: `Красок ${declared.size} при пороге ${t.maxColours} — каждая печатается отдельно`,
     })
   }
 
-  const rasters = c.elements.filter((e) => e.kind === 'image').length
+  const rasters = c.elements.filter((e) => e.kind === 'image' && !declaredInks(e.look)).length
   if (rasters > 0) {
     found.push({
       rule: 'colour-count',

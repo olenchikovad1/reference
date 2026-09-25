@@ -61,6 +61,7 @@ import { readDropped } from '../shared/dropped'
 import { windowKey } from '../shared/keys'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
 import { useFrameAlpha } from '../shared/frameAlpha'
+import { declaredInks, mainColoursOf, type Ink } from '../shared/look'
 import { detectAlpha } from '../shared/dropped'
 import { fetchBoard, fetchCatalogue, fetchDrops } from '../shared/api/drops'
 import { fetchTexts } from '../shared/api/texts'
@@ -193,6 +194,9 @@ export function WorkWindow() {
   const [tagHints, setTagHints] = useState<string[]>([])
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
+  // Какую основную краску принта меняем и какие краски выбраны для дуотона.
+  const [swapPick, setSwapPick] = useState<number | null>(null)
+  const [duoPick, setDuoPick] = useState<string[]>([])
   // Узнанное. Пусто — окна нет вовсе: окно «совпадений нет» превращает
   // подсказку в помеху, и его перестают читать вместе с полезными.
   const [seen, setSeen] = useState<Match[]>([])
@@ -1422,6 +1426,12 @@ export function WorkWindow() {
     )
 
   const cal = product.calibration
+  const selectedImg = selected?.kind === 'image' ? images.current.get(selected.src) : undefined
+  const mains = selectedImg?.complete ? mainColoursOf(selectedImg) : []
+  const inkOf = (code: string): Ink | null => {
+    const c = colours.find((x) => x.code === code)
+    return c ? { code: c.code, rgb: c.rgb } : null
+  }
   const hiddenCodes = new Set((refTags?.hidden ?? []).map((h) => h.code))
   const autoTags = [
     ...composition.elements
@@ -1593,6 +1603,130 @@ export function WorkWindow() {
             digits={2}
             onChange={(v) => commit((comp) => relook(comp, selected.id, { opacity: 1 - v }))}
           />
+        </Section>
+      )}
+      {selected.kind === 'image' && (
+        <Section title="Краски">
+          {/* Многоцветный принт (US-0503): основные краски находятся сами, каждая
+              меняется на краску палитры; тон и дуотон — поверх. Исходник тот же. */}
+          <p className="text-xs text-muted-foreground">
+            основные краски: {mains.length}
+            {' · '}
+            {declaredInks(selected.look)
+              ? `красок после правки: ${declaredInks(selected.look)!.length}`
+              : 'краски не объявлены — замените все или сделайте дуотон, тогда проверка их посчитает'}
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {mains.map((m, i) => {
+              const to = selected.look?.swaps?.[i]?.to
+              return (
+                <button
+                  key={i}
+                  aria-pressed={swapPick === i}
+                  onClick={() => setSwapPick(swapPick === i ? null : i)}
+                  title={to ? `заменена на ${to.code}` : `доля ${Math.round(m.share * 100)}% — нажмите, чтобы заменить`}
+                  style={{ ...S.swatch, background: `rgb(${(to?.rgb ?? m.rgb).join(',')})`, outline: swapPick === i ? '2px solid currentColor' : undefined }}
+                />
+              )
+            })}
+          </div>
+          {swapPick !== null && mains[swapPick] && (
+            <>
+              <p className="text-xs text-muted-foreground">заменить эту краску на краску палитры:</p>
+              <div style={S.swatches}>
+                {colours.map((c) => (
+                  <button
+                    key={c.code}
+                    title={`${c.name} · ${c.code}`}
+                    aria-label={`заменить на ${c.group}`}
+                    onClick={() =>
+                      commit((comp) =>
+                        relook(comp, selected.id, {
+                          tint: null,
+                          duotone: null,
+                          swaps: mains.map((m, i) => ({
+                            from: m.rgb,
+                            to: i === swapPick ? inkOf(c.code) : (selected.look?.swaps?.[i]?.to ?? null),
+                          })),
+                        }),
+                      )
+                    }
+                    style={{ ...S.swatch, background: toCss(c) }}
+                  />
+                ))}
+              </div>
+              <button
+                className={small()}
+                onClick={() =>
+                  commit((comp) =>
+                    relook(comp, selected.id, {
+                      swaps: mains.map((m, i) => ({ from: m.rgb, to: i === swapPick ? null : (selected.look?.swaps?.[i]?.to ?? null) })),
+                    }),
+                  )
+                }
+              >
+                эту краску как есть
+              </button>
+            </>
+          )}
+          <Slider label="оттенок" hint="сдвигает все цвета принта вместе по кругу: соотношения между ними те же" value={selected.look?.hue ?? 0} min={-180} max={180} step={5} digits={0} onChange={(v) => commit((c) => relook(c, selected.id, { hue: v }))} />
+          <Slider label="насыщенность" hint="насколько цвета яркие: меньше — ближе к серому, больше — сочнее" value={selected.look?.saturation ?? 0} min={-1} max={1} step={0.05} digits={2} onChange={(v) => commit((c) => relook(c, selected.id, { saturation: v }))} />
+          <Slider label="контраст" hint="насколько светлое отличается от тёмного: меньше — принт мягче, приглушённее" value={selected.look?.contrast ?? 0} min={-0.8} max={1} step={0.05} digits={2} onChange={(v) => commit((c) => relook(c, selected.id, { contrast: v }))} />
+          <Slider label="яркость" hint="светлее или темнее весь принт целиком" value={selected.look?.brightness ?? 0} min={-0.8} max={0.8} step={0.05} digits={2} onChange={(v) => commit((c) => relook(c, selected.id, { brightness: v }))} />
+          <Slider label="теплота" hint="больше — теплее, в красный и жёлтый; меньше — холоднее, в синий" value={selected.look?.warmth ?? 0} min={-1} max={1} step={0.05} digits={2} onChange={(v) => commit((c) => relook(c, selected.id, { warmth: v }))} />
+          <p className="text-xs text-muted-foreground">дуотон — принт в две-три краски по яркости: выберите их</p>
+          <div style={S.swatches}>
+            {colours.map((c) => (
+              <button
+                key={c.code}
+                title={`${c.name} · ${c.code}`}
+                aria-label={`краска дуотона ${c.group}`}
+                aria-pressed={duoPick.includes(c.code)}
+                onClick={() => setDuoPick((d) => (d.includes(c.code) ? d.filter((x) => x !== c.code) : d.length < 3 ? [...d, c.code] : d))}
+                style={{ ...S.swatch, background: toCss(c), outline: duoPick.includes(c.code) ? '2px solid currentColor' : undefined }}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <button
+              className={small()}
+              disabled={duoPick.length < 2}
+              onClick={() =>
+                commit((c) =>
+                  relook(c, selected.id, { tint: null, swaps: undefined, duotone: duoPick.flatMap((code) => inkOf(code) ?? []) }),
+                )
+              }
+            >
+              дуотон из выбранных ({duoPick.length})
+            </button>
+            <button
+              className={small()}
+              onClick={() =>
+                commit((c) =>
+                  relook(c, selected.id, {
+                    tint: null, swaps: undefined, duotone: null, hue: 0, saturation: 0, contrast: 0, brightness: 0, warmth: 0,
+                  }),
+                )
+              }
+            >
+              вернуть исходный
+            </button>
+            <button
+              className={small()}
+              title="Копия этого принта рядом — сравнить два варианта на одном изделии"
+              onClick={() =>
+                commit((c) =>
+                  add(c, {
+                    ...selected,
+                    id: newElementId(),
+                    placement: { ...selected.placement, dxCm: selected.placement.dxCm + selected.placement.widthCm + 2 },
+                  }),
+                )
+              }
+            >
+              копия рядом
+            </button>
+          </div>
         </Section>
       )}
       {selected.kind === 'image' && (
