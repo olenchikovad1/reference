@@ -4,7 +4,9 @@
 аудиторией «reference»: своего входа у приложения нет (запрет 3). Здесь ключи
 подменяются своими, чтобы подписать токен в тесте; разбор — настоящий, пакета
 платформы. Токен без аудитории «Референса», чужой подписи или без срока не
-даёт субъекта вовсе — отказ на маршруте делает объявление права (US-0487).
+даёт субъекта вовсе, и с US-0487 такой запрос отказывается правом маршрута.
+Приложение здесь собирается в режиме платформы, а не стенда: у стенда запрос
+без субъекта получает стендового.
 """
 
 import datetime
@@ -39,7 +41,7 @@ async def client():
 
     from reference_api.db import engine
 
-    app = create_app()
+    app = create_app(without_platform=False)
     app.state.keys = FixedKeys()
     async with app.router.lifespan_context(app):
         async with engine.begin() as conn:
@@ -49,27 +51,27 @@ async def client():
     await engine.dispose()
 
 
-async def save_as(client, bearer: str | None) -> dict:
+async def save_as(client, bearer: str | None) -> httpx.Response:
     headers = {"Authorization": f"Bearer {bearer}"} if bearer else {}
-    r = await client.post("/reference/api/references", headers=headers,
-                          json={"name": "проба", "sheet_digest": "a" * 64, "image_digests": [], "texts": []})
-    assert r.status_code == 200, r.text
-    cards = (await client.get("/reference/api/references")).json()
-    return next(c for c in cards if c["id"] == r.json()["id"])
+    return await client.post("/reference/api/references", headers=headers,
+                             json={"name": "проба", "sheet_digest": "a" * 64, "image_digests": [], "texts": []})
 
 
 async def test_saved_card_knows_who_saved_it(client) -> None:
-    assert (await save_as(client, token()))["author_id"] == "01OWNER"
+    r = await save_as(client, token())
+    assert r.status_code == 200, r.text
+    cards = (await client.get("/reference/api/references")).json()
+    assert next(c for c in cards if c["id"] == r.json()["id"])["author_id"] == "01OWNER"
 
 
 async def test_token_of_another_application_gives_nobody(client) -> None:
     """Аудитория — код приложения: токен, выданный под plm, здесь не пропуск."""
-    assert (await save_as(client, token(aud="plm")))["author_id"] is None
+    assert (await save_as(client, token(aud="plm"))).status_code == 404
 
 
 async def test_token_signed_not_by_the_platform_gives_nobody(client) -> None:
-    assert (await save_as(client, token(key=FOREIGN)))["author_id"] is None
+    assert (await save_as(client, token(key=FOREIGN))).status_code == 404
 
 
 async def test_no_token_gives_nobody(client) -> None:
-    assert (await save_as(client, None))["author_id"] is None
+    assert (await save_as(client, None)).status_code == 404
