@@ -1,6 +1,6 @@
 import { Modal, TextInput, buttonClass } from '@platform/ui'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
@@ -27,13 +27,12 @@ import {
 import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
-import type { FileTags, Found, Match, Named, Tag } from '../shared/api/assets'
+import type { FileTags, Match, Named, Tag } from '../shared/api/assets'
 import {
   assetUrl,
   digestOf,
   fetchTags,
   recogniseAssets,
-  searchAssets,
   uploadAssets,
   uploadCanvas,
   UploadRefused,
@@ -60,6 +59,10 @@ import { readDropped } from '../shared/dropped'
 import { windowKey } from '../shared/keys'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
 import { useFrameAlpha } from '../shared/frameAlpha'
+import { detectAlpha } from '../shared/dropped'
+import { fetchCatalogue, fetchBoard } from '../shared/api/drops'
+import { fetchTexts } from '../shared/api/texts'
+import { approvedIn, PICK_TYPE, WorkPicker, type Pick as Picked } from './WorkPicker'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../shared/grading'
 import { forget, forgetDraft, load, loadDraft, save, type SavedState } from '../shared/saved'
@@ -196,12 +199,6 @@ export function WorkWindow() {
   // Нет права записи на «Референсах» — кнопки сохранения нет вовсе, а не
   // есть и отказывает; сервис и сам ответит «нет такого пути» (US-0487).
   const canSave = useCan(CODE, 'references', 'write')
-  // Поиск по смыслу (US-0480). null — ещё не искали: тогда показывается
-  // подсказка, а не «ничего не нашлось», которого ещё не было.
-  const [query, setQuery] = useState('')
-  const [found, setFound] = useState<Found[] | null>(null)
-  const [searching, setSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
   // Теги файлов по имени файла. Ставятся сами при узнавании; для уже
   // лежащих — досчитываются по сохранённому вектору.
   const [tagsOf, setTagsOf] = useState<Record<string, FileTags>>({})
@@ -777,22 +774,6 @@ export function WorkWindow() {
     showVersion(offer.card, offer.at, work)
   }
 
-  /** Открыть сохранённую карточку: работа восстанавливается как была. */
-  async function runSearch() {
-    const q = query.trim()
-    if (!q) return
-    setSearching(true)
-    setSearchError(null)
-    try {
-      setFound(await searchAssets(q))
-    } catch (e) {
-      // Запрос не теряется: поле не очищается, повторить — та же кнопка.
-      setSearchError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSearching(false)
-    }
-  }
-
   /** Печатный лист: сборка из сантиметров, мимо шейдера, в печатном разрешении. */
   function downloadSheet() {
     if (composition.elements.length === 0) return
@@ -909,6 +890,70 @@ export function WorkWindow() {
     commit((c) => add(c, el))
   }
 
+  /** Положить выбранное (US-0507): картинку из библиотеки — как есть, фразу —
+   *  надписью тем шрифтом, которым она уже стоит в референсах. Не из
+   *  одобренного к дропу — сказать об этом сразу. */
+  function pick(p: Picked) {
+    if (p.kind === 'image') addFromLibrary(p.key, p.title)
+    else void addPhrase(p.title, p.key)
+    if (!p.approved && refDropIds.length) {
+      setDropHint(`«${p.title}» не одобрено к этому дропу — на изделии оно отмечено.`)
+    }
+  }
+
+  function addFromLibrary(digest: string, name: string) {
+    if (refusedHere()) return
+    const src = assetUrl(digest, 'preview')
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      cacheImage(src)
+      const w = Math.max(1, Math.min(160, img.naturalWidth))
+      const h = Math.max(1, Math.round((w * img.naturalHeight) / img.naturalWidth))
+      const probe = document.createElement('canvas')
+      probe.width = w
+      probe.height = h
+      const ctx = probe.getContext('2d', { willReadFrequently: true })
+      ctx?.drawImage(img, 0, 0, w, h)
+      const hasAlpha = ctx ? detectAlpha(ctx.getImageData(0, 0, w, h).data) : true
+      commit((c) =>
+        add(c, {
+          id: newElementId(),
+          kind: 'image',
+          name,
+          src,
+          aspect: img.naturalWidth / img.naturalHeight,
+          hasAlpha,
+          placement: { side: stateCode, anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
+        }),
+      )
+    }
+    img.src = src
+  }
+
+  async function addPhrase(text: string, key: string) {
+    if (refusedHere()) return
+    let font = DEFAULT_FONT.family
+    try {
+      const rows = await queries.fetchQuery({ queryKey: ['texts', ''], queryFn: () => fetchTexts(''), staleTime: 30_000 })
+      font = rows.find((r) => r.key === key)?.fonts[0] ?? font
+    } catch {
+      // Шрифт не узнали — надпись встанет шрифтом по умолчанию.
+    }
+    const style = { text, fontFamily: font, weight: 600, rgb: [255, 255, 255] as const }
+    commit((c) =>
+      add(c, {
+        id: newElementId(),
+        kind: 'text',
+        name: 'надпись',
+        ...style,
+        colourCode: 'WHITE',
+        textAspect: aspectOf(style),
+        placement: { side: stateCode, anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
+      }),
+    )
+  }
+
   /** Закрыть окно — туда, откуда открыли: шагом назад по истории, чтобы
    *  «назад» после закрытия не открывало окно снова. Открыли прямой ссылкой —
    *  на витрину. С несохранённым уход задержит вопрос. */
@@ -940,6 +985,9 @@ export function WorkWindow() {
       (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
     const a = windowKey(e, typing)
     if (!a) return
+    // В окне выбора стрелки ходят по плитке, Delete и цифры — не про принт.
+    const inPicker = !!target?.closest?.('[data-picker]')
+    if (inPicker && !['save', 'save-as', 'escape', 'undo', 'redo'].includes(a.kind)) return
     if (helpOpen) {
       if (a.kind === 'escape' || a.kind === 'help') setHelpOpen(false)
       return
@@ -1108,6 +1156,27 @@ export function WorkWindow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ref])
 
+  // Дропы референса — от цветомодели (US-0497): по ним выбор показывает
+  // одобренное, а на изделии отмечено взятое не из одобренного.
+  const catalogue = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue, staleTime: 60_000 })
+  const cmId = current?.colour_model_id ?? colourModelId
+  const refDropIds = useMemo(() => {
+    const walk = (nodes: typeof catalogue.data): number[] =>
+      (nodes ?? []).flatMap((n) => [
+        ...n.models.flatMap((m) => m.colour_models.filter((cm) => cm.id === cmId).flatMap((cm) => cm.drop_ids)),
+        ...walk(n.children),
+      ])
+    return cmId ? walk(catalogue.data) : []
+  }, [catalogue.data, cmId])
+  const board = useQuery({
+    queryKey: ['drops', refDropIds[0], 'board'],
+    queryFn: () => fetchBoard(refDropIds[0]),
+    enabled: refDropIds.length > 0,
+  })
+  const approved = approvedIn(board.data)
+  const isApproved = (el: (typeof composition.elements)[number]) =>
+    el.kind === 'image' ? approved.has(`image:${digestOf(el.src)}`) : approved.has(`text:${el.text.replace(/\s+/g, ' ').trim().toUpperCase()}`)
+
   const onGarment = useFrameAlpha(product && state ? frameUrl(product.code, state.code) : null)
 
   function onAreaDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -1247,6 +1316,11 @@ export function WorkWindow() {
   const onDrop = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault()
+      const picked = e.dataTransfer.getData(PICK_TYPE)
+      if (picked) {
+        pick(JSON.parse(picked) as Picked)
+        return
+      }
       await addFiles([...e.dataTransfer.files].filter((f) => f.type.startsWith('image/')))
     },
     // Состояние ОБЯЗАНО быть в списке: сторона берётся из него, и с пустым
@@ -1701,69 +1775,12 @@ export function WorkWindow() {
               + надпись
             </button>
             <button className={on(libraryOpen)} aria-expanded={libraryOpen} onClick={() => setLibraryOpen((v) => !v)}>
-              + принт
+              + добавить
             </button>
           </div>
           {libraryOpen && (
-            <div className="pf-card absolute bottom-3 left-3 top-14 w-72 overflow-y-auto border border-line p-3 text-sm">
-              <p className="mb-2 text-xs text-muted-foreground">картинку можно и просто перетащить с диска на изделие</p>
-              <Section title="Поиск по смыслу">
-                <div className="flex gap-1">
-                  <TextInput
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void runSearch()
-                    }}
-                    placeholder="снег, вертолёт, мишка…"
-                    aria-label="слово для поиска по картинкам"
-                  />
-                  <button onClick={() => void runSearch()} disabled={searching || !query.trim()} className={small()}>
-                    {searching ? 'ищу…' : 'найти'}
-                  </button>
-                </div>
-                {searchError && (
-                  <p className="text-xs text-muted-foreground">
-                    {searchError} — нажмите «найти» ещё раз; если повторится, стенд сервиса не поднят
-                  </p>
-                )}
-                {found?.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    ничего не нашлось — назовите предмет, а не настроение: «мяч», а не «весело»
-                  </p>
-                )}
-                {found?.map((f) => (
-                  <div key={f.digest} className="flex items-center gap-2" title={`похожесть ${f.similarity}`}>
-                    <img src={assetUrl(f.digest, 'thumb')} alt="" width={32} height={32} className="object-contain" />
-                    <span className="flex-1 truncate text-xs">{f.name}</span>
-                    <span className="text-xs text-muted-foreground">вес {f.weight.toFixed(1)}</span>
-                    {f.references.map((r) => (
-                      <button key={r.id} onClick={() => navigate(`/references/${r.id}`)} className={small()} title={r.name}>
-                        №{r.id}
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </Section>
-              <Section title="Набор принтов">
-                <div className="flex flex-col gap-1">
-                  {prints
-                    .slice()
-                    .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'probe' ? -1 : 1))
-                    .map((item) => (
-                      <button
-                        key={item.path}
-                        onClick={() => void addFromSet(item)}
-                        title={[item.subject ?? item.name, item.answers].filter(Boolean).join(' — ')}
-                        className="flex items-center gap-2 rounded border border-line px-2 py-1 text-left text-xs hover:bg-hover"
-                      >
-                        <span className="flex-1 truncate">{item.subject ?? item.name}</span>
-                        {item.kind === 'probe' && <span className="text-muted-foreground">эталон</span>}
-                        {item.width_cm && <span className="text-muted-foreground">{item.width_cm} см</span>}
-                      </button>
-                    ))}
-                </div>
-              </Section>
+            <div className="pf-card absolute bottom-3 left-3 top-14 w-80 overflow-hidden border border-line p-3 text-sm">
+              <WorkPicker dropIds={refDropIds} prints={prints} onPick={pick} onFiles={(f) => void addFiles(f)} onSetPrint={(item) => void addFromSet(item)} />
             </div>
           )}
 
@@ -1936,6 +1953,11 @@ export function WorkWindow() {
                     <span style={{ ...S.badge, fontFamily: `"${el.fontFamily}", sans-serif` }}>{el.fontFamily}</span>
                   )}
                   {el.kind === 'image' && !el.hasAlpha && <span style={S.badge}>фон не вырезан</span>}
+                  {refDropIds.length > 0 && board.data && !isApproved(el) && (
+                    <span style={S.badge} title="Взято не из одобренного к дропу референса">
+                      не одобрено к дропу
+                    </span>
+                  )}
                   {el.kind === 'image' && tagsOf[digestOf(el.src)]?.name && <NameChip named={tagsOf[digestOf(el.src)]!.name!} />}
                   {el.kind === 'image' && (tagsOf[digestOf(el.src)]?.tags ?? []).length > 0 && (
                     <TagChips tags={tagsOf[digestOf(el.src)]!.tags} />
