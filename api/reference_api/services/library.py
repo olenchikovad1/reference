@@ -106,6 +106,6 @@ async def search(db: AsyncSession, query: str) -> list[Found]:
     shown = [r for r in weighed if r[3] >= cfg.search_show_weight][: cfg.search_limit]
     used = await cards.by_image(db, [d for d, *_ in shown], exclude=0)
     return [
-        Found(d, n, s, w, [c for c in used if d in c.image_digests])
+        Found(d, n, s, w, [c for c, images in used if d in images])
         for d, n, s, w in shown
     ]

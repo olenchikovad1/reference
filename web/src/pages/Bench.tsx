@@ -1,4 +1,6 @@
+import { Modal, buttonClass } from '@platform/ui'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useBlocker } from 'react-router-dom'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
 import { DEFAULT_PARAMS, type RenderParams } from '../candidates/renderer'
@@ -35,15 +37,26 @@ import {
   UploadRefused,
 } from '../shared/api/assets'
 import type { ReferenceMatch } from '../shared/api/references'
-import { listReferences, openReference, saveReference, type Card } from '../shared/api/references'
+import {
+  listReferences,
+  openReference,
+  openVersion,
+  saveReference,
+  saveVersion,
+  type Card,
+  type ReferenceFull,
+  type Saved,
+  type VersionBody,
+} from '../shared/api/references'
 import { CODE } from '../app/shell'
 import { useCan } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
-import { historyKey } from '../shared/keys'
+import { historyKey, versionKey } from '../shared/keys'
 import { newElementId, onSide, sidesUsed, upgrade } from '../shared/sides'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../shared/grading'
-import { forget, load, save } from '../shared/saved'
+import { forget, forgetDraft, load, loadDraft, save, type SavedState } from '../shared/saved'
+import { neighbour, workKey } from '../shared/versions'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones } from '../shared/zones'
 import { calibrationFor, fieldFor, fieldSize, sizesWithField } from '../shared/fields'
@@ -96,7 +109,7 @@ export function Bench() {
   const [colourCode, setColourCode] = useState(colourFromDrop ?? 'WHITE')
   // Цветомодель из ячейки дропа (US-0489): примерка открывается в её цвете и
   // запоминает её при сохранении. Нет — референс пока без цветомодели.
-  const [colourModelId] = useState<number | null>(() => {
+  const [colourModelId, setColourModelId] = useState<number | null>(() => {
     const v = new URLSearchParams(window.location.search).get('colour_model')
     return v ? Number(v) : null
   })
@@ -131,7 +144,18 @@ export function Bench() {
   // Теги файлов по имени файла. Ставятся сами при узнавании; для уже
   // лежащих — досчитываются по сохранённому вектору.
   const [tagsOf, setTagsOf] = useState<Record<string, FileTags>>({})
-  const [opened, setOpened] = useState<string | null>(null)
+  // Открытый референс и версия на экране (US-0490). null — работа ещё не
+  // сохранялась ни разу: «Сохранить» заведёт новый референс.
+  const [current, setCurrent] = useState<ReferenceFull | null>(null)
+  const [viewing, setViewing] = useState<number | null>(null)
+  // Отпечаток открытой версии, с ним сравнивается экран. null — сравнивать не
+  // с чем: несохранённое — всё, что есть на холсте.
+  const [baseline, setBaseline] = useState<string | null>(null)
+  // Вопрос «сохранить, не сохранять, остаться» и что сделать после ответа.
+  const [leaving, setLeaving] = useState<{ then: () => void } | null>(null)
+  // Вопрос «восстановить несохранённое?»: черновик и референс, к которому он.
+  const [draftOffer, setDraftOffer] = useState<{ draft: SavedState; card: ReferenceFull; at: number } | null>(null)
+  const [saving, setSaving] = useState(false)
   useEffect(() => {
     const missing = [
       ...new Set(
@@ -167,7 +191,13 @@ export function Bench() {
     // первая отрисовка надписи уходит в запасной шрифт, то есть показывает не
     // то, что уйдёт в печать, и заметить это трудно: буквы-то на месте.
     const was = load()
-    if (was) {
+    if (was?.referenceId) {
+      // Работа была референсом — открывается он на той версии, где остановились;
+      // несохранённое предлагается восстановить, а не подменяет сохранённое
+      // молча. Пришли из ячейки дропа — начинают новый: черновик референса
+      // лежит под его номером и дождётся, когда его откроют.
+      if (!colourFromDrop) void openCard(was.referenceId, was.number ?? undefined)
+    } else if (was) {
       setStateCode(was.stateCode)
       if (!colourFromDrop) setColourCode(was.colourCode)
       setSize(was.size ?? null)
@@ -280,8 +310,36 @@ export function Bench() {
   // только тот, кто менял.
   useEffect(() => {
     if (composition.elements.length === 0) return
-    save({ version: 2, stateCode, colourCode, size, composition })
-  }, [composition, stateCode, colourCode, size])
+    save({ version: 2, stateCode, colourCode, size, composition, referenceId: current?.id ?? null, number: viewing })
+  }, [composition, stateCode, colourCode, size, current, viewing])
+
+  // Несохранённое — отличие экрана от открытой версии; у несохранённой ни разу
+  // работы — всё, что на холсте.
+  const nowKey = workKey({ colourCode, composition })
+  const dirty = baseline === null ? composition.elements.length > 0 : nowKey !== baseline
+
+  // Закрыть вкладку с правками — вопрос браузера «уйти или остаться»; своих
+  // кнопок в нём браузер не даёт, поэтому «сохранить» там нет, но черновик
+  // остаётся и при следующем открытии предлагается восстановить.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  // Уход на другую страницу приложения с правками — тот же вопрос из трёх.
+  const blocker = useBlocker(dirty)
+  // По состоянию, а не по самому blocker: объект новый на каждой отрисовке, и
+  // зависимость от него ставила бы вопрос заново бесконечно.
+  const blocked = blocker.state === 'blocked'
+  useEffect(() => {
+    if (blocked) setLeaving({ then: () => blocker.proceed?.() })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocked])
   // Пороги приходят из описания изделия, а не из кода.
   const rules = product?.print_rules
   // Две группы находок, а не одна: первая считается из самого принта и верна на
@@ -425,13 +483,13 @@ export function Bench() {
    * Лист кладётся в хранилище как обычная картинка: по нему считается вектор
    * «такой принт уже был», а вторая копия рядом разошлась бы с первой.
    */
-  async function saveCard() {
+  async function versionBody(): Promise<VersionBody | null> {
     // Сохраняется СТОРОНА, а не изделие целиком: перед и спина печатаются
     // разными прогонами, и «такой принт уже был» — вопрос про сторону.
-    if (visible.elements.length === 0) return
+    if (visible.elements.length === 0) return null
     const canvas = renderSheet(visible, images.current, 120)
     const sheet = await uploadCanvas(canvas, `${PRODUCT}-${stateCode}-list.png`)
-    const found = await saveReference({
+    return {
       name: `${PRODUCT} · ${SIDE_NAMES[stateCode] ?? stateCode} · ${colourCode}${size ? ' · ' + size : ''}`,
       sheet_digest: sheet,
       image_digests: visible.elements
@@ -442,13 +500,169 @@ export function Bench() {
         .filter((el) => el.kind === 'text')
         .map((el) => (el.kind === 'text' ? el.text : '')),
       // Работа целиком — все стороны, сантиметры базы, исключения размеров,
-      // цвет. Лист и надписи выше — для узнавания; открывается карточка
+      // цвет. Лист и надписи выше — для узнавания; открывается версия
       // вот этим.
       work: { version: 2, stateCode, colourCode, size, composition },
-      colour_model_id: colourModelId,
+    }
+  }
+
+  /** «Сохранить» (Ctrl+S): новая версия открытого референса, а если его ещё
+   *  нет — новый референс. Открытая старая версия ложится поверх последней,
+   *  а не на своё место. false — не сохранилось, и сказано почему. */
+  async function saveCard(): Promise<boolean> {
+    return keep(async (body) =>
+      current ? saveVersion(current.id, body) : saveReference({ ...body, colour_model_id: colourModelId }),
+    )
+  }
+
+  /** «Сохранить как» (Ctrl+Shift+S): новый референс, первая версия — то, что
+   *  на экране; у нового записано, от какой версии он пошёл. */
+  async function saveCardAs(): Promise<boolean> {
+    return keep(async (body) =>
+      saveReference({
+        ...body,
+        colour_model_id: current?.colour_model_id ?? colourModelId,
+        forked_from: current && viewing ? { reference_id: current.id, number: viewing } : null,
+      }),
+    )
+  }
+
+  async function keep(send: (body: VersionBody) => Promise<Saved>): Promise<boolean> {
+    if (saving) return false
+    setSaving(true)
+    try {
+      const body = await versionBody()
+      if (!body) return false
+      const saved = await send(body)
+      const card = await openReference(saved.id)
+      // Правки легли в версию — черновик больше не предлагать; при «сохранить
+      // как» правки ушли в новый референс, и прежнему они тоже не черновик.
+      if (current) forgetDraft(current.id)
+      forgetDraft(saved.id)
+      setCurrent(card)
+      setViewing(saved.number)
+      setBaseline(nowKey)
+      setRestored(false)
+      setSeenCards(saved.matches)
+      void listReferences().then(setCards).catch(() => undefined)
+      return true
+    } catch (e) {
+      // Работа не теряется: она на экране и в черновике, повторить — то же
+      // сочетание клавиш.
+      setDropHint(`Не сохранилось: ${e instanceof Error ? e.message : String(e)} — повторите Ctrl+S.`)
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** Сделать `then`, а при несохранённом сначала спросить: сохранить, не
+   *  сохранять или остаться. */
+  function askLeave(then: () => void) {
+    if (dirty) setLeaving({ then })
+    else then()
+  }
+
+  /** Листать историю: соседняя версия открывается целиком. */
+  function step(towards: 'older' | 'newer') {
+    if (!current || viewing === null) return
+    const n = neighbour(
+      current.versions.map((v) => v.number),
+      viewing,
+      towards,
+    )
+    if (n === null) return
+    const card = current
+    askLeave(() => {
+      void openVersion(card.id, n)
+        .then((v) => showVersion(card, n, v.work))
+        .catch((e: Error) => setDropHint(`Версия №${n} не открылась: ${e.message}`))
     })
-    setSeenCards(found.matches)
-    void listReferences().then(setCards).catch(() => undefined)
+  }
+
+  /** Показать версию референса как сохранили: стороны, цвет, размер. */
+  function showVersion(card: ReferenceFull, number: number, work: unknown): boolean {
+    const w = work as {
+      stateCode?: string
+      colourCode?: string
+      size?: number | null
+      composition?: typeof composition
+    } | null
+    if (!w?.composition) {
+      // Карточка из тех времён, когда сохранялся только снимок для узнавания.
+      // Открыть её нечем — и сказано это прямо, а не пустым изделием.
+      setDropHint(`«${card.name}» сохранена до того, как карточки стали хранить работу: открыть нечего.`)
+      return false
+    }
+    const c = upgrade(w.composition)
+    for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
+    if (w.stateCode) setStateCode(w.stateCode)
+    const colour = w.colourCode ?? colourCode
+    setColourCode(colour)
+    setSize(w.size ?? null)
+    commit(c)
+    setCurrent(card)
+    setViewing(number)
+    setColourModelId(card.colour_model_id)
+    setBaseline(workKey({ colourCode: colour, composition: c }))
+    setRestored(false)
+    return true
+  }
+
+  /** Открыть референс — последнюю версию или `at`. Остались правки с прошлого
+   *  раза — сначала вопрос, восстановить ли их. */
+  async function openCard(id: number, at?: number) {
+    try {
+      const card = await openReference(id)
+      const number = at && card.versions.some((v) => v.number === at) ? at : card.number
+      const work = number === card.number ? card.work : (await openVersion(id, number)).work
+      const draft = loadDraft(id)
+      // Черновик сравнивается с той версией, поверх которой правили, а не с
+      // последней: открыть старую версию и не тронуть её — не правка.
+      const baseNumber = draft?.number && card.versions.some((v) => v.number === draft.number) ? draft.number : number
+      const base = baseNumber === number ? work : (await openVersion(id, baseNumber)).work
+      const b = base as { colourCode?: string; composition?: typeof composition } | null
+      const differs =
+        draft !== null &&
+        (!b?.composition ||
+          workKey(draft) !== workKey({ colourCode: b.colourCode ?? 'WHITE', composition: upgrade(b.composition) }))
+      if (differs) {
+        setDraftOffer({ draft, card, at: baseNumber })
+        return
+      }
+      showVersion(card, number, work)
+    } catch (e) {
+      setDropHint(`Референс №${id} не открылся: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  /** «Восстановить»: на экране черновик, сравнивается он с версией, поверх
+   *  которой правили, — значит, виден как несохранённый. */
+  async function restoreDraft(offer: { draft: SavedState; card: ReferenceFull; at: number }) {
+    setDraftOffer(null)
+    const d = offer.draft
+    const base = offer.at === offer.card.number ? offer.card.work : (await openVersion(offer.card.id, offer.at)).work
+    const b = base as { colourCode?: string; composition?: typeof composition } | null
+    for (const el of d.composition.elements) if (el.kind === 'image') cacheImage(el.src)
+    setStateCode(d.stateCode)
+    setColourCode(d.colourCode)
+    setSize(d.size ?? null)
+    commit(d.composition)
+    setCurrent(offer.card)
+    setViewing(offer.at)
+    setColourModelId(offer.card.colour_model_id)
+    setBaseline(
+      b?.composition ? workKey({ colourCode: b.colourCode ?? 'WHITE', composition: upgrade(b.composition) }) : null,
+    )
+    setRestored(true)
+  }
+
+  /** «Не восстанавливать»: правки забыты, открыта сохранённая версия. */
+  async function dropDraft(offer: { draft: SavedState; card: ReferenceFull; at: number }) {
+    setDraftOffer(null)
+    forgetDraft(offer.card.id)
+    const work = offer.at === offer.card.number ? offer.card.work : (await openVersion(offer.card.id, offer.at)).work
+    showVersion(offer.card, offer.at, work)
   }
 
   /** Открыть сохранённую карточку: работа восстанавливается как была. */
@@ -465,29 +679,6 @@ export function Bench() {
     } finally {
       setSearching(false)
     }
-  }
-
-  async function openCard(card: Card) {
-    const got = await openReference(card.id)
-    const w = got.work as {
-      stateCode?: string
-      colourCode?: string
-      size?: number | null
-      composition?: typeof composition
-    } | null
-    if (!w?.composition) {
-      // Карточка из тех времён, когда сохранялся только снимок для узнавания.
-      // Открыть её нечем — и сказано это прямо, а не пустым изделием.
-      setDropHint(`«${card.name}» сохранена до того, как карточки стали хранить работу: открыть нечего.`)
-      return
-    }
-    const c = upgrade(w.composition)
-    for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
-    if (w.stateCode) setStateCode(w.stateCode)
-    if (w.colourCode) setColourCode(w.colourCode)
-    setSize(w.size ?? null)
-    commit(c)
-    setOpened(`${card.name} · №${card.id}`)
   }
 
   /** Печатный лист: сборка из сантиметров, мимо шейдера, в печатном разрешении. */
@@ -605,6 +796,28 @@ export function Bench() {
     }
     commit((c) => add(c, el))
   }
+
+  // Клавиши версий. Функции берутся из ref: обработчик ставится один раз, а
+  // сохранять должен то, что на экране сейчас, а не при установке.
+  const versionActions = useRef({ save: saveCard, saveAs: saveCardAs, step })
+  versionActions.current = { save: saveCard, saveAs: saveCardAs, step }
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const asked = versionKey(e)
+      if (!asked) return
+      const target = e.target as HTMLElement | null
+      const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      if ((asked === 'older' || asked === 'newer') && typing) return
+      e.preventDefault()
+      if (asked === 'save') {
+        if (canSave) void versionActions.current.save()
+      } else if (asked === 'save-as') {
+        if (canSave) void versionActions.current.saveAs()
+      } else versionActions.current.step(asked)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [canSave])
 
   // Клавиши: мышкой удобно искать, но попасть в «12 см ниже горловины» ею
   // нельзя, а это основной способ работы.
@@ -761,6 +974,16 @@ export function Bench() {
           {cal.px_per_cm} px/см{cal.provisional && ' · предварительно'}
           {restored && ' · восстановлено с прошлого раза'}
         </span>
+        <span style={S.dim}>
+          {current ? `референс №${current.id} · версия ${viewing} из ${current.versions.length}` : 'новый референс, ещё не сохранён'}
+          {current?.forked_from &&
+            ` · пошёл от №${current.forked_from.reference_id}, версия ${current.forked_from.number}`}
+        </span>
+        {dirty && (
+          <span role="status" style={{ color: '#b45309', fontSize: 13 }}>
+            ● не сохранено
+          </span>
+        )}
       </header>
 
       <div style={S.body}>
@@ -1148,19 +1371,29 @@ export function Bench() {
 
           <Group title="Правка">
             {canSave && (
-              <button onClick={() => void saveCard()} style={S.btn}>
-                сохранить принт
-              </button>
+              <>
+                <button onClick={() => void saveCard()} disabled={saving} style={S.btn} title="Ctrl+S">
+                  {current ? 'сохранить версию' : 'сохранить принт'}
+                </button>
+                <button onClick={() => void saveCardAs()} disabled={saving} style={S.btn} title="Ctrl+Shift+S">
+                  сохранить как новый
+                </button>
+              </>
             )}
             <button
-              onClick={() => {
-                forget()
-                commit(EMPTY)
-                setRestored(false)
-              }}
+              onClick={() =>
+                askLeave(() => {
+                  forget()
+                  commit(EMPTY)
+                  setCurrent(null)
+                  setViewing(null)
+                  setBaseline(null)
+                  setRestored(false)
+                })
+              }
               style={S.btn}
             >
-              очистить
+              начать новый
             </button>
             <button onClick={history.undo} disabled={!history.canUndo} style={S.btn}>
               отменить
@@ -1168,25 +1401,54 @@ export function Bench() {
             <button onClick={history.redo} disabled={!history.canRedo} style={S.btn}>
               вернуть
             </button>
-            <p style={S.dim}>Ctrl+Z и Ctrl+Shift+Z. Ползунки подбора не откатываются</p>
+            <p style={S.dim}>
+              Ctrl+Z и Ctrl+Shift+Z. Ползунки подбора не откатываются. Ctrl+S — версия, Ctrl+Shift+S — новый референс
+            </p>
           </Group>
 
+          {current && viewing !== null && (
+            <Group title={`История (${current.versions.length})`}>
+              <button onClick={() => step('older')} disabled={viewing === current.versions[0]?.number} style={S.btn} title="A">
+                ← раньше
+              </button>
+              <button
+                onClick={() => step('newer')}
+                disabled={viewing === current.versions[current.versions.length - 1]?.number}
+                style={S.btn}
+                title="D"
+              >
+                позже →
+              </button>
+              {(() => {
+                const v = current.versions.find((x) => x.number === viewing)
+                return v ? (
+                  <p style={S.dim}>
+                    версия {v.number}: {v.author_name ?? (v.author_id ? 'имя ещё не пришло' : 'без входа')},{' '}
+                    {new Date(v.saved_at).toLocaleString('ru-RU')}
+                    {viewing !== current.number && ' · не последняя: сохранение ляжет новой версией поверх последней'}
+                  </p>
+                ) : null
+              })()}
+              <p style={S.dim}>A и D — листать</p>
+            </Group>
+          )}
+
           <Group title={`Сохранённое (${cards.length})`}>
-            {opened && <p style={S.dim}>открыта: {opened}</p>}
             {cards.length === 0 && <p style={S.dim}>пока ничего — «сохранить принт» кладёт сюда</p>}
             <div style={S.list}>
               {cards.slice(0, 12).map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => void openCard(c)}
-                  title={`${c.name} · ${new Date(c.created_at).toLocaleString('ru-RU')}`}
+                  onClick={() => askLeave(() => void openCard(c.id))}
+                  title={`${c.name} · версия ${c.number} · ${new Date(c.saved_at).toLocaleString('ru-RU')}`}
                   style={S.setArtwork}
                 >
                   <span style={S.itemName}>
                     №{c.id} · {c.name}
                   </span>
                   <span style={S.tag}>
-                    {new Date(c.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                    в.{c.number} ·{' '}
+                    {new Date(c.saved_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </button>
               ))}
@@ -1232,7 +1494,7 @@ export function Bench() {
                     {f.references.map((r) => {
                       const card = cards.find((c) => c.id === r.id)
                       return card ? (
-                        <button key={r.id} onClick={() => void openCard(card)} style={S.btn} title={r.name}>
+                        <button key={r.id} onClick={() => askLeave(() => void openCard(card.id))} style={S.btn} title={r.name}>
                           №{r.id}
                         </button>
                       ) : (
@@ -1479,6 +1741,90 @@ export function Bench() {
           )}
         </aside>
       </div>
+
+      {/* Правки не теряются молча: листание истории, другой референс, новый
+          и уход со страницы спрашивают. Ответ по умолчанию — остаться. */}
+      <Modal
+        open={leaving !== null}
+        onClose={() => {
+          setLeaving(null)
+          if (blocker.state === 'blocked') blocker.reset()
+        }}
+        title="Есть несохранённые правки"
+        actions={
+          <>
+            <button
+              className={buttonClass({ tone: 'neutral', variant: 'outline' })}
+              onClick={() => {
+                setLeaving(null)
+                if (blocker.state === 'blocked') blocker.reset()
+              }}
+            >
+              остаться
+            </button>
+            <button
+              className={buttonClass({ tone: 'danger', variant: 'outline' })}
+              onClick={() => {
+                const then = leaving?.then
+                setLeaving(null)
+                // Отказались — черновик больше не предлагать, иначе отказ
+                // вернётся вопросом «восстановить?» при следующем открытии.
+                if (current) forgetDraft(current.id)
+                else forget()
+                setBaseline(null)
+                then?.()
+              }}
+            >
+              не сохранять
+            </button>
+            {canSave && (
+              <button
+                className={buttonClass({ tone: 'accent', variant: 'solid' })}
+                disabled={saving}
+                onClick={() => {
+                  const then = leaving?.then
+                  void saveCard().then((ok) => {
+                    if (!ok) return
+                    setLeaving(null)
+                    then?.()
+                  })
+                }}
+              >
+                сохранить
+              </button>
+            )}
+          </>
+        }
+      >
+        {current
+          ? `Правки к референсу №${current.id} (поверх версии ${viewing}) ещё не сохранены.`
+          : 'Этот принт ещё ни разу не сохранён.'}
+      </Modal>
+
+      <Modal
+        open={draftOffer !== null}
+        onClose={() => draftOffer && void dropDraft(draftOffer)}
+        title="Восстановить несохранённое?"
+        actions={
+          <>
+            <button
+              className={buttonClass({ tone: 'neutral', variant: 'outline' })}
+              onClick={() => draftOffer && void dropDraft(draftOffer)}
+            >
+              открыть сохранённую
+            </button>
+            <button
+              className={buttonClass({ tone: 'accent', variant: 'solid' })}
+              onClick={() => draftOffer && void restoreDraft(draftOffer)}
+            >
+              восстановить
+            </button>
+          </>
+        }
+      >
+        {draftOffer &&
+          `У референса №${draftOffer.card.id} остались правки поверх версии ${draftOffer.at}, которые не сохранили до закрытия.`}
+      </Modal>
     </main>
   )
 }

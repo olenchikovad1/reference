@@ -7,11 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from reference_api.db import session
 from reference_api.schemas.references import (
     CardOut,
-    CardWorkOut,
+    ForkOut,
     FoundOut,
     ReferenceMatchOut,
+    ReferenceOut,
     SavedOut,
     SaveIn,
+    VersionIn,
+    VersionMetaOut,
+    VersionOut,
 )
 from reference_api.services import drops, people
 from reference_api.services import references as service
@@ -19,24 +23,17 @@ from reference_api.services import references as service
 router = APIRouter(prefix="/references", tags=["references"])
 
 
-@router.post("", response_model=SavedOut, dependencies=[requires("references", Action.WRITE)])
-async def save(body: SaveIn, request: Request, db: AsyncSession = Depends(session)) -> SavedOut:
-    """Сохраняет собранный принт и сразу говорит, что узналось."""
+def _author(request: Request) -> str | None:
     # Субъекта кладёт посредник платформы (app.py); нет токена или он не
     # принят — None: отказ без права делает объявление на маршруте (US-0487).
     subject = getattr(request.state, "subject", None)
-    if body.colour_model_id is not None:
-        # Цветомодель без кадров — работу на ней не начать, и причина названа.
-        try:
-            await drops.colour_model_for_work(db, body.colour_model_id)
-        except drops.CannotWork as refusal:
-            raise HTTPException(status_code=422, detail=str(refusal)) from None
-    card_id, found = await service.save(
-        db, body.name, body.sheet_digest, body.image_digests, body.texts, body.work,
-        author_id=subject.id if subject else None, colour_model_id=body.colour_model_id,
-    )
+    return subject.id if subject else None
+
+
+def _saved(saved: service.Saved) -> SavedOut:
     return SavedOut(
-        id=card_id,
+        id=saved.reference_id,
+        number=saved.number,
         matches=[
             ReferenceMatchOut(
                 by=m.by,
@@ -46,9 +43,47 @@ async def save(body: SaveIn, request: Request, db: AsyncSession = Depends(sessio
                 level=m.level,
                 text=m.text,
             )
-            for m in found
+            for m in saved.matches
         ],
     )
+
+
+@router.post("", response_model=SavedOut, dependencies=[requires("references", Action.WRITE)])
+async def create(body: SaveIn, request: Request, db: AsyncSession = Depends(session)) -> SavedOut:
+    """Новый референс с первой версией — и сразу что узналось. С
+    ``forked_from`` — «Сохранить как»."""
+    if body.colour_model_id is not None:
+        # Цветомодель без кадров — работу на ней не начать, и причина названа.
+        try:
+            await drops.colour_model_for_work(db, body.colour_model_id)
+        except drops.CannotWork as refusal:
+            raise HTTPException(status_code=422, detail=str(refusal)) from None
+    try:
+        saved = await service.create(
+            db, body.name, body.sheet_digest, body.image_digests, body.texts, body.work,
+            author_id=_author(request), colour_model_id=body.colour_model_id,
+            forked_from=(body.forked_from.reference_id, body.forked_from.number) if body.forked_from else None,
+        )
+    except service.NoSuchReference as missing:
+        raise HTTPException(status_code=422, detail=str(missing)) from None
+    return _saved(saved)
+
+
+@router.post(
+    "/{reference_id}/versions", response_model=SavedOut, dependencies=[requires("references", Action.WRITE)]
+)
+async def add_version(
+    reference_id: int, body: VersionIn, request: Request, db: AsyncSession = Depends(session)
+) -> SavedOut:
+    """«Сохранить»: новая версия поверх последней; прежние не меняются (И-6)."""
+    try:
+        saved = await service.add_version(
+            db, reference_id, body.name, body.sheet_digest, body.image_digests, body.texts, body.work,
+            author_id=_author(request),
+        )
+    except service.NoSuchReference as missing:
+        raise HTTPException(status_code=404, detail=str(missing)) from None
+    return _saved(saved)
 
 
 @router.get("/search", response_model=list[FoundOut])
@@ -64,21 +99,49 @@ async def search(q: str, db: AsyncSession = Depends(session)) -> list[FoundOut]:
 
 @router.get("", response_model=list[CardOut])
 async def latest(db: AsyncSession = Depends(session)) -> list[CardOut]:
-    """Сохранённые карточки, свежие первыми."""
-    cards = await service.latest(db)
-    names = await people.names_of(db, [c.author_id for c in cards if c.author_id])
-    return [CardOut(id=c.id, name=c.name, created_at=c.created_at, author_id=c.author_id,
-                    author_name=names.get(c.author_id or ""))
-            for c in cards]
+    """Референсы, свежие по последней версии первыми."""
+    rows = await service.latest(db)
+    names = await people.names_of(db, [v.author_id for _, v in rows if v.author_id])
+    return [
+        CardOut(id=c.id, name=c.name, number=v.number, saved_at=v.created_at, author_id=v.author_id,
+                author_name=names.get(v.author_id or ""))
+        for c, v in rows
+    ]
 
 
 # Объявлен ПОСЛЕ /search: иначе «search» разбирался бы как номер карточки и
 # падал бы проверкой типа, а не находил поиск.
-@router.get("/{card_id}", response_model=CardWorkOut)
-async def open_card(card_id: int, db: AsyncSession = Depends(session)) -> CardWorkOut:
-    """Карточка с работой — чтобы открыть её там, где сохранили, или на другом
-    компьютере."""
-    card = await service.open_card(db, card_id)
-    if card is None:
-        raise HTTPException(404, "карточки с таким номером нет")
-    return CardWorkOut(id=card.id, name=card.name, created_at=card.created_at, author_id=card.author_id, work=card.work)
+@router.get("/{reference_id}", response_model=ReferenceOut)
+async def open_card(reference_id: int, db: AsyncSession = Depends(session)) -> ReferenceOut:
+    """Референс с версиями и работой последней — чтобы открыть его там, где
+    сохранили, или на другом компьютере."""
+    opened = await service.open_card(db, reference_id)
+    if opened is None:
+        raise HTTPException(404, "референса с таким номером нет")
+    card, versions, fork = opened
+    names = await people.names_of(db, [v.author_id for v in versions if v.author_id])
+    last = versions[-1]
+    return ReferenceOut(
+        id=card.id,
+        name=card.name,
+        colour_model_id=card.colour_model_id,
+        forked_from=ForkOut(reference_id=fork.reference_id, number=fork.number, name=fork.name) if fork else None,
+        versions=[
+            VersionMetaOut(number=v.number, saved_at=v.created_at, author_id=v.author_id,
+                           author_name=names.get(v.author_id or ""))
+            for v in versions
+        ],
+        number=last.number,
+        work=last.work,
+    )
+
+
+@router.get("/{reference_id}/versions/{number}", response_model=VersionOut)
+async def open_version(reference_id: int, number: int, db: AsyncSession = Depends(session)) -> VersionOut:
+    """Версия целиком — листание истории открывает её, а не пересказ."""
+    v = await service.open_version(db, reference_id, number)
+    if v is None:
+        raise HTTPException(404, "такой версии у референса нет")
+    names = await people.names_of(db, [v.author_id] if v.author_id else [])
+    return VersionOut(number=v.number, saved_at=v.created_at, author_id=v.author_id,
+                      author_name=names.get(v.author_id or ""), work=v.work)

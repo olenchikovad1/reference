@@ -42,7 +42,19 @@ def normalise(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().upper()
 
 
-async def save(
+@dataclass(frozen=True)
+class Saved:
+    reference_id: int
+    #: Номер сохранённой версии внутри референса.
+    number: int
+    matches: list[Match]
+
+
+class NoSuchReference(LookupError):
+    """Референса или версии с таким номером нет."""
+
+
+async def create(
     db: AsyncSession,
     name: str,
     sheet_digest: str,
@@ -51,24 +63,60 @@ async def save(
     work: dict | None = None,
     author_id: str | None = None,
     colour_model_id: int | None = None,
-) -> tuple[int, list[Match]]:
-    """Сохраняет собранный принт и говорит, что узналось.
+    forked_from: tuple[int, int] | None = None,
+) -> Saved:
+    """Новый референс с первой версией — и что узналось.
 
-    Порядок тот же, что у картинок: сначала ищем, потом сохраняем. Иначе принт
-    находит сам себя и сообщает, что он уже был.
+    ``forked_from`` — «сохранить как»: референс и номер версии, от которой
+    пошёл новый. Порядок тот же, что у картинок: сначала ищем, потом
+    сохраняем. Иначе принт находит сам себя и сообщает, что он уже был.
     """
+    parent_id = None
+    if forked_from is not None:
+        parent = await repo.version(db, *forked_from)
+        if parent is None:
+            raise NoSuchReference("версии, от которой сохраняют, нет")
+        parent_id = parent.id
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=0)
-    card = await repo.save(
-        db, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts], work,
-        author_id=author_id, colour_model_id=colour_model_id,
-    )
+    card = await repo.create(db, name, colour_model_id=colour_model_id, forked_from_version_id=parent_id)
+    version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id)
+    return Saved(card.id, version.number, found)
 
+
+async def add_version(
+    db: AsyncSession,
+    reference_id: int,
+    name: str,
+    sheet_digest: str,
+    image_digests: list[str],
+    texts: list[str],
+    work: dict | None = None,
+    author_id: str | None = None,
+) -> Saved:
+    """«Сохранить»: новая версия поверх последней, прежние не трогаются (И-6).
+
+    Правка открытой старой версии идёт сюда же: она ложится номером после
+    последней, а не на место старой. Узнавание своих версий не видит — пятая
+    версия принта, узнавшая четвёртую, ни о чём не говорит.
+    """
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    found = await _recognise(db, sheet_digest, image_digests, texts, exclude=reference_id)
+    version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id)
+    return Saved(card.id, version.number, found)
+
+
+async def _put(db, card, name, sheet_digest, image_digests, texts, work, author_id):
+    version = await repo.add_version(
+        db, card, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts], work, author_id
+    )
     # Вектор листа считается ПОСЛЕ поиска и по тому же оригиналу, что у картинок.
     content = assets.original(sheet_digest)
     if content is not None:
         emb = embeddings.embed(content)
         await library.put_vector(db, sheet_digest, name, emb, kind=SHEET)
-    return card.id, found
+    return version
 
 
 async def _recognise(
@@ -90,7 +138,7 @@ async def _recognise(
         same_pictures.append(digest)
         same_pictures.extend(await library.same_as(db, digest, kind="image"))
     seen_by_print = {m.reference_id for m in out}
-    for card in await repo.by_image(db, same_pictures, exclude):
+    for card, _ in await repo.by_image(db, same_pictures, exclude):
         if card.id not in seen_by_print:
             out.append(Match("picture", card.id, card.name, 1.0, "same"))
 
@@ -111,9 +159,32 @@ async def search(db: AsyncSession, query: str) -> list[tuple[int, str]]:
     return [(c.id, c.name) for c in await repo.search(db, normalise(query))]
 
 
-async def open_card(db: AsyncSession, card_id: int):
-    """Карточка с её работой. None — такой нет."""
-    return await repo.get(db, card_id)
+@dataclass(frozen=True)
+class Fork:
+    """От какой версии какого референса пошёл («Сохранить как»)."""
+
+    reference_id: int
+    number: int
+    name: str
+
+
+async def open_card(db: AsyncSession, reference_id: int):
+    """Карточка, её версии по порядку и версия, от которой пошла. None — такой нет."""
+    card = await repo.get(db, reference_id)
+    if card is None:
+        return None
+    fork = None
+    if card.forked_from_version_id is not None:
+        parent = await repo.version_by_id(db, card.forked_from_version_id)
+        parent_card = await repo.get(db, parent.reference_id) if parent else None
+        if parent and parent_card:
+            fork = Fork(parent_card.id, parent.number, parent_card.name)
+    return card, await repo.versions(db, reference_id), fork
+
+
+async def open_version(db: AsyncSession, reference_id: int, number: int):
+    """Версия с работой. None — такой нет."""
+    return await repo.version(db, reference_id, number)
 
 
 async def latest(db: AsyncSession):

@@ -24,7 +24,7 @@ export function Drops() {
     return <main style={S.page}>Справочник дропов не ответил — обновите страницу; если повторится, стенд сервиса не поднят.</main>
 
   return (
-    <main style={{ ...S.page, display: 'grid', gridTemplateColumns: '260px 1fr', gap: 24 }}>
+    <main style={{ ...S.page, display: 'grid', gridTemplateColumns: '260px minmax(0, 1fr)', gap: 24 }}>
       <nav aria-label="дропы">
         <h1 style={S.h1}>Дропы</h1>
         {drops.data.map((d) => (
@@ -53,6 +53,8 @@ function DropMatrix({ dropId, drop }: { dropId: number; drop: Drop }) {
     {
       id: 'model',
       header: 'модель',
+      // Имя модели длиннее цвета: на общей доле оно ломается в три строки.
+      width: 'w-56',
       cell: (r) => (
         <span>
           <b>{r.model.name}</b>

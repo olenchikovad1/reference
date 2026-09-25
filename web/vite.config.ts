@@ -1,3 +1,4 @@
+import tailwind from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
@@ -8,7 +9,10 @@ const BASE = '/reference/'
 
 export default defineConfig({
   base: BASE,
-  plugins: [react()],
+  // Tailwind — ради стилей набора платформы: tokens.css собирает классы из
+  // @platform/ui и @platform/shell, и без плагина их окна и таблицы остаются
+  // голой разметкой (диалог стоит в конце страницы, а не поверх неё).
+  plugins: [react(), tailwind()],
   server: {
     host: '0.0.0.0',
     port: 5173,

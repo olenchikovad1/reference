@@ -5,10 +5,11 @@
 // референса — если он рождается здесь, переход от стенда к карточке будет
 // переносом данных, а не переписыванием.
 //
-// Лежит пока в браузере: у стенда нет ни карточек, ни субъектов, и заводить
-// под него таблицу раньше, чем появятся те и другие, значит проектировать
-// вслепую. Файлы при этом лежат НЕ здесь — они в хранилище, а тут только их
-// имена по содержимому.
+// Сохранённое в браузере — черновик: то, что на экране, пока не нажали
+// «Сохранить». Версии референса живут в сервисе (US-0490); черновик нужен,
+// чтобы закрытая вкладка не уносила правки, и при следующем открытии
+// референса его предлагают восстановить. Файлы лежат НЕ здесь — они в
+// хранилище, а тут только их имена по содержимому.
 
 import type { Composition } from './composition'
 import { upgrade } from './sides'
@@ -22,11 +23,21 @@ export interface SavedState {
   /** Выбранный размер. Нет — база. */
   readonly size?: number | null
   readonly composition: Composition
+  /** Референс, к которому работа (US-0490). Нет — ещё ни разу не сохранена. */
+  readonly referenceId?: number | null
+  /** Версия, поверх которой правки. */
+  readonly number?: number | null
 }
+
+/** Черновик референса лежит ещё и под своим номером: начатая с ячейки дропа
+ *  новая работа перепишет общий ключ, а правки референса №12 должны дождаться,
+ *  пока его откроют снова. */
+const draftKey = (referenceId: number) => `reference.bench.draft.${referenceId}`
 
 export function save(state: SavedState): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(state))
+    if (state.referenceId) localStorage.setItem(draftKey(state.referenceId), JSON.stringify(state))
   } catch {
     // Переполнение или запрет хранилища не должны ронять работу: потеря
     // сохранения — неприятность, потеря страницы — поломка.
@@ -34,8 +45,26 @@ export function save(state: SavedState): void {
 }
 
 export function load(): SavedState | null {
+  return read(KEY)
+}
+
+/** Несохранённое референса — то, что было на экране, когда его закрыли. */
+export function loadDraft(referenceId: number): SavedState | null {
+  return read(draftKey(referenceId))
+}
+
+/** Сохранили или отказались от правок — черновик больше не предлагать. */
+export function forgetDraft(referenceId: number): void {
   try {
-    const raw = localStorage.getItem(KEY)
+    localStorage.removeItem(draftKey(referenceId))
+  } catch {
+    // см. save
+  }
+}
+
+function read(key: string): SavedState | null {
+  try {
+    const raw = localStorage.getItem(key)
     if (!raw) return null
     // Разбирается как «что-то с номером версии», а не как текущий формат:
     // прочитанное на диске старее того, что описывает тип, и приводить одно к

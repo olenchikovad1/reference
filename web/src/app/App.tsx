@@ -8,7 +8,7 @@
 import { readAppearance, type Appearance } from '@platform/shell'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactElement, type ReactNode } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { createBrowserRouter, Route, RouterProvider, Routes } from 'react-router-dom'
 
 import { Bench } from '../pages/Bench'
 import { Drops } from '../pages/Drops'
@@ -79,24 +79,31 @@ function Framed({ children }: { children: ReactNode }) {
   )
 }
 
+function Root() {
+  return WITHOUT_PLATFORM ? (
+    <>
+      <div role="status" style={{ background: '#fef3c7', color: '#92400e', padding: '6px 12px', fontSize: 13 }}>
+        Работает без платформы: входа и прав нет, меню не показывается. Настройка VITE_WITHOUT_PLATFORM в web/.env.
+      </div>
+      <Pages />
+    </>
+  ) : (
+    <Framed>
+      <Pages />
+    </Framed>
+  )
+}
+
+// Роутер с данными, а не BrowserRouter: только он умеет задержать уход со
+// страницы (useBlocker) — примерка с несохранённым спрашивает «сохранить?»,
+// а не теряет правки молча (US-0490). Приставка — основание всех адресов:
+// шлюз путь не срезает.
+const router = createBrowserRouter([{ path: '*', element: <Root /> }], { basename: BASE })
+
 export function App() {
   return (
     <QueryClientProvider client={queries}>
-      {/* Приставка — основание всех адресов: шлюз путь не срезает. */}
-      <BrowserRouter basename={BASE}>
-        {WITHOUT_PLATFORM ? (
-          <>
-            <div role="status" style={{ background: '#fef3c7', color: '#92400e', padding: '6px 12px', fontSize: 13 }}>
-              Работает без платформы: входа и прав нет, меню не показывается. Настройка VITE_WITHOUT_PLATFORM в web/.env.
-            </div>
-            <Pages />
-          </>
-        ) : (
-          <Framed>
-            <Pages />
-          </Framed>
-        )}
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   )
 }

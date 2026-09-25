@@ -23,7 +23,7 @@ async def client():
     async with app.router.lifespan_context(app):
         async with engine.begin() as conn:
             await conn.execute(
-                text("truncate table asset_embeddings, reference_cards, reference_texts")
+                text("truncate table asset_embeddings, reference_cards, reference_versions, reference_texts")
             )
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://stand"
@@ -217,27 +217,85 @@ async def test_the_whole_work_is_saved_and_opens_as_it_was(client) -> None:
     assert opened.json()["work"] == WORK, "работа открылась не такой, какой её сохранили"
 
 
-async def test_saving_again_makes_a_new_card_and_keeps_the_first(client) -> None:
-    """Каждое сохранение — новая карточка; прошлые не перезаписываются (И-6)."""
-    sheet = await store(client, "лист.png", 400, 300, 40)
-    first = (
-        await client.post(
-            "/reference/api/references",
-            json={"name": "первая", "sheet_digest": sheet, "image_digests": [], "texts": [], "work": WORK},
-        )
-    ).json()["id"]
-    changed = {**WORK, "colourCode": "WHITE"}
-    second = (
-        await client.post(
-            "/reference/api/references",
-            json={"name": "вторая", "sheet_digest": sheet, "image_digests": [], "texts": [], "work": changed},
-        )
-    ).json()["id"]
+async def put(client, reference: int | None, work: dict, sheet: str, texts=(), **extra) -> dict:
+    """Сохранить: без номера — новый референс, с номером — новая его версия."""
+    url = "/reference/api/references" + (f"/{reference}/versions" if reference else "")
+    r = await client.post(url, json={"name": "работа", "sheet_digest": sheet, "image_digests": [],
+                                     "texts": list(texts), "work": work, **extra})
+    assert r.status_code == 200, r.text
+    return r.json()
 
-    assert second != first
-    assert (await client.get(f"/reference/api/references/{first}")).json()["work"]["colourCode"] == "BLACK"
+
+async def test_saving_again_is_a_new_version_and_the_old_ones_stay(client) -> None:
+    """«Сохранить» — новая версия того же референса; прежние не меняются (И-6)."""
+    sheet = await store(client, "лист.png", 400, 300, 40)
+    first = await put(client, None, WORK, sheet)
+    ref = first["id"]
+    second = await put(client, ref, {**WORK, "colourCode": "WHITE"}, sheet)
+    third = await put(client, ref, {**WORK, "colourCode": "RED"}, sheet)
+
+    assert (first["number"], second["number"], third["number"]) == (1, 2, 3)
+    assert second["id"] == third["id"] == ref, "сохранение завело новый референс вместо версии"
+    card = (await client.get(f"/reference/api/references/{ref}")).json()
+    assert [v["number"] for v in card["versions"]] == [1, 2, 3]
+    assert card["number"] == 3 and card["work"]["colourCode"] == "RED", "открывается не последняя версия"
+    v1 = (await client.get(f"/reference/api/references/{ref}/versions/1")).json()
+    assert v1["work"]["colourCode"] == "BLACK"
+    assert all(v["saved_at"] for v in card["versions"]), "у версии нет времени сохранения"
+
+
+async def test_editing_an_old_version_lands_on_top_not_in_place(client) -> None:
+    """Открыли первую, поправили, сохранили — появилась четвёртая, первая та же."""
+    sheet = await store(client, "лист.png", 400, 300, 40)
+    ref = (await put(client, None, WORK, sheet))["id"]
+    await put(client, ref, {**WORK, "colourCode": "WHITE"}, sheet)
+    await put(client, ref, {**WORK, "colourCode": "RED"}, sheet)
+    old = (await client.get(f"/reference/api/references/{ref}/versions/1")).json()["work"]
+    fourth = await put(client, ref, {**old, "size": 98}, sheet)
+
+    assert fourth["number"] == 4
+    v1 = (await client.get(f"/reference/api/references/{ref}/versions/1")).json()["work"]
+    assert v1 == WORK, "правка старой версии переписала её"
+
+
+async def test_save_as_is_a_new_reference_that_knows_where_it_came_from(client) -> None:
+    """«Сохранить как» — новый референс, у него видно, от какой версии пошёл."""
+    sheet = await store(client, "лист.png", 400, 300, 40)
+    ref = (await put(client, None, WORK, sheet))["id"]
+    await put(client, ref, {**WORK, "colourCode": "WHITE"}, sheet)
+    copy = await put(client, None, {**WORK, "colourCode": "WHITE"}, sheet,
+                     forked_from={"reference_id": ref, "number": 2})
+
+    assert copy["id"] != ref and copy["number"] == 1
+    opened = (await client.get(f"/reference/api/references/{copy['id']}")).json()
+    assert opened["forked_from"] == {"reference_id": ref, "number": 2, "name": "работа"}
+    assert (await client.get(f"/reference/api/references/{ref}")).json()["forked_from"] is None
+
+
+async def test_own_versions_are_not_recognised_as_a_repeat(client) -> None:
+    """Пятая версия принта, узнавшая четвёртую, ни о чём не говорит."""
+    sheet = await store(client, "лист.png", 400, 300, 40)
+    ref = (await put(client, None, WORK, sheet, texts=["ЛЕТО 2025"]))["id"]
+    again = await put(client, ref, WORK, sheet, texts=["ЛЕТО 2025"])
+    assert again["matches"] == [], f"референс узнал сам себя: {again['matches']}"
+
+
+async def test_a_version_of_an_unknown_reference_is_refused(client) -> None:
+    sheet = await store(client, "лист.png", 400, 300, 40)
+    r = await client.post("/reference/api/references/999999/versions",
+                          json={"sheet_digest": sheet, "work": WORK})
+    assert r.status_code == 404
+    assert (await client.get("/reference/api/references/1/versions/99")).status_code == 404
+
+
+async def test_the_list_shows_references_by_their_latest_version(client) -> None:
+    """Список — референсы, а не сохранения: у каждого номер последней версии."""
+    sheet = await store(client, "лист.png", 400, 300, 40)
+    a = (await put(client, None, WORK, sheet))["id"]
+    b = (await put(client, None, WORK, sheet))["id"]
+    await put(client, a, WORK, sheet)
     listed = (await client.get("/reference/api/references")).json()
-    assert [c["id"] for c in listed][:2] == [second, first], "свежие — первыми"
+    assert [(c["id"], c["number"]) for c in listed][:2] == [(a, 2), (b, 1)], "свежие по последней версии — первыми"
 
 
 async def test_unknown_card_is_a_404(client) -> None:

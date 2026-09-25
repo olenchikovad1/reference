@@ -59,7 +59,7 @@ async def client():
         # Чистить можно потому, что база тестовая (см. conftest).
         async with engine.begin() as conn:
             await conn.execute(
-                text("truncate table asset_embeddings, reference_cards, reference_texts")
+                text("truncate table asset_embeddings, reference_cards, reference_versions, reference_texts")
             )
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://stand"
