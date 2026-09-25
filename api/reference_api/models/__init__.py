@@ -6,6 +6,7 @@
 - checks
 - collections
 - library
+- people — снимок людей из платформы, не таблица пользователей (И-5)
 - products
 - references
 - review

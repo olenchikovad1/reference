@@ -13,6 +13,7 @@ from reference_api.schemas.references import (
     SavedOut,
     SaveIn,
 )
+from reference_api.services import people
 from reference_api.services import references as service
 
 router = APIRouter(prefix="/references", tags=["references"])
@@ -58,8 +59,11 @@ async def search(q: str, db: AsyncSession = Depends(session)) -> list[FoundOut]:
 @router.get("", response_model=list[CardOut])
 async def latest(db: AsyncSession = Depends(session)) -> list[CardOut]:
     """Сохранённые карточки, свежие первыми."""
-    return [CardOut(id=c.id, name=c.name, created_at=c.created_at, author_id=c.author_id)
-            for c in await service.latest(db)]
+    cards = await service.latest(db)
+    names = await people.names_of(db, [c.author_id for c in cards if c.author_id])
+    return [CardOut(id=c.id, name=c.name, created_at=c.created_at, author_id=c.author_id,
+                    author_name=names.get(c.author_id or ""))
+            for c in cards]
 
 
 # Объявлен ПОСЛЕ /search: иначе «search» разбирался бы как номер карточки и

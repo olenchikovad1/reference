@@ -19,7 +19,7 @@ config.set_main_option("sqlalchemy.url", settings().database_url)
 # что успело зарегистрироваться в метаданных, и забытый импорт даёт не ошибку, а
 # миграцию без половины таблиц.
 from reference_api.models.base import Base  # noqa: E402
-from reference_api.models import library, references  # noqa: E402,F401
+from reference_api.models import library, people, references  # noqa: E402,F401
 
 target_metadata = Base.metadata
 

@@ -15,8 +15,9 @@ from platform_client.subjects import install_subject_reading
 from platform_client.tokens import KeySet, Subject, Visibility
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from reference_api.api import assets, colours, health, platform, prints, products, references
+from reference_api.api import assets, colours, health, people, platform, prints, products, references
 from reference_api.config import settings
+from reference_api.schedulers import people as people_schedule
 from reference_api.services import platform as publishing
 
 log = logging.getLogger("reference.platform")
@@ -38,6 +39,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     if getattr(app.state, "keys", None) is None and cfg.platform_jwks_url:
         app.state.keys = publishing.PlatformKeys(cfg.platform_jwks_url)
         tasks.append(asyncio.create_task(app.state.keys.keep_fresh()))
+    # Люди приложения — только когда есть чем спросить платформу; у стенда без
+    # неё и в тестах снимок перечитывается вручную.
+    if cfg.platform_credential and cfg.platform_core_url and not cfg.without_platform:
+        tasks.append(asyncio.create_task(people_schedule.keep_fresh()))
     yield
     for task in tasks:
         task.cancel()
@@ -94,6 +99,7 @@ def create_app(without_platform: bool | None = None) -> FastAPI:
     root.include_router(prints.router)
     root.include_router(assets.router)
     root.include_router(references.router)
+    root.include_router(people.router)
     app.include_router(root)
     if stand:
         # Добавлен раньше посредника платформы — значит, исполняется после него.

@@ -46,6 +46,9 @@ class CardOut(BaseModel):
     created_at: datetime
     #: Кто сохранил — id субъекта платформы; пусто — сохранено без входа.
     author_id: str | None = None
+    #: Имя для показа — из снимка людей платформы (US-0508); пусто — имя ещё
+    #: не приходило. Остаётся и у тех, у кого доступ забрали.
+    author_name: str | None = None
 
 
 class CardWorkOut(CardOut):
