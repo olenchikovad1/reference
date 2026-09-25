@@ -5,7 +5,9 @@
 не помещается.
 """
 
-from sqlalchemy import Float, Index, Integer, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
 
@@ -93,3 +95,24 @@ class AssetName(Base):
     source: Mapped[str] = mapped_column(String(16), nullable=False)
     #: От какого файла унаследовано. У подписи из каталога пусто.
     from_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class LibraryText(Base):
+    """Надпись библиотеки, заведённая заранее — до того, как попала в
+    референс: «С НОВЫМ 2027» под будущий дроп (US-0496).
+
+    Надписи из референсов здесь не лежат — они в reference_texts у версий и
+    собираются оттуда; здесь только то, чего ни в одном референсе ещё нет.
+    """
+
+    __tablename__ = "library_texts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    #: Как написал человек.
+    text: Mapped[str] = mapped_column(String(1024), nullable=False)
+    #: Верхний регистр, схлопнутые пробелы — как у надписей референсов.
+    normalised: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
+    author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

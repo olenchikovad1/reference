@@ -85,3 +85,21 @@ class FoundOut(BaseModel):
     #: Вес относительно всей библиотеки на этот запрос — по нему порядок.
     weight: float
     references: list[FoundCardOut]
+
+
+class TextRowOut(BaseModel):
+    """Надпись на странице «Тексты»."""
+
+    text: str
+    fonts: list[str]
+    #: Референсы с этой надписью — «в скольких» и переход.
+    references: list[FoundCardOut]
+    #: Заведена заранее, в референсах её ещё нет.
+    planned: bool
+    #: При поиске: same — дословно, words — все слова запроса, close — похоже.
+    match: str | None = None
+    similarity: float | None = None
+
+
+class TextIn(BaseModel):
+    text: str

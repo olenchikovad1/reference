@@ -1,9 +1,9 @@
 """Векторы: как хранятся и как ищутся. Бизнес-смысла здесь нет."""
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from reference_api.models.library import AssetEmbedding
+from reference_api.models.library import AssetEmbedding, LibraryText
 
 
 async def put(
@@ -85,3 +85,28 @@ async def images(db: AsyncSession, model: str) -> list[tuple[str, str]]:
         .order_by(AssetEmbedding.id.desc())
     )
     return [(d, n) for d, n in rows]
+
+
+async def planned_texts(db: AsyncSession) -> list[LibraryText]:
+    rows = await db.execute(select(LibraryText).order_by(LibraryText.created_at.desc()))
+    return list(rows.scalars())
+
+
+async def add_text(db: AsyncSession, text: str, normalised: str, author_id: str | None) -> None:
+    """Заведённая надпись; та же по нормализованному — не вторая."""
+    exists = await db.scalar(select(LibraryText.id).where(LibraryText.normalised == normalised))
+    if exists is None:
+        db.add(LibraryText(text=text, normalised=normalised, author_id=author_id))
+    await db.commit()
+
+
+async def text_similarities(db: AsyncSession, query: str, texts: list[str]) -> dict[str, float]:
+    """Похожесть запроса на каждую надпись — триграммами (решение 0010), одним
+    запросом, той же мерой, что узнавание надписи при сохранении."""
+    if not texts:
+        return {}
+    rows = await db.execute(
+        text("select t, similarity(:q, t) from unnest(cast(:texts as text[])) as t"),
+        {"q": query, "texts": texts},
+    )
+    return {t: float(s) for t, s in rows}

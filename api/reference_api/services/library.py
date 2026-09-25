@@ -4,6 +4,7 @@
 окно «совпадений нет» превращает подсказку в помеху, и его перестают читать.
 """
 
+import re
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -191,3 +192,73 @@ async def catalogue(db: AsyncSession) -> list[LibraryItem]:
         LibraryItem(d, n, tags[d], [c for c, images in used if d in images])
         for d, n in files
     ]
+
+
+@dataclass
+class TextRow:
+    """Надпись на странице «Тексты»: написание, шрифты, где стоит."""
+
+    text: str
+    normalised: str
+    fonts: set[str]
+    #: Номер референса → имя: «в скольких референсах» и переход к ним.
+    references: dict[int, str]
+    #: Заведена заранее, в референсах её ещё нет.
+    planned: bool = False
+    #: При поиске: same — дословно, words — все слова запроса есть в
+    #: надписи, close — похоже триграммами (решение 0010).
+    match: str | None = None
+    similarity: float | None = None
+
+
+def _normalise_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().upper()
+
+
+async def texts(db: AsyncSession, query: str | None = None) -> list[TextRow]:
+    """Надписи из последних версий живых референсов и заведённые заранее.
+
+    Шрифты берутся из работы версии — надпись в двух референсах бывает двумя
+    шрифтами, и видеть это надо до того, как взять её третий раз. С запросом —
+    поиск по словам: дословно, по всем словам, похожее с отметкой.
+    """
+    rows: dict[str, TextRow] = {}
+    for card, version in await cards.latest(db, limit=10_000):
+        elements = ((version.work or {}).get("composition") or {}).get("elements") or []
+        fonts: dict[str, set[str]] = {}
+        for el in elements:
+            if el.get("kind") == "text" and el.get("fontFamily"):
+                fonts.setdefault(_normalise_text(el.get("text", "")), set()).add(el["fontFamily"])
+        for t in version.texts:
+            row = rows.setdefault(t.normalised, TextRow(t.text, t.normalised, set(), {}))
+            row.references[card.id] = card.name
+            row.fonts |= fonts.get(t.normalised, set())
+    for planned in await repo.planned_texts(db):
+        rows.setdefault(planned.normalised, TextRow(planned.text, planned.normalised, set(), {}, planned=True))
+
+    if not query or not query.strip():
+        return sorted(rows.values(), key=lambda r: (-len(r.references), r.normalised))
+
+    q = _normalise_text(query)
+    words = q.split(" ")
+    close = await repo.text_similarities(db, q, list(rows))
+    found: list[TextRow] = []
+    for n, row in rows.items():
+        if n == q:
+            row.match, row.similarity = "same", 1.0
+        elif all(w in n.split(" ") for w in words):
+            row.match, row.similarity = "words", close.get(n, 0.0)
+        elif close.get(n, 0.0) >= settings().slogan_close:
+            row.match, row.similarity = "close", close[n]
+        else:
+            continue
+        found.append(row)
+    order = {"same": 0, "words": 1, "close": 2}
+    return sorted(found, key=lambda r: (order[r.match or "close"], -(r.similarity or 0), r.normalised))
+
+
+async def plan_text(db: AsyncSession, text: str, author_id: str | None) -> None:
+    """Завести надпись заранее — под будущий дроп."""
+    clean = re.sub(r"\s+", " ", text).strip()
+    if clean:
+        await repo.add_text(db, clean, _normalise_text(clean), author_id)
