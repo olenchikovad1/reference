@@ -6,6 +6,7 @@
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -275,8 +276,11 @@ class DropLink:
     id: int
     name: str
     retired: bool
-    #: None — назначен руками; номер — «через референс №…».
+    #: None — предложен руками; номер — «через референс №…».
     via: int | None
+    #: У предложенного — proposed, approved, rejected; у «через референс» пусто.
+    status: str | None = None
+    reason: str | None = None
 
 
 @dataclass
@@ -316,9 +320,10 @@ async def links(db: AsyncSession, kind: str) -> dict[str, Links]:
                 got.categories.add(place.category)
     assigned_drops, assigned_audiences = await repo.assigned(db, kind)
     by_id = {d.id: d for d in await drops_service.drops(db)}
-    for key, drop_id in assigned_drops:
+    for key, drop_id, status, reason in assigned_drops:
         d = by_id[drop_id]
-        out.setdefault(key, Links({}, {}, set())).drops[drop_id] = DropLink(d.id, d.name, d.retired, None)
+        out.setdefault(key, Links({}, {}, set())).drops[drop_id] = DropLink(
+            d.id, d.name, d.retired, None, status, reason)
     for key, audience in assigned_audiences:
         out.setdefault(key, Links({}, {}, set())).audiences[audience] = None
     return out
@@ -349,3 +354,79 @@ async def link(
             raise BadLink(str(refusal)) from None
     keys = [(_normalise_text(k) if kind == "text" else k) for k in keys if k.strip()]
     await repo.link(db, kind, keys, drop_id, audience, remove, author_id)
+
+
+@dataclass(frozen=True)
+class BoardItem:
+    """Предложенное в дроп: что, кем, в каком статусе и почему."""
+
+    kind: str
+    key: str
+    #: Как показать: имя картинки или написание надписи.
+    title: str
+    status: str
+    proposed_by: str | None
+    proposed_at: datetime
+    decided_by: str | None
+    decided_at: datetime | None
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class ViaReference:
+    """Попавшее в дроп через референс: одобрения само не получает (US-0506)."""
+
+    kind: str
+    key: str
+    title: str
+    references: list[int]
+
+
+async def board(db: AsyncSession, drop_id: int) -> tuple[list[BoardItem], list[ViaReference]]:
+    """Доска дропа: предложенное с решениями и отдельно — то, что стоит в
+    референсах дропа, но не предлагалось."""
+    names = dict(await repo.images(db, embeddings.MODEL_NAME))
+    named = await naming.stored(db, list(names))
+    texts_by_key = {r.normalised: r.text for r in await texts(db)}
+
+    def title(kind: str, key: str) -> str:
+        if kind == "text":
+            return texts_by_key.get(key, key)
+        n = named.get(key)
+        return n.name if n else names.get(key, key[:12])
+
+    items = [
+        BoardItem(p.kind, p.key, title(p.kind, p.key), p.status, p.author_id, p.created_at,
+                  p.decided_by, p.decided_at, p.reason)
+        for p in await repo.proposals(db, drop_id)
+    ]
+    proposed = {(i.kind, i.key) for i in items}
+    via: list[ViaReference] = []
+    for kind in ("image", "text"):
+        for key, got in (await links(db, kind)).items():
+            d = got.drops.get(drop_id)
+            if d is None or d.via is None or (kind, key) in proposed:
+                continue
+            via.append(ViaReference(kind, key, title(kind, key), [d.via]))
+    return items, via
+
+
+class BadDecision(ValueError):
+    """Решение не сходится: незнакомый статус или отказ без причины."""
+
+
+async def decide(
+    db: AsyncSession, drop_id: int, kind: str, keys: list[str], status: str, reason: str | None,
+    decided_by: str | None,
+) -> int:
+    """Одобрить или не одобрить предложенное в дроп. У отказа причина
+    обязательна: «почему не взяли» спросят позже, и ответить будет нечем."""
+    from datetime import UTC
+
+    if status not in ("approved", "rejected"):
+        raise BadDecision(f"незнакомое решение {status}")
+    clean = (reason or "").strip() or None
+    if status == "rejected" and not clean:
+        raise BadDecision("у отказа нужна причина")
+    keys = [(_normalise_text(k) if kind == "text" else k) for k in keys]
+    return await repo.decide(db, kind, keys, drop_id, status, clean, decided_by, datetime.now(UTC))

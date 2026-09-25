@@ -22,7 +22,7 @@ async def texts(q: str | None = None, db: AsyncSession = Depends(session)) -> li
     return [
         TextRowOut(
             text=r.text, key=r.normalised, fonts=sorted(r.fonts),
-            drops=[DropLinkOut(id=d.id, name=d.name, retired=d.retired, via=d.via) for d in r.links.drops.values()]
+            drops=[DropLinkOut(id=d.id, name=d.name, retired=d.retired, via=d.via, status=d.status, reason=d.reason) for d in r.links.drops.values()]
             if r.links else [],
             audiences=[AudienceLinkOut(code=a, via=v) for a, v in r.links.audiences.items()] if r.links else [],
             categories=sorted(r.links.categories) if r.links else [],

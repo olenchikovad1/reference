@@ -20,6 +20,7 @@ from reference_api.config import settings
 from reference_api.schedulers import people as people_schedule
 from reference_api.schedulers import references as trash_schedule
 from reference_api.services import platform as publishing
+from reference_api.services import people as people_service
 
 log = logging.getLogger("reference.platform")
 
@@ -58,7 +59,8 @@ def _stand_subject() -> Subject:
     m = publishing.manifest()
     granted = {f"{s['code']}:{a}" for s in m["sections"] for a in s.get("actions", ("view", "write", "delete"))}
     granted |= {f"{s['code']}:{f['code']}" for s in m["sections"] for f in s.get("functions", ())}
-    return Subject(id="stand", organization_id="", visibility=Visibility.ALL, granted=frozenset(granted))
+    return Subject(id=people_service.STAND_SUBJECT_ID, organization_id="", visibility=Visibility.ALL,
+                   granted=frozenset(granted))
 
 
 class _StandSubject(BaseHTTPMiddleware):

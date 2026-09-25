@@ -17,6 +17,12 @@ log = logging.getLogger("reference.trash")
 async def purge_expired() -> None:
     cfg = settings()
     while True:
+        # Сначала ждём, потом чистим. Сразу при подъёме проход ловил отмену
+        # посреди запроса в коротких жизнях приложения (тесты), и соединение
+        # оставалось «idle in transaction» — об него вставали truncate
+        # следующих тестов (25.09.2026). Срок корзины — дни, час ожидания ему
+        # ничего не стоит.
+        await asyncio.sleep(cfg.trash_check_seconds)
         try:
             async with session_factory() as db:
                 erased = await references.purge_expired(db)
@@ -24,4 +30,3 @@ async def purge_expired() -> None:
                 log.info("корзина: стёрто по сроку %s", erased)
         except Exception:  # noqa: BLE001 — сбой одного прохода не должен остановить очистку навсегда
             log.exception("корзина: проход очистки не удался, повторю через %s с", cfg.trash_check_seconds)
-        await asyncio.sleep(cfg.trash_check_seconds)

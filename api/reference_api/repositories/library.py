@@ -112,13 +112,18 @@ async def text_similarities(db: AsyncSession, query: str, texts: list[str]) -> d
     return {t: float(s) for t, s in rows}
 
 
-async def assigned(db: AsyncSession, kind: str) -> tuple[list[tuple[str, int]], list[tuple[str, str]]]:
-    """Назначенное руками: пары «ключ — дроп» и «ключ — адресат»."""
-    drops = await db.execute(select(LibraryDrop.key, LibraryDrop.drop_id).where(LibraryDrop.kind == kind))
+async def assigned(
+    db: AsyncSession, kind: str
+) -> tuple[list[tuple[str, int, str, str | None]], list[tuple[str, str]]]:
+    """Назначенное руками: «ключ — дроп — статус — причина» и «ключ — адресат»."""
+    drops = await db.execute(
+        select(LibraryDrop.key, LibraryDrop.drop_id, LibraryDrop.status, LibraryDrop.reason)
+        .where(LibraryDrop.kind == kind)
+    )
     audiences = await db.execute(
         select(LibraryAudience.key, LibraryAudience.audience).where(LibraryAudience.kind == kind)
     )
-    return [(k, d) for k, d in drops], [(k, a) for k, a in audiences]
+    return [(k, d, s, r) for k, d, s, r in drops], [(k, a) for k, a in audiences]
 
 
 async def link(
@@ -129,7 +134,9 @@ async def link(
     for key in set(keys):
         if drop_id is not None:
             found = await db.get(LibraryDrop, (kind, key, drop_id))
-            if remove and found is not None:
+            # Снять можно только ещё не решённое — отзыв предложения. Решённое
+            # не удаляется: «почему не взяли» спрашивают позже.
+            if remove and found is not None and found.status == "proposed":
                 await db.delete(found)
             elif not remove and found is None:
                 db.add(LibraryDrop(kind=kind, key=key, drop_id=drop_id, author_id=author_id))
@@ -140,3 +147,28 @@ async def link(
             elif not remove and found is None:
                 db.add(LibraryAudience(kind=kind, key=key, audience=audience, author_id=author_id))
     await db.commit()
+
+
+async def proposals(db: AsyncSession, drop_id: int) -> list[LibraryDrop]:
+    """Предложенное в дроп вместе с решениями, свежие первыми."""
+    rows = await db.execute(
+        select(LibraryDrop).where(LibraryDrop.drop_id == drop_id).order_by(LibraryDrop.created_at.desc())
+    )
+    return list(rows.scalars())
+
+
+async def decide(
+    db: AsyncSession, kind: str, keys: list[str], drop_id: int, status: str, reason: str | None,
+    decided_by: str | None, when,
+) -> int:
+    """Решение по предложенному: одобрен или не одобрен. Возвращает, сколько
+    решено; непредложенное в этот дроп не решается — решать нечего."""
+    done = 0
+    for key in set(keys):
+        found = await db.get(LibraryDrop, (kind, key, drop_id))
+        if found is None:
+            continue
+        found.status, found.reason, found.decided_by, found.decided_at = status, reason, decided_by, when
+        done += 1
+    await db.commit()
+    return done

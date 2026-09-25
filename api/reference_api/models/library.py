@@ -119,11 +119,14 @@ class LibraryText(Base):
 
 
 class LibraryDrop(Base):
-    """Принт или надпись, назначенные дропу руками (US-0497).
+    """Принт или надпись, предложенные в дроп (US-0497, US-0506).
 
     Связь «через референс» здесь не лежит — она считается из живых
-    референсов и уходит вместе с ними; здесь только «назначен». `key` —
-    хеш файла у картинки, нормализованная надпись у текста.
+    референсов и уходит вместе с ними, и одобрения сама не получает; здесь —
+    предложенное руками и решение по нему. `key` — хеш файла у картинки,
+    нормализованная надпись у текста. Статус — у элемента В ДРОПЕ, а не у
+    элемента вообще: одобренное к 23 февраля может быть отклонено к Новому
+    году. Отклонённое не удаляется — «почему не взяли» спрашивают позже.
     """
 
     __tablename__ = "library_drops"
@@ -131,12 +134,23 @@ class LibraryDrop(Base):
     kind: Mapped[str] = mapped_column(String(8), primary_key=True)
     key: Mapped[str] = mapped_column(String(1024), primary_key=True)
     drop_id: Mapped[int] = mapped_column(ForeignKey("drops.id", ondelete="RESTRICT"), primary_key=True)
+    #: Кто предложил — id субъекта платформы; пусто — без входа.
     author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    #: proposed — предложен; approved — одобрен; rejected — не одобрен.
+    status: Mapped[str] = mapped_column(String(10), nullable=False, default="proposed")
+    decided_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Причина решения; у отказа обязательна — это держит база, а не экран.
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    __table_args__ = (CheckConstraint("kind in ('image', 'text')", name="ck_library_drops_kind"),)
+    __table_args__ = (
+        CheckConstraint("kind in ('image', 'text')", name="ck_library_drops_kind"),
+        CheckConstraint("status in ('proposed', 'approved', 'rejected')", name="ck_library_drops_status"),
+        CheckConstraint("status <> 'rejected' or coalesce(trim(reason), '') <> ''", name="ck_library_drops_reason"),
+    )
 
 
 class LibraryAudience(Base):

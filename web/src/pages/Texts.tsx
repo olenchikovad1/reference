@@ -102,7 +102,9 @@ export function Texts() {
               .filter((d) => d.id === drop.filter.drop)
               .map((d) => (
                 <span key={d.id} className="text-xs text-muted-foreground">
-                  {d.via === null ? 'назначена' : `через референс №${d.via}`}
+                  {d.via === null
+                    ? { proposed: 'предложена', approved: 'одобрена', rejected: `не одобрена — «${d.reason}»` }[d.status ?? 'proposed']
+                    : `через референс №${d.via}`}
                 </span>
               ))}
         </span>

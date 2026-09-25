@@ -3,10 +3,13 @@
 Слой: api. Контракт и объявление прав. Вход по HTTP, правил предметной области нет.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from platform_client import requires_function
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
+from reference_api.schemas.library import BoardItemOut, BoardOut, DecisionIn, ViaReferenceOut
+from reference_api.services import library, people
 from reference_api.models.drops import GarmentModel, HierarchyNode
 from reference_api.schemas.drops import (
     DropOut,
@@ -71,3 +74,35 @@ def _node(n: HierarchyNode) -> TreeNodeOut:
 async def catalogue(db: AsyncSession = Depends(session)) -> list[TreeNodeOut]:
     """Товарная иерархия деревом: модели с цветомоделями и дропами, где те выходят."""
     return [_node(n) for n in await service.tree(db)]
+
+
+@router.get("/drops/{drop_id}/board", response_model=BoardOut)
+async def board(drop_id: int, db: AsyncSession = Depends(session)) -> BoardOut:
+    """Доска дропа (US-0506): предложено, одобрено, не одобрено — и отдельно
+    то, что стоит в референсах дропа, но не предлагалось."""
+    items, via = await library.board(db, drop_id)
+    names = await people.names_of(db, [x for i in items for x in (i.proposed_by, i.decided_by) if x])
+    return BoardOut(
+        items=[
+            BoardItemOut(kind=i.kind, key=i.key, title=i.title, status=i.status,
+                         proposed_by=i.proposed_by, proposed_by_name=names.get(i.proposed_by or ""),
+                         proposed_at=i.proposed_at, decided_by=i.decided_by,
+                         decided_by_name=names.get(i.decided_by or ""), decided_at=i.decided_at, reason=i.reason)
+            for i in items
+        ],
+        via_references=[ViaReferenceOut(kind=v.kind, key=v.key, title=v.title, references=v.references) for v in via],
+    )
+
+
+@router.post(
+    "/drops/{drop_id}/decisions", status_code=204, dependencies=[requires_function("drops", "approve-in-drop")]
+)
+async def decide(drop_id: int, body: DecisionIn, request: Request, db: AsyncSession = Depends(session)) -> None:
+    """Одобрить или не одобрить предложенное — отдельным правом: дизайнер
+    предлагает, решает редактор. У отказа причина обязательна."""
+    subject = getattr(request.state, "subject", None)
+    try:
+        await library.decide(db, drop_id, body.kind, body.keys, body.status, body.reason,
+                             subject.id if subject else None)
+    except library.BadDecision as refusal:
+        raise HTTPException(422, str(refusal)) from None

@@ -179,7 +179,8 @@ export function Prints() {
                     .map((d) => (
                       <div key={d.id} className="text-xs text-muted-foreground">
                         {d.via === null ? (
-                          'в дропе: назначен'
+                          `в дропе: ${{ proposed: 'предложен', approved: 'одобрен', rejected: 'не одобрен' }[d.status ?? 'proposed']}` +
+                          (d.reason ? ` — «${d.reason}»` : '')
                         ) : (
                           <>
                             в дропе: через{' '}

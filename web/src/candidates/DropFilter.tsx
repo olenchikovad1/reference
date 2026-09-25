@@ -1,5 +1,8 @@
 // Фильтр «дроп · адресат · вид одежды» и назначение выбранным (US-0497).
 //
+// Select платформы растягивается во всю ширину (w-full): в строку их ставит
+// обёртка фиксированной ширины, иначе выборы встают друг над другом.
+//
 // Кандидат в набор платформы (решение 0005) только раскладкой: сами выборы —
 // Select из @platform/ui, а смысл (дропы, адресаты) — наш. Один и тот же на
 // «Референсах», «Принтах», «Текстах», «Изделиях»: разные фильтры на соседних
@@ -43,27 +46,33 @@ export function DropFilterBar({
     .map((d) => ({ value: String(d.id), label: d.retired ? `${d.name} · погашен` : d.name }))
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="фильтр по дропу, адресату и виду одежды">
-      <Select
-        aria-label="дроп" className="w-52"
+      <div className="w-52 shrink-0">
+<Select
+        aria-label="дроп"
         options={dropOptions}
         placeholder="все дропы"
         value={filter.drop !== null ? String(filter.drop) : ''}
         onChange={(e) => set({ drop: e.target.value ? Number(e.target.value) : null })}
       />
-      <Select
-        aria-label="адресат" className="w-52"
+</div>
+      <div className="w-52 shrink-0">
+<Select
+        aria-label="адресат"
         options={AUDIENCE_OPTIONS}
         placeholder="любой адресат"
         value={filter.audience ?? ''}
         onChange={(e) => set({ audience: (e.target.value || null) as Audience | null })}
       />
-      <Select
-        aria-label="вид одежды" className="w-52"
+</div>
+      <div className="w-52 shrink-0">
+<Select
+        aria-label="вид одежды"
         options={categoriesOf(tree.data ?? []).map((c) => ({ value: c, label: c }))}
         placeholder="любой вид одежды"
         value={filter.category ?? ''}
         onChange={(e) => set({ category: e.target.value || null })}
       />
+</div>
       {count > 0 && (
         <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={reset}>
           сбросить ({count})
@@ -73,7 +82,8 @@ export function DropFilterBar({
   )
 }
 
-/** Назначить выбранным дроп или адресат — нескольким разом. */
+/** Предложить выбранные в дроп или назначить им адресата — нескольким разом.
+ *  В дропе они ждут решения на его доске (US-0506). */
 export function AssignBar({
   selected,
   onAssign,
@@ -91,17 +101,21 @@ export function AssignBar({
   return (
     <div className="pf-card mb-3 flex flex-wrap items-center gap-2 border border-line p-2 text-sm" role="region" aria-label="назначить выбранным">
       <span>выбрано: {selected}</span>
-      <Select
-        aria-label="дроп для назначения" className="w-52"
+      <div className="w-52 shrink-0">
+<Select
+        aria-label="дроп для назначения"
         options={(drops.data ?? []).filter((d) => !d.retired).map((d) => ({ value: String(d.id), label: d.name }))}
         placeholder="дроп…"
         value={drop}
         onChange={(e) => setDrop(e.target.value)}
       />
+</div>
       <button className={small} disabled={!drop} onClick={() => onAssign({ drop_id: Number(drop) })}>
-        назначить в дроп
+        предложить в дроп
       </button>
-      <Select aria-label="адресат для назначения" className="w-52" options={AUDIENCE_OPTIONS} placeholder="адресат…" value={audience} onChange={(e) => setAudience(e.target.value)} />
+      <div className="w-52 shrink-0">
+<Select aria-label="адресат для назначения" options={AUDIENCE_OPTIONS} placeholder="адресат…" value={audience} onChange={(e) => setAudience(e.target.value)} />
+</div>
       <button className={small} disabled={!audience} onClick={() => onAssign({ audience: audience as Audience })}>
         назначить адресата
       </button>

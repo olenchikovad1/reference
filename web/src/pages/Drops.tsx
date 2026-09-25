@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { fetchDrops, fetchMatrix, type Drop, type Matrix } from '../shared/api/drops'
+import { DropBoard } from './DropBoard'
 
 const dateRu = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 
@@ -113,6 +114,7 @@ function DropMatrix({ dropId, drop }: { dropId: number; drop: Drop }) {
           {refusal}
         </p>
       )}
+      <DropBoard dropId={dropId} />
     </section>
   )
 }

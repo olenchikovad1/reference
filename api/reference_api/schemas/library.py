@@ -1,5 +1,7 @@
 """Узнавание: что отдаётся наружу."""
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -69,8 +71,11 @@ class DropLinkOut(BaseModel):
     id: int
     name: str
     retired: bool
-    #: Пусто — назначен руками; номер — «через референс №…».
+    #: Пусто — предложен руками; номер — «через референс №…».
     via: int | None = None
+    #: У предложенного — proposed, approved, rejected; у «через референс» пусто.
+    status: str | None = None
+    reason: str | None = None
 
 
 class AudienceLinkOut(BaseModel):
@@ -134,3 +139,40 @@ class TextRowOut(BaseModel):
 
 class TextIn(BaseModel):
     text: str
+
+
+class BoardItemOut(BaseModel):
+    kind: str
+    key: str
+    title: str
+    #: proposed, approved, rejected.
+    status: str
+    proposed_by: str | None = None
+    proposed_by_name: str | None = None
+    proposed_at: datetime
+    decided_by: str | None = None
+    decided_by_name: str | None = None
+    decided_at: datetime | None = None
+    reason: str | None = None
+
+
+class ViaReferenceOut(BaseModel):
+    kind: str
+    key: str
+    title: str
+    references: list[int]
+
+
+class BoardOut(BaseModel):
+    """Доска дропа: предложенное с решениями и то, что в референсах дропа."""
+
+    items: list[BoardItemOut]
+    via_references: list[ViaReferenceOut]
+
+
+class DecisionIn(BaseModel):
+    kind: str
+    keys: list[str]
+    #: approved или rejected.
+    status: str
+    reason: str | None = None

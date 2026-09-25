@@ -169,7 +169,7 @@ async def catalogue(db: AsyncSession = Depends(session)) -> list[LibraryItemOut]
         LibraryItemOut(
             digest=i.digest, file_name=i.file_name, tags=[_tag_out(x) for x in i.tags.tags],
             name=_name_out(i.tags.name), references=[FoundCardOut(id=c.id, name=c.name) for c in i.references],
-            drops=[DropLinkOut(id=d.id, name=d.name, retired=d.retired, via=d.via) for d in i.links.drops.values()],
+            drops=[DropLinkOut(id=d.id, name=d.name, retired=d.retired, via=d.via, status=d.status, reason=d.reason) for d in i.links.drops.values()],
             audiences=[AudienceLinkOut(code=a, via=v) for a, v in i.links.audiences.items()],
             categories=sorted(i.links.categories),
         )

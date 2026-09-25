@@ -175,6 +175,9 @@ export interface DropLink {
   name: string
   retired: boolean
   via: number | null
+  /** У предложенного — статус решения; у «через референс» пусто. */
+  status: 'proposed' | 'approved' | 'rejected' | null
+  reason: string | null
 }
 
 /** Назначить (или снять) дроп либо адресат нескольким разом. */

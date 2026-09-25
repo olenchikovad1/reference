@@ -55,9 +55,19 @@ async def listing(db: AsyncSession, right_set: str | None = None) -> list[Person
     return await repo.listing(db, right_set)
 
 
+#: Субъект стенда без платформы (решение 0006): у него нет имени в снимке
+#: людей, и «имя ещё не пришло» про него неправда — оно не придёт никогда.
+STAND_SUBJECT_ID = "stand"
+STAND_SUBJECT_NAME = "стенд без входа"
+
+
 async def names_of(db: AsyncSession, ids: list[str]) -> dict[str, str]:
     """Имена для показа «кто сделал» — в том числе тех, у кого доступ забрали."""
-    return await repo.names(db, sorted({i for i in ids if i}))
+    wanted = {i for i in ids if i}
+    names = await repo.names(db, sorted(wanted - {STAND_SUBJECT_ID}))
+    if STAND_SUBJECT_ID in wanted:
+        names[STAND_SUBJECT_ID] = STAND_SUBJECT_NAME
+    return names
 
 
 async def name_of(db: AsyncSession, subject_id: str) -> str | None:
