@@ -177,6 +177,8 @@ async def _cards(db: AsyncSession, rows) -> list[CardOut]:
             author_name=names.get(v.author_id or ""), views=v.views or {},
             colour_code=cm.colour_code if cm else None, drops=cm.drops if cm else [],
             forked_from_id=origins.get(c.id),
+            drop_ids=[d.id for d in cm.drop_refs] if cm else [],
+            audience=cm.audience if cm else None, category=cm.category if cm else None,
         ))
     return out
 

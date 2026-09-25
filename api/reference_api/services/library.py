@@ -179,6 +179,7 @@ class LibraryItem:
     #: Референсы, где картинка стоит, — «где использован». Удалённые в корзину
     #: сюда не попадают (решение 0014).
     references: list[Reference]
+    links: "Links"
 
 
 async def catalogue(db: AsyncSession) -> list[LibraryItem]:
@@ -188,8 +189,9 @@ async def catalogue(db: AsyncSession) -> list[LibraryItem]:
     digests = [d for d, _ in files]
     tags = {t.digest: t for t in await tags_of_files(db, digests)}
     used = await cards.by_image(db, digests, exclude=0)
+    linked = await links(db, "image")
     return [
-        LibraryItem(d, n, tags[d], [c for c, images in used if d in images])
+        LibraryItem(d, n, tags[d], [c for c, images in used if d in images], linked.get(d) or Links({}, {}, set()))
         for d, n in files
     ]
 
@@ -209,6 +211,7 @@ class TextRow:
     #: надписи, close — похоже триграммами (решение 0010).
     match: str | None = None
     similarity: float | None = None
+    links: "Links | None" = None
 
 
 def _normalise_text(text: str) -> str:
@@ -235,6 +238,9 @@ async def texts(db: AsyncSession, query: str | None = None) -> list[TextRow]:
             row.fonts |= fonts.get(t.normalised, set())
     for planned in await repo.planned_texts(db):
         rows.setdefault(planned.normalised, TextRow(planned.text, planned.normalised, set(), {}, planned=True))
+    linked = await links(db, "text")
+    for n, row in rows.items():
+        row.links = linked.get(n) or Links({}, {}, set())
 
     if not query or not query.strip():
         return sorted(rows.values(), key=lambda r: (-len(r.references), r.normalised))
@@ -262,3 +268,84 @@ async def plan_text(db: AsyncSession, text: str, author_id: str | None) -> None:
     clean = re.sub(r"\s+", " ", text).strip()
     if clean:
         await repo.add_text(db, clean, _normalise_text(clean), author_id)
+
+
+@dataclass(frozen=True)
+class DropLink:
+    id: int
+    name: str
+    retired: bool
+    #: None — назначен руками; номер — «через референс №…».
+    via: int | None
+
+
+@dataclass
+class Links:
+    """К каким дропам и адресатам относится принт или надпись, и откуда это."""
+
+    drops: dict[int, DropLink]
+    #: Адресат → None (назначен) или номер референса, через который.
+    audiences: dict[str, int | None]
+    #: Виды одежды — через референсы: у самого принта вида одежды нет.
+    categories: set[str]
+
+
+async def links(db: AsyncSession, kind: str) -> dict[str, Links]:
+    """Связи с дропами и адресатом по ключам — хешу картинки или надписи.
+
+    «Через референс» считается из живых референсов их последней версией: удалён
+    или в корзине — связи через него нет, и назначать руками ради этого не
+    надо. Назначенное руками главнее: оно не уходит ни с каким референсом.
+    """
+    from reference_api.services import drops as drops_service
+
+    out: dict[str, Links] = {}
+    rows = await cards.latest(db, limit=10_000)
+    places = await drops_service.colour_models_of(db, [c.colour_model_id for c, _ in rows if c.colour_model_id])
+    for card, version in rows:
+        place = places.get(card.colour_model_id) if card.colour_model_id else None
+        if place is None:
+            continue
+        keys = version.image_digests if kind == "image" else [t.normalised for t in version.texts]
+        for key in set(keys):
+            got = out.setdefault(key, Links({}, {}, set()))
+            for d in place.drop_refs:
+                got.drops.setdefault(d.id, DropLink(d.id, d.name, d.retired, card.id))
+            got.audiences.setdefault(place.audience, card.id)
+            if place.category:
+                got.categories.add(place.category)
+    assigned_drops, assigned_audiences = await repo.assigned(db, kind)
+    by_id = {d.id: d for d in await drops_service.drops(db)}
+    for key, drop_id in assigned_drops:
+        d = by_id[drop_id]
+        out.setdefault(key, Links({}, {}, set())).drops[drop_id] = DropLink(d.id, d.name, d.retired, None)
+    for key, audience in assigned_audiences:
+        out.setdefault(key, Links({}, {}, set())).audiences[audience] = None
+    return out
+
+
+class BadLink(ValueError):
+    """Назначение не сходится: ни дропа, ни адресата, или адресат незнакомый."""
+
+
+async def link(
+    db: AsyncSession, kind: str, keys: list[str], drop_id: int | None, audience: str | None,
+    remove: bool, author_id: str | None,
+) -> None:
+    """Назначить дроп или адресат нескольким принтам (надписям) разом."""
+    from reference_api.models.drops import AUDIENCES
+    from reference_api.services import drops as drops_service
+
+    if (drop_id is None) == (audience is None):
+        raise BadLink("назначается либо дроп, либо адресат")
+    if audience is not None and audience not in AUDIENCES:
+        raise BadLink(f"незнакомый адресат {audience}")
+    if drop_id is not None and not remove:
+        try:
+            await drops_service.check_drop_for_linking(db, drop_id)
+        except drops_service.DropNotFound:
+            raise BadLink("такого дропа нет") from None
+        except drops_service.CannotWork as refusal:
+            raise BadLink(str(refusal)) from None
+    keys = [(_normalise_text(k) if kind == "text" else k) for k in keys if k.strip()]
+    await repo.link(db, kind, keys, drop_id, audience, remove, author_id)

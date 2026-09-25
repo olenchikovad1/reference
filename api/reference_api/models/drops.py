@@ -17,6 +17,10 @@ from reference_api.models.base import Base
 #: Уровни товарной иерархии по порядку: направление › пол › группа › категория.
 LEVELS = ("direction", "gender", "group", "category")
 
+#: Адресат (US-0497): мальчики, девочки, для всех. Кодом, а не словом:
+#: слово — для показа, фильтр в адресе держит код.
+AUDIENCES = ("boys", "girls", "all")
+
 
 class HierarchyNode(Base):
     """Узел товарной иерархии. Категория (последний уровень) — вид одежды."""
@@ -27,6 +31,9 @@ class HierarchyNode(Base):
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("hierarchy_nodes.id", ondelete="RESTRICT"))
     level: Mapped[str] = mapped_column(String(16), nullable=False)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: Адресат узла «пол»: модели под ним — для мальчиков или девочек. У
+    #: остальных уровней пусто; модель без пола в иерархии — «для всех».
+    audience: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
     parent: Mapped["HierarchyNode | None"] = relationship(remote_side=[id], back_populates="children")
     # join_depth: у связи на саму себя жадная загрузка без неё уходит на один
@@ -39,6 +46,7 @@ class HierarchyNode(Base):
         # Верхний уровень без родителя, остальные — с ним: дерево, а не лес обрывков.
         CheckConstraint("(level = 'direction') = (parent_id is null)", name="ck_hierarchy_root"),
         UniqueConstraint("parent_id", "name", name="uq_hierarchy_sibling_name"),
+        CheckConstraint("audience is null or audience in ('boys', 'girls', 'all')", name="ck_hierarchy_audience"),
     )
 
 

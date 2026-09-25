@@ -89,6 +89,10 @@ class CardOut(Saver):
     drops: list[str] = []
     #: От какого референса пошла копия («Сохранить как», «копировать»).
     forked_from_id: int | None = None
+    #: Для фильтра (US-0497): дропы, адресат и вид одежды — от цветомодели.
+    drop_ids: list[int] = []
+    audience: str | None = None
+    category: str | None = None
 
 
 class TrashedOut(CardOut):

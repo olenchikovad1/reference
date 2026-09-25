@@ -164,6 +164,34 @@ export interface LibraryItem {
   name: Named | null
   /** «Где использован» — референсы с этой картинкой. */
   references: { id: number; name: string }[]
+  drops: DropLink[]
+  audiences: { code: string; via: number | null }[]
+  categories: string[]
+}
+
+/** Связь с дропом: via пусто — назначен руками, номер — «через референс №…». */
+export interface DropLink {
+  id: number
+  name: string
+  retired: boolean
+  via: number | null
+}
+
+/** Назначить (или снять) дроп либо адресат нескольким разом. */
+export interface LinksBody {
+  keys: string[]
+  drop_id?: number
+  audience?: string
+  remove?: boolean
+}
+
+export async function linkImages(body: LinksBody): Promise<void> {
+  const r = await fetch(`${BASE}library/images/links`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!r.ok) throw new Error(`не назначилось: ${r.status}`)
 }
 
 /** Библиотека целиком, свежие первыми. */

@@ -3,7 +3,7 @@
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from reference_api.models.library import AssetEmbedding, LibraryText
+from reference_api.models.library import AssetEmbedding, LibraryAudience, LibraryDrop, LibraryText
 
 
 async def put(
@@ -110,3 +110,33 @@ async def text_similarities(db: AsyncSession, query: str, texts: list[str]) -> d
         {"q": query, "texts": texts},
     )
     return {t: float(s) for t, s in rows}
+
+
+async def assigned(db: AsyncSession, kind: str) -> tuple[list[tuple[str, int]], list[tuple[str, str]]]:
+    """Назначенное руками: пары «ключ — дроп» и «ключ — адресат»."""
+    drops = await db.execute(select(LibraryDrop.key, LibraryDrop.drop_id).where(LibraryDrop.kind == kind))
+    audiences = await db.execute(
+        select(LibraryAudience.key, LibraryAudience.audience).where(LibraryAudience.kind == kind)
+    )
+    return [(k, d) for k, d in drops], [(k, a) for k, a in audiences]
+
+
+async def link(
+    db: AsyncSession, kind: str, keys: list[str], drop_id: int | None, audience: str | None,
+    remove: bool, author_id: str | None,
+) -> None:
+    """Назначить (или снять) дроп либо адресат нескольким разом."""
+    for key in set(keys):
+        if drop_id is not None:
+            found = await db.get(LibraryDrop, (kind, key, drop_id))
+            if remove and found is not None:
+                await db.delete(found)
+            elif not remove and found is None:
+                db.add(LibraryDrop(kind=kind, key=key, drop_id=drop_id, author_id=author_id))
+        if audience is not None:
+            found = await db.get(LibraryAudience, (kind, key, audience))
+            if remove and found is not None:
+                await db.delete(found)
+            elif not remove and found is None:
+                db.add(LibraryAudience(kind=kind, key=key, audience=audience, author_id=author_id))
+    await db.commit()

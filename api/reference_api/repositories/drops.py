@@ -46,6 +46,13 @@ async def references_by_colour_model(db: AsyncSession, ids: list[int]) -> dict[i
     return {cm: n for cm, n in rows}
 
 
+async def nodes(db: AsyncSession) -> dict[int, HierarchyNode]:
+    """Вся иерархия разом: узлов десятки, и подниматься от категории к полу
+    в памяти дешевле, чем ленивыми запросами по одному."""
+    rows = await db.execute(select(HierarchyNode))
+    return {n.id: n for n in rows.scalars()}
+
+
 async def roots(db: AsyncSession) -> list[HierarchyNode]:
     """Верх товарной иерархии; дети, модели и цветомодели подгружаются связями."""
     q = select(HierarchyNode).where(HierarchyNode.parent_id.is_(None)).order_by(HierarchyNode.name)

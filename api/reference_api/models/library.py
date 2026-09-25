@@ -7,7 +7,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
 
@@ -115,4 +115,44 @@ class LibraryText(Base):
     author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class LibraryDrop(Base):
+    """Принт или надпись, назначенные дропу руками (US-0497).
+
+    Связь «через референс» здесь не лежит — она считается из живых
+    референсов и уходит вместе с ними; здесь только «назначен». `key` —
+    хеш файла у картинки, нормализованная надпись у текста.
+    """
+
+    __tablename__ = "library_drops"
+
+    kind: Mapped[str] = mapped_column(String(8), primary_key=True)
+    key: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    drop_id: Mapped[int] = mapped_column(ForeignKey("drops.id", ondelete="RESTRICT"), primary_key=True)
+    author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (CheckConstraint("kind in ('image', 'text')", name="ck_library_drops_kind"),)
+
+
+class LibraryAudience(Base):
+    """Адресат, назначенный принту или надписи руками (US-0497)."""
+
+    __tablename__ = "library_audiences"
+
+    kind: Mapped[str] = mapped_column(String(8), primary_key=True)
+    key: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    audience: Mapped[str] = mapped_column(String(8), primary_key=True)
+    author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("kind in ('image', 'text')", name="ck_library_audiences_kind"),
+        CheckConstraint("audience in ('boys', 'girls', 'all')", name="ck_library_audiences_audience"),
     )

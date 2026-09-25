@@ -57,6 +57,8 @@ class TreeColourModelOut(BaseModel):
     id: int
     colour_code: str
     drops: list[str]
+    #: Для фильтра по дропу — по номеру, а не по имени.
+    drop_ids: list[int] = []
 
 
 class TreeModelOut(ModelOut):
@@ -67,5 +69,7 @@ class TreeNodeOut(BaseModel):
     id: int
     level: str
     name: str
+    #: Адресат узла «пол»: boys, girls; у остальных пусто.
+    audience: str | None = None
     children: list["TreeNodeOut"]
     models: list[TreeModelOut]

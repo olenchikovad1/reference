@@ -10,8 +10,10 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
+import { AssignBar, DropFilterBar } from '../candidates/DropFilter'
+import { passes, useDropFilter } from '../shared/filters'
 import { useCan } from '../shared/api/platform'
-import { fetchTexts, planText, type TextRow } from '../shared/api/texts'
+import { fetchTexts, linkTexts, planText, type TextRow } from '../shared/api/texts'
 
 const MATCH: Record<string, string> = { same: 'дословно', words: 'все слова', close: 'похоже' }
 
@@ -24,6 +26,20 @@ export function Texts() {
   const canPlan = useCan(CODE, 'texts', 'write')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const drop = useDropFilter()
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const shown = (texts.data ?? []).filter((r) =>
+    passes({ drops: r.drops.map((d) => d.id), audiences: r.audiences.map((a) => a.code), categories: r.categories }, drop.filter),
+  )
+
+  function assign(what: { drop_id?: number; audience?: string }) {
+    linkTexts({ keys: [...picked], ...what })
+      .then(() => {
+        setPicked(new Set())
+        return queries.invalidateQueries({ queryKey: ['texts'] })
+      })
+      .catch((e: Error) => setError(`${e.message} — повторите.`))
+  }
 
   // Запрос на каждую букву ни к чему: ищем, когда рука остановилась.
   useEffect(() => {
@@ -45,6 +61,27 @@ export function Texts() {
 
   const columns: DataColumn<TextRow>[] = [
     {
+      id: 'pick',
+      header: '',
+      sortable: false,
+      width: 'w-10',
+      cell: (r) => (
+        <input
+          type="checkbox"
+          checked={picked.has(r.key)}
+          aria-label={`выбрать «${r.text}»`}
+          onChange={() =>
+            setPicked((s) => {
+              const next = new Set(s)
+              if (next.has(r.key)) next.delete(r.key)
+              else next.add(r.key)
+              return next
+            })
+          }
+        />
+      ),
+    },
+    {
       id: 'text',
       header: 'надпись',
       width: 'w-80',
@@ -60,6 +97,14 @@ export function Texts() {
             </span>
           )}
           {r.planned && <span className="rounded bg-tone-blue-soft px-1.5 text-xs">заведена заранее</span>}
+          {drop.filter.drop !== null &&
+            r.drops
+              .filter((d) => d.id === drop.filter.drop)
+              .map((d) => (
+                <span key={d.id} className="text-xs text-muted-foreground">
+                  {d.via === null ? 'назначена' : `через референс №${d.via}`}
+                </span>
+              ))}
         </span>
       ),
     },
@@ -111,12 +156,14 @@ export function Texts() {
           </div>
         }
       />
+      <DropFilterBar {...drop} />
+      <AssignBar selected={picked.size} onAssign={assign} onClear={() => setPicked(new Set())} />
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
       {texts.isError ? (
         <EmptyState title="Тексты не пришли" description="Сервис не ответил. Обновите страницу; если повторится — стенд сервиса не поднят." />
       ) : (
         <DataTable
-          rows={texts.data ?? []}
+          rows={shown}
           columns={columns}
           rowKey={(r) => r.text}
           isLoading={texts.isPending}

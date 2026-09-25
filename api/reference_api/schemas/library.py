@@ -65,6 +65,29 @@ class FoundCardOut(BaseModel):
     name: str
 
 
+class DropLinkOut(BaseModel):
+    id: int
+    name: str
+    retired: bool
+    #: Пусто — назначен руками; номер — «через референс №…».
+    via: int | None = None
+
+
+class AudienceLinkOut(BaseModel):
+    #: boys, girls, all.
+    code: str
+    via: int | None = None
+
+
+class LinksIn(BaseModel):
+    """Назначить нескольким разом дроп или адресат; remove — снять."""
+
+    keys: list[str]
+    drop_id: int | None = None
+    audience: str | None = None
+    remove: bool = False
+
+
 class LibraryItemOut(BaseModel):
     """Картинка библиотеки на странице «Принты»."""
 
@@ -74,6 +97,9 @@ class LibraryItemOut(BaseModel):
     name: NameOut | None = None
     #: «Где использован» — референсы с этой картинкой.
     references: list[FoundCardOut]
+    drops: list[DropLinkOut] = []
+    audiences: list[AudienceLinkOut] = []
+    categories: list[str] = []
 
 
 class FoundOut(BaseModel):
@@ -91,6 +117,8 @@ class TextRowOut(BaseModel):
     """Надпись на странице «Тексты»."""
 
     text: str
+    #: Ключ для назначений — нормализованная надпись.
+    key: str
     fonts: list[str]
     #: Референсы с этой надписью — «в скольких» и переход.
     references: list[FoundCardOut]
@@ -99,6 +127,9 @@ class TextRowOut(BaseModel):
     #: При поиске: same — дословно, words — все слова запроса, close — похоже.
     match: str | None = None
     similarity: float | None = None
+    drops: list[DropLinkOut] = []
+    audiences: list[AudienceLinkOut] = []
+    categories: list[str] = []
 
 
 class TextIn(BaseModel):

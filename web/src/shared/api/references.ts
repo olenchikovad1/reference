@@ -89,6 +89,10 @@ export interface Card extends Saver {
   drops: string[]
   /** От какого референса пошла копия; пусто — начат с чистого листа. */
   forked_from_id: number | null
+  /** Для фильтра — от цветомодели (US-0497). */
+  drop_ids: number[]
+  audience: string | null
+  category: string | null
 }
 
 /** Референс в корзине: когда удалён и когда сотрётся сам (решение 0014). */

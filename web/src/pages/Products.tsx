@@ -3,10 +3,27 @@
 
 import { useQuery } from '@tanstack/react-query'
 
+import { DropFilterBar } from '../candidates/DropFilter'
 import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
+import { passes, useDropFilter, type DropFilter } from '../shared/filters'
+
+/** Дерево под фильтр: модели, прошедшие его, с ветками до них. Изделие в
+ *  дроп попадает через ассортимент — цветомодель, которая в нём выходит. */
+function pruned(nodes: TreeNode[], f: DropFilter, audience: string = 'all', category = ''): TreeNode[] {
+  return nodes.flatMap((n) => {
+    const aud = n.audience ?? audience
+    const cat = n.level === 'category' ? n.name : category
+    const models = n.models.filter((m) =>
+      passes({ drops: m.colour_models.flatMap((cm) => cm.drop_ids), audiences: [aud], categories: cat ? [cat] : [] }, f),
+    )
+    const children = pruned(n.children, f, aud, cat)
+    return models.length || children.length ? [{ ...n, models, children }] : []
+  })
+}
 
 export function Products() {
   const tree = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue })
+  const drop = useDropFilter()
   if (tree.isPending) return <main style={{ padding: 24 }}>Загружаю изделия…</main>
   if (tree.isError) return <main style={{ padding: 24 }}>Справочник изделий не ответил — обновите страницу.</main>
   if (tree.data.length === 0)
@@ -14,8 +31,10 @@ export function Products() {
   return (
     <main style={{ padding: 24 }}>
       <h1 style={{ fontSize: 20, margin: '0 0 12px' }}>Изделия</h1>
+      <DropFilterBar {...drop} />
+      {pruned(tree.data, drop.filter).length === 0 && <p>Под фильтр не попало ни одного изделия — сбросьте часть условий.</p>}
       <ul style={{ listStyle: 'none', paddingLeft: 0, margin: 0 }}>
-        {tree.data.map((n) => (
+        {pruned(tree.data, drop.filter).map((n) => (
           <Node key={n.id} node={n} />
         ))}
       </ul>

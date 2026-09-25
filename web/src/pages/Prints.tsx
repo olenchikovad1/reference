@@ -9,9 +9,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { AssignBar, DropFilterBar } from '../candidates/DropFilter'
+import { passes, useDropFilter } from '../shared/filters'
 import {
   assetUrl,
   fetchLibrary,
+  linkImages,
   recogniseAssets,
   searchAssets,
   uploadAssets,
@@ -28,6 +31,8 @@ export function Prints() {
   const [query, setQuery] = useState('')
   const found = useWeights(query)
   const [busy, setBusy] = useState<string | null>(null)
+  const drop = useDropFilter()
+  const [picked, setPicked] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
   /** Файлы в библиотеку: загрузить, узнать (теги и название), показать. */
@@ -54,13 +59,34 @@ export function Prints() {
   }
 
   // В поиске — порядок и вес поиска; без него — библиотека, свежие первыми.
-  const items: { item: LibraryItem; weight?: number }[] =
+  // Фильтр дропа поверх: картинка без дропа не пропадает — без фильтра она
+  // среди всех и находится поиском.
+  const items: { item: LibraryItem; weight?: number }[] = (
     found.rows === null
       ? (library.data ?? []).map((item) => ({ item }))
       : found.rows.flatMap((f) => {
           const item = library.data?.find((i) => i.digest === f.digest)
           return item ? [{ item, weight: f.weight }] : []
         })
+  ).filter(({ item }) =>
+    passes({ drops: item.drops.map((d) => d.id), audiences: item.audiences.map((a) => a.code), categories: item.categories }, drop.filter),
+  )
+
+  function assign(what: { drop_id?: number; audience?: string }) {
+    linkImages({ keys: [...picked], ...what })
+      .then(() => {
+        setPicked(new Set())
+        return queries.invalidateQueries({ queryKey: ['library'] })
+      })
+      .catch((e: Error) => setError(`${e.message} — повторите.`))
+  }
+  const toggle = (digest: string) =>
+    setPicked((s) => {
+      const next = new Set(s)
+      if (next.has(digest)) next.delete(digest)
+      else next.add(digest)
+      return next
+    })
 
   return (
     <main className="min-h-[70vh] p-4" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
@@ -95,6 +121,8 @@ export function Prints() {
           </div>
         }
       />
+      <DropFilterBar {...drop} />
+      <AssignBar selected={picked.size} onAssign={assign} onClear={() => setPicked(new Set())} />
       {busy && <p className="mb-2 text-sm text-muted-foreground">{busy}</p>}
       {(error || found.error) && <p className="mb-2 text-sm text-destructive">{error ?? found.error}</p>}
 
@@ -114,6 +142,13 @@ export function Prints() {
           {items.map(({ item, weight }) => (
             <article key={item.digest} className="pf-card flex flex-col overflow-hidden border border-line text-sm">
               <div className="relative aspect-square bg-muted">
+                <input
+                  type="checkbox"
+                  className="absolute left-2 top-2 z-10 h-4 w-4"
+                  checked={picked.has(item.digest)}
+                  onChange={() => toggle(item.digest)}
+                  aria-label={`выбрать ${item.name?.name ?? item.file_name}`}
+                />
                 <img src={assetUrl(item.digest, 'thumb')} alt={item.name?.name ?? item.file_name} className="h-full w-full object-contain" />
                 {weight !== undefined && (
                   <span className="absolute right-1 top-1 rounded bg-card px-1 text-xs" title="насколько картинка про запрос относительно всей библиотеки">
@@ -138,6 +173,23 @@ export function Prints() {
                       </span>
                     ))}
                 </div>
+                {drop.filter.drop !== null &&
+                  item.drops
+                    .filter((d) => d.id === drop.filter.drop)
+                    .map((d) => (
+                      <div key={d.id} className="text-xs text-muted-foreground">
+                        {d.via === null ? (
+                          'в дропе: назначен'
+                        ) : (
+                          <>
+                            в дропе: через{' '}
+                            <button className="underline" onClick={() => navigate(`/references/${d.via}`)}>
+                              референс №{d.via}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
                 <div className="mt-auto flex flex-wrap items-center gap-1 text-xs">
                   <span className="text-muted-foreground">где использован:</span>
                   {item.references.length === 0 && <span className="text-muted-foreground">нигде</span>}

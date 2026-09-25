@@ -41,8 +41,10 @@ export interface TreeNode {
   id: number
   level: 'direction' | 'gender' | 'group' | 'category'
   name: string
+  /** Адресат узла «пол»: boys, girls; у остальных пусто. */
+  audience?: string | null
   children: TreeNode[]
-  models: (GarmentModel & { colour_models: { id: number; colour_code: string; drops: string[] }[] })[]
+  models: (GarmentModel & { colour_models: { id: number; colour_code: string; drops: string[]; drop_ids: number[] }[] })[]
 }
 
 async function get<T>(path: string): Promise<T> {

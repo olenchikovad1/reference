@@ -51,12 +51,14 @@ def _node(n: HierarchyNode) -> TreeNodeOut:
         id=n.id,
         level=n.level,
         name=n.name,
+        audience=n.audience,
         children=[_node(c) for c in sorted(n.children, key=lambda c: c.name)],
         models=[
             TreeModelOut(
                 **_model(m).model_dump(),
                 colour_models=[
-                    TreeColourModelOut(id=cm.id, colour_code=cm.colour_code, drops=[d.name for d in cm.drops])
+                    TreeColourModelOut(id=cm.id, colour_code=cm.colour_code, drops=[d.name for d in cm.drops],
+                                       drop_ids=[d.id for d in cm.drops])
                     for cm in m.colour_models
                 ],
             )

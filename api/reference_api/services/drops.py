@@ -90,22 +90,62 @@ async def colour_model_for_work(db: AsyncSession, colour_model_id: int) -> Colou
 
 
 @dataclass(frozen=True)
+class DropRef:
+    id: int
+    name: str
+    retired: bool
+
+
+@dataclass(frozen=True)
 class ColourPlace:
-    """Где цветомодель: цвет палитры и дропы, где она выходит."""
+    """Где цветомодель: цвет палитры, дропы, адресат и вид одежды (US-0497).
+    Референс берёт всё это от своей цветомодели."""
 
     colour_code: str
     #: Сначала действующие, погашенные в конце: погашенный остаётся виден там,
     #: где стоит, но первым его не называют.
     drops: list[str]
+    drop_refs: list[DropRef]
+    #: boys, girls — от узла «пол» над моделью; all — пола в иерархии нет.
+    audience: str
+    #: Вид одежды — категория модели: «Худи», «Футболки».
+    category: str
+
+
+def audience_of(category_id: int, nodes: dict[int, HierarchyNode]) -> str:
+    """Адресат модели — от ближайшего узла с адресатом вверх по иерархии."""
+    node = nodes.get(category_id)
+    while node is not None:
+        if node.audience:
+            return node.audience
+        node = nodes.get(node.parent_id) if node.parent_id else None
+    return "all"
 
 
 async def colour_models_of(db: AsyncSession, ids: list[int]) -> dict[int, ColourPlace]:
-    """Цвет и дропы цветомоделей разом — для списка референсов."""
+    """Место цветомоделей разом — для списка референсов и связей библиотеки."""
     found = await repo.colour_models(db, sorted(set(ids)))
-    return {
-        cm_id: ColourPlace(
+    nodes = await repo.nodes(db) if found else {}
+    out: dict[int, ColourPlace] = {}
+    for cm_id, cm in found.items():
+        ordered = sorted(cm.drops, key=lambda d: (d.retired, d.release_from))
+        category = nodes.get(cm.model.category_id)
+        out[cm_id] = ColourPlace(
             cm.colour_code,
-            [d.name for d in sorted(cm.drops, key=lambda d: (d.retired, d.release_from))],
+            [d.name for d in ordered],
+            [DropRef(d.id, d.name, d.retired) for d in ordered],
+            audience_of(cm.model.category_id, nodes),
+            category.name if category else "",
         )
-        for cm_id, cm in found.items()
-    }
+    return out
+
+
+async def check_drop_for_linking(db: AsyncSession, drop_id: int) -> Drop:
+    """Дроп, которому можно назначить принт или надпись. Погашенный в выборе
+    не предлагается — назначать в него нельзя, хотя стоящее там видно."""
+    d = await repo.drop(db, drop_id)
+    if d is None:
+        raise DropNotFound(drop_id)
+    if d.retired:
+        raise CannotWork(f"дроп «{d.name}» погашен — назначать в него нельзя")
+    return d

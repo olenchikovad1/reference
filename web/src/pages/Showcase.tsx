@@ -13,6 +13,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import { Link, useNavigate } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
+import { DropFilterBar } from '../candidates/DropFilter'
+import { passes, useDropFilter } from '../shared/filters'
 import { useCan } from '../shared/api/platform'
 
 import { assetUrl } from '../shared/api/assets'
@@ -32,6 +34,7 @@ export function Showcase() {
   const [creating, setCreating] = useState(false)
   const [query, setQuery] = useState('')
   const found = useFound(query)
+  const drop = useDropFilter()
   const height = useFreeHeight()
   const grid = useRef<HTMLDivElement | null>(null)
   const queries = useQueryClient()
@@ -48,10 +51,14 @@ export function Showcase() {
       .catch((e: Error) => setActionError(`${e.message} — повторите; если повторится, сервис не отвечает.`))
 
   // В поиске — порядок совпадения (свой тег первым), без него — свежие первыми.
-  const shown =
-    found.ids === null
-      ? cards.data
-      : found.ids.flatMap((id) => cards.data?.find((c) => c.id === id) ?? [])
+  const shown = (
+    found.ids === null ? cards.data : found.ids.flatMap((id) => cards.data?.find((c) => c.id === id) ?? [])
+  )?.filter((c) =>
+    passes(
+      { drops: c.drop_ids, audiences: c.audience ? [c.audience] : [], categories: c.category ? [c.category] : [] },
+      drop.filter,
+    ),
+  )
   const rowHeight = Math.max(120, (height.value - GAP * (ROWS - 1)) / ROWS)
 
   /** Стрелки ходят по карточкам: вверх-вниз — в столбце, вбок — на столбец. */
@@ -95,6 +102,7 @@ export function Showcase() {
           </div>
         }
       />
+      <DropFilterBar {...drop} />
       {found.error && <p className="text-sm text-muted-foreground">{found.error} — поиск повторится, если изменить запрос.</p>}
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}
 
