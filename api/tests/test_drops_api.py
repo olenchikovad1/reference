@@ -33,9 +33,9 @@ async def drop_named(client, name: str) -> dict:
     return next(d for d in (await client.get("/reference/api/drops")).json() if d["name"] == name)
 
 
-async def test_five_drops_and_the_retired_one_is_marked(client) -> None:
+async def test_six_drops_and_the_retired_one_is_marked(client) -> None:
     drops = (await client.get("/reference/api/drops")).json()
-    assert len(drops) == 5
+    assert len(drops) == 6, "сид: пять дропов US-0489 и «Пляжная коллекция 2027» US-0498"
     assert [d["name"] for d in drops if d["retired"]] == ["Лето 2026"]
     active = (await client.get("/reference/api/drops", params={"active": "true"})).json()
     assert "Лето 2026" not in [d["name"] for d in active]

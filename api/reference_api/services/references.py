@@ -250,37 +250,83 @@ async def tag_names(db: AsyncSession, prefix: str) -> list[str]:
 class FoundReference:
     reference_id: int
     name: str
-    #: tag — свой тег, slogan — надпись дословно, picture — картинка по смыслу.
+    #: tag — свой тег, drop — дроп референса, slogan — надпись, picture —
+    #: картинка по смыслу.
     by: str
-    #: Порядок выдачи. Свой тег — 100 и выше: он важнее любого автотега,
-    #: надпись дословно — 10, картинка — её вес по библиотеке (2–5).
+    #: Порядок выдачи (US-0498): свой тег — 100 и выше (важнее любого
+    #: автотега), дроп — 50–60, надпись дословно — 40, похожая — 20–30,
+    #: картинка — её вес по библиотеке (2–5).
     rank: float
-    #: Что совпало: тег или надпись.
+    #: Почему найдено — словами: «дроп „Новый год 2027“», «надпись С НОВЫМ
+    #: ГОДОМ», «на картинке снег, вес 3.1».
     what: str | None = None
+    #: Все причины по силе: референс бывает найден и по дропу, и по картинке.
+    reasons: tuple[str, ...] = ()
 
 
 async def find(db: AsyncSession, query: str) -> list[FoundReference]:
-    """Референсы по запросу: свои теги первыми, затем надпись дословно, затем
-    картинки по смыслу (план 071) — кроме референсов, скрывших похожий автотег.
-    Референс — одной строкой, по самому сильному совпадению."""
+    """Один поиск на витрине (US-0498): свои теги, дропы, надписи, картинки —
+    референсы по весу, у каждого сказано, почему найден.
+
+    Дроп — словами, месяцами выхода и смыслом (services/drops.match_drops):
+    «лето» находит «Пляжную коллекцию 2027», хотя слова «лето» в ней нет.
+    Картинка — по смыслу (план 071), кроме референсов, скрывших похожий
+    автотег. Референс — одной строкой, по самому сильному совпадению.
+    """
+    from reference_api.repositories import tags as tag_repo
+    from reference_api.services import drops as drops_service
+    from reference_api.services import tags as tagging
+
     q = normalise_tag(query)
     if not q:
         return []
     cfg = settings()
     out: dict[int, FoundReference] = {}
+    why: dict[int, list[tuple[float, str]]] = {}
+
+    def put(r: FoundReference) -> None:
+        if r.reference_id not in out or out[r.reference_id].rank < r.rank:
+            out[r.reference_id] = r
+        said = why.setdefault(r.reference_id, [])
+        if r.what and r.what not in [w for _, w in said]:
+            said.append((r.rank, r.what))
+
     for card, tag, score in await repo.by_own_tag(db, q, cfg.tag_close):
-        if card.id not in out:
-            out[card.id] = FoundReference(card.id, card.name, "tag", 100 + score, tag.name)
+        put(FoundReference(card.id, card.name, "tag", 100 + score, f"свой тег «{tag.name}»"))
+
+    matched = await drops_service.match_drops(db, query)
+    if matched:
+        rows = await repo.latest(db, limit=10_000)
+        places = await drops_service.colour_models_of(db, [c.colour_model_id for c, _ in rows if c.colour_model_id])
+        for m in matched:
+            for card, _ in rows:
+                place = places.get(card.colour_model_id) if card.colour_model_id else None
+                if place and m.drop.id in {d.id for d in place.drop_refs}:
+                    put(FoundReference(card.id, card.name, "drop", 50 + 10 * m.score, m.why))
+
     for card in await repo.search(db, normalise(query)):
-        out.setdefault(card.id, FoundReference(card.id, card.name, "slogan", 10, query.strip()))
+        put(FoundReference(card.id, card.name, "slogan", 40, f"надпись {normalise(query)}"))
+    for card, row, score in await repo.text_near(db, normalise(query), cfg.slogan_close, exclude=0):
+        put(FoundReference(card.id, card.name, "slogan", 20 + 10 * score, f"надпись {row.text} — похожа"))
+
     pictures = await library.search(db, query)
     shown = {c.id for f in pictures for c in f.references}
     hidden = await repo.hiding(db, sorted(shown), q, cfg.tag_close)
+    stored = await tag_repo.of(db, [f.digest for f in pictures], tagging.model_name()) if pictures else {}
     for f in pictures:
+        # Причина — тег картинки, совпавший с запросом по основе слова; нет
+        # такого — сама картинка: модель нашла её по смыслу, а не по тегу.
+        tag = next((r for r in stored.get(f.digest, []) if drops_service.words_meet(q, r.name)), None)
+        seen = f"на картинке {tag.name}" if tag else f"картинка «{f.name}»"
         for card in f.references:
-            if card.id not in hidden and card.id not in out:
-                out[card.id] = FoundReference(card.id, card.name, "picture", f.weight, f.name)
-    return sorted(out.values(), key=lambda r: -r.rank)
+            if card.id not in hidden:
+                put(FoundReference(card.id, card.name, "picture", f.weight, f"{seen}, вес {f.weight:.1f}"))
+    return sorted(
+        (FoundReference(r.reference_id, r.name, r.by, r.rank, r.what,
+                        tuple(w for _, w in sorted(why[r.reference_id], key=lambda x: -x[0])))
+         for r in out.values()),
+        key=lambda r: -r.rank,
+    )
 
 
 class NotInTrash(Exception):

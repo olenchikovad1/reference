@@ -133,10 +133,13 @@ class TagsOut(BaseModel):
 class FoundReferenceOut(BaseModel):
     id: int
     name: str
-    #: tag — свой тег, slogan — надпись дословно, picture — картинка по смыслу.
+    #: tag — свой тег, drop — дроп, slogan — надпись, picture — картинка по смыслу.
     by: str
     rank: float
+    #: Главная причина словами.
     what: str | None = None
+    #: Все причины по силе — «дроп „Зима 2026/27“», «на картинке снег, вес 2.6».
+    reasons: list[str] = []
 
 
 class ReferenceOut(BaseModel):

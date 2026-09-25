@@ -156,6 +156,7 @@ export function Showcase() {
               key={c.id}
               card={c}
               onOpen={() => navigate(`/references/${c.id}`)}
+              reasons={found.ids === null ? undefined : found.why.get(c.id)}
               onCopy={canCopy ? () => void act(() => copyReference(c.id)) : undefined}
               onTrash={canTrash ? () => setTrashing(c) : undefined}
             />
@@ -218,8 +219,11 @@ function ShowcaseCard({
   onOpen,
   onCopy,
   onTrash,
+  reasons,
 }: {
   card: Card
+  /** Почему найдена — при поиске (US-0498). */
+  reasons?: string[]
   onOpen: () => void
   onCopy?: () => void
   onTrash?: () => void
@@ -256,6 +260,11 @@ function ShowcaseCard({
           {card.drops[0] ?? 'без дропа'} · {new Date(card.saved_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
           {card.forked_from_id && ` · от №${card.forked_from_id}`}
         </div>
+        {reasons?.slice(0, 2).map((r) => (
+          <div key={r} className="truncate text-primary" title={r}>
+            {r}
+          </div>
+        ))}
       </div>
     </button>
       {(onCopy || onTrash) && (
@@ -339,8 +348,9 @@ function modelsOf(node: TreeNode): TreeNode['models'] {
  * С задержкой: запрос на каждую букву — это «с», «сн», «сне» в сервис, из
  * которых нужен последний.
  */
-function useFound(query: string): { ids: number[] | null; error: string | null } {
+function useFound(query: string): { ids: number[] | null; why: Map<number, string[]>; error: string | null } {
   const [ids, setIds] = useState<number[] | null>(null)
+  const [why, setWhy] = useState<Map<number, string[]>>(new Map())
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     const q = query.trim()
@@ -355,6 +365,7 @@ function useFound(query: string): { ids: number[] | null; error: string | null }
         .then((rows) => {
           if (stale) return
           setIds(rows.map((r) => r.id))
+          setWhy(new Map(rows.map((r) => [r.id, r.reasons])))
           setError(null)
         })
         .catch((e: Error) => !stale && setError(`Поиск не ответил: ${e.message}`))
@@ -364,7 +375,7 @@ function useFound(query: string): { ids: number[] | null; error: string | null }
       clearTimeout(t)
     }
   }, [query])
-  return { ids, error }
+  return { ids, why, error }
 }
 
 /** Высота от верха витрины до низа окна: три строки делят именно её. */

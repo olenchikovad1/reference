@@ -169,9 +169,11 @@ export const tagNames = (prefix: string) => send<string[]>('GET', `references/ta
 export interface FoundReference {
   id: number
   name: string
-  by: 'tag' | 'slogan' | 'picture'
+  by: 'tag' | 'drop' | 'slogan' | 'picture'
   rank: number
   what: string | null
+  /** Все причины по силе: «дроп „Новый год 2027“», «на картинке снег, вес 2.6». */
+  reasons: string[]
 }
 
 export const findReferences = (q: string) => send<FoundReference[]>('GET', `references/find?q=${encodeURIComponent(q)}`)

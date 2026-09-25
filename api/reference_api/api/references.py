@@ -101,7 +101,8 @@ async def find(q: str, db: AsyncSession = Depends(session)) -> list[FoundReferen
     """Поиск на витрине: свои теги первыми, затем надпись дословно, затем
     картинки по смыслу. Скрытый у референса автотег его больше не находит."""
     return [
-        FoundReferenceOut(id=f.reference_id, name=f.name, by=f.by, rank=round(f.rank, 3), what=f.what)
+        FoundReferenceOut(id=f.reference_id, name=f.name, by=f.by, rank=round(f.rank, 3), what=f.what,
+                          reasons=list(f.reasons))
         for f in await service.find(db, q)
     ]
 

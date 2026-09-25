@@ -10,6 +10,7 @@
 from datetime import date
 
 from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from reference_api.models.base import Base
@@ -107,6 +108,9 @@ class Drop(Base):
     audience: Mapped[str] = mapped_column(String(120), nullable=False)
     theme: Mapped[str] = mapped_column(Text, nullable=False, default="")
     retired: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: Как его ещё называют (US-0498): «НГ», «новогодний». Своё дописывается у
+    #: дропа, общеязыковое — в словаре сокращений services/abbreviations.yaml.
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(String(120)), nullable=False, default=list)
 
     items: Mapped[list[ColourModel]] = relationship(secondary="drop_items", back_populates="drops", lazy="selectin")
 
