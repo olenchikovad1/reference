@@ -23,12 +23,13 @@ import {
 import { DEFAULT_FONT, FONTS } from '../shared/fonts'
 import { formatCm } from '../shared/geometry'
 import { measureAspect } from '../shared/text'
-import type { FileTags, Match, Named, Tag } from '../shared/api/assets'
+import type { FileTags, Found, Match, Named, Tag } from '../shared/api/assets'
 import {
   assetUrl,
   digestOf,
   fetchTags,
   recogniseAssets,
+  searchAssets,
   uploadAssets,
   uploadCanvas,
   UploadRefused,
@@ -107,6 +108,12 @@ export function Bench() {
   const [seenCards, setSeenCards] = useState<ReferenceMatch[]>([])
   // Сохранённые карточки. Грузятся при открытии и после каждого сохранения.
   const [cards, setCards] = useState<Card[]>([])
+  // Поиск по смыслу (US-0480). null — ещё не искали: тогда показывается
+  // подсказка, а не «ничего не нашлось», которого ещё не было.
+  const [query, setQuery] = useState('')
+  const [found, setFound] = useState<Found[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
   // Теги файлов по имени файла. Ставятся сами при узнавании; для уже
   // лежащих — досчитываются по сохранённому вектору.
   const [tagsOf, setTagsOf] = useState<Record<string, FileTags>>({})
@@ -422,6 +429,21 @@ export function Bench() {
   }
 
   /** Открыть сохранённую карточку: работа восстанавливается как была. */
+  async function runSearch() {
+    const q = query.trim()
+    if (!q) return
+    setSearching(true)
+    setSearchError(null)
+    try {
+      setFound(await searchAssets(q))
+    } catch (e) {
+      // Запрос не теряется: поле не очищается, повторить — та же кнопка.
+      setSearchError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSearching(false)
+    }
+  }
+
   async function openCard(card: Card) {
     const got = await openReference(card.id)
     const w = got.work as {
@@ -1143,6 +1165,60 @@ export function Bench() {
                 </button>
               ))}
             </div>
+          </Group>
+
+          <Group title="Поиск по смыслу">
+            <div style={{ display: 'flex', gap: 6, width: '100%' }}>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void runSearch()
+                }}
+                placeholder="снег, вертолёт, мишка…"
+                aria-label="слово для поиска по картинкам"
+                style={{ ...S.input, flex: 1, width: 'auto' }}
+              />
+              <button onClick={() => void runSearch()} disabled={searching || !query.trim()} style={S.btn}>
+                {searching ? 'ищу…' : 'найти'}
+              </button>
+            </div>
+            {searchError && (
+              <p style={S.dim}>
+                {searchError} — нажмите «найти» ещё раз; если повторится, стенд сервиса не поднят
+              </p>
+            )}
+            {found === null && !searchError && (
+              <p style={S.dim}>любое слово в любой форме, не обязательно тег; ищет по картинкам библиотеки</p>
+            )}
+            {found?.length === 0 && (
+              <p style={S.dim}>
+                ничего не нашлось — попробуйте назвать предмет, а не настроение: «мяч», а не «весело»
+              </p>
+            )}
+            {found && found.length > 0 && (
+              <div style={S.list}>
+                {found.map((f) => (
+                  <div key={f.digest} style={S.setArtwork} title={`похожесть ${f.similarity}`}>
+                    <img src={assetUrl(f.digest, 'thumb')} alt="" width={32} height={32} style={{ objectFit: 'contain' }} />
+                    <span style={S.itemName}>{f.name}</span>
+                    <span style={S.tag}>вес {f.weight.toFixed(1)}</span>
+                    {f.references.map((r) => {
+                      const card = cards.find((c) => c.id === r.id)
+                      return card ? (
+                        <button key={r.id} onClick={() => void openCard(card)} style={S.btn} title={r.name}>
+                          №{r.id}
+                        </button>
+                      ) : (
+                        <span key={r.id} style={S.tag} title={r.name}>
+                          №{r.id}
+                        </span>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
           </Group>
 
           <Group title="Набор принтов">

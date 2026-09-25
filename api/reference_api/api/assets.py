@@ -1,12 +1,12 @@
 """Файлы: вход по HTTP."""
 
-from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
 from reference_api.schemas.assets import AssetOut, DerivativeOut
 from reference_api.repositories import tags as tag_repo
-from reference_api.schemas.library import FileTagsOut, MatchOut, NameOut, RecognisedOut, TagOut
+from reference_api.schemas.library import FileTagsOut, FoundCardOut, FoundOut, MatchOut, NameOut, RecognisedOut, TagOut
 from reference_api.services import assets as service
 from reference_api.services import library
 from reference_api.services import names as naming
@@ -51,6 +51,26 @@ async def upload(files: list[UploadFile]) -> list[AssetOut]:
             )
         )
     return out
+
+
+@router.get("/search", response_model=list[FoundOut])
+async def search(
+    q: str = Query(min_length=1, max_length=200), db: AsyncSession = Depends(session)
+) -> list[FoundOut]:
+    """Картинки по смыслу слова, по весу, с карточками, где они стоят.
+
+    Слово любое и в любой форме — не обязано быть тегом. Пустая выдача значит
+    «ничего не нашлось», а не ошибку.
+    """
+    query = q.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="пустой запрос")
+    found = await library.search(db, query)
+    return [
+        FoundOut(digest=f.digest, name=f.name, similarity=round(f.similarity, 4), weight=round(f.weight, 2),
+                 references=[FoundCardOut(id=c.id, name=c.name) for c in f.references])
+        for f in found
+    ]
 
 
 @router.get("/{digest}/{preset}")

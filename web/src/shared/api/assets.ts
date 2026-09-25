@@ -134,3 +134,22 @@ export async function uploadCanvas(canvas: HTMLCanvasElement, name: string): Pro
   const [asset] = await uploadAssets([new File([blob], name, { type: 'image/png' })])
   return asset.digest
 }
+
+/** Картинка, найденная словом. Вес — насколько она про запрос относительно
+ *  всей библиотеки (в стандартных отклонениях); по нему и порядок. */
+export interface Found {
+  digest: string
+  name: string
+  similarity: number
+  weight: number
+  /** Карточки, где картинка стоит. */
+  references: { id: number; name: string }[]
+}
+
+/** Поиск по смыслу слова (US-0480). Пустой ответ — «ничего не нашлось», а не
+ *  ошибка: сервис не показывает слабую догадку первой строкой. */
+export async function searchAssets(q: string): Promise<Found[]> {
+  const r = await fetch(`${BASE}assets/search?q=${encodeURIComponent(q)}`)
+  if (!r.ok) throw new Error(`поиск не ответил: ${r.status}`)
+  return r.json()
+}

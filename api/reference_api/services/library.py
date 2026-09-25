@@ -8,9 +8,13 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import statistics
+
 from reference_api.config import settings
+from reference_api.models.references import Reference
 from reference_api.repositories import library as repo
-from reference_api.services import embeddings
+from reference_api.repositories import references as cards
+from reference_api.services import embeddings, words
 
 
 @dataclass(frozen=True)
@@ -68,3 +72,40 @@ async def same_as(db: AsyncSession, digest: str, kind: str) -> list[str]:
     found = await repo.nearest(db, emb.model, emb.vector, exclude=digest, kind=kind)
     cfg = settings()
     return [d for d, _, s in found if s >= cfg.similarity_same]
+
+
+@dataclass(frozen=True)
+class Found:
+    digest: str
+    name: str
+    similarity: float
+    #: Насколько картинка про запрос относительно остальных — в стандартных
+    #: отклонениях от среднего по библиотеке. Его и видит человек.
+    weight: float
+    references: list[Reference]
+
+
+async def search(db: AsyncSession, query: str) -> list[Found]:
+    """Картинки по смыслу слова, по весу, с карточками, где они стоят.
+
+    Пусто — не ошибка: если ни одна картинка не набрала веса, «ничего не
+    нашлось» честнее, чем показать слабую догадку первой строкой.
+    """
+    cfg = settings()
+    vector = words.embed([cfg.search_template.format(query)])[0].tolist()
+    rows = await repo.similarities(db, embeddings.MODEL_NAME, vector)
+    if len(rows) < 2:
+        return []
+    sims = [s for _, _, s in rows]
+    mean, spread = statistics.fmean(sims), statistics.pstdev(sims)
+    if spread == 0:
+        return []
+    weighed = [(d, n, s, (s - mean) / spread) for d, n, s in rows]
+    if weighed[0][3] < cfg.search_min_weight:
+        return []
+    shown = [r for r in weighed if r[3] >= cfg.search_show_weight][: cfg.search_limit]
+    used = await cards.by_image(db, [d for d, *_ in shown], exclude=0)
+    return [
+        Found(d, n, s, w, [c for c in used if d in c.image_digests])
+        for d, n, s, w in shown
+    ]

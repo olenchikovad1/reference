@@ -56,3 +56,21 @@ class RecognisedOut(BaseModel):
     tags: list[TagOut] = []
     #: Что за изделие на картинке. Нет — никто не знает; догадки не бывает.
     name: NameOut | None = None
+
+
+class FoundCardOut(BaseModel):
+    """Карточка, где стоит найденная картинка."""
+
+    id: int
+    name: str
+
+
+class FoundOut(BaseModel):
+    """Картинка, найденная словом."""
+
+    digest: str
+    name: str
+    similarity: float
+    #: Вес относительно всей библиотеки на этот запрос — по нему порядок.
+    weight: float
+    references: list[FoundCardOut]

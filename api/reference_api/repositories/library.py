@@ -27,6 +27,24 @@ async def put(
     await db.commit()
 
 
+async def similarities(
+    db: AsyncSession, model: str, vector: list[float], kind: str = "image"
+) -> list[tuple[str, str, float]]:
+    """Похожесть на вектор у КАЖДОЙ картинки модели, по убыванию.
+
+    Все, а не первые N: вес в поиске меряется относительно всей библиотеки,
+    и по верхушке его не посчитать. Пока картинок сотни, это дёшево; на
+    десятках тысяч — повод считать среднее выборкой.
+    """
+    distance = AssetEmbedding.vector.cosine_distance(vector)
+    rows = await db.execute(
+        select(AssetEmbedding.digest, AssetEmbedding.name, (1 - distance).label("similarity"))
+        .where(AssetEmbedding.model == model, AssetEmbedding.kind == kind)
+        .order_by(distance)
+    )
+    return [(r.digest, r.name, float(r.similarity)) for r in rows]
+
+
 async def nearest(
     db: AsyncSession,
     model: str,
