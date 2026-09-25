@@ -13,6 +13,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import { Link, useNavigate } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
+import { warmGarments } from '../candidates/GarmentCanvas'
+import { frameUrl, productQuery } from '../shared/api/products'
 import { DropFilterBar } from '../candidates/DropFilter'
 import { passes, useDropFilter } from '../shared/filters'
 import { useCan } from '../shared/api/platform'
@@ -38,6 +40,11 @@ export function Showcase() {
   const height = useFreeHeight()
   const grid = useRef<HTMLDivElement | null>(null)
   const queries = useQueryClient()
+  // Окно откроется мгновенно: изделие и его кадры грузятся, пока человек
+  // выбирает карточку. Изделие на стенде одно — B-HDY-14.
+  useEffect(() => {
+    void queries.fetchQuery(productQuery('B-HDY-14')).then((p) => warmGarments(p.states.map((s) => frameUrl(p.code, s.code))))
+  }, [queries])
   const canCopy = useCan(CODE, 'references', 'write')
   const canTrash = useCan(CODE, 'references', 'delete')
   const [trashing, setTrashing] = useState<Card | null>(null)

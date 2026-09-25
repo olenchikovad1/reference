@@ -7,6 +7,45 @@ import { heightCm } from '../shared/composition'
 import type { Calibration } from '../shared/geometry'
 import { cmToPx } from '../shared/geometry'
 import { buildLuminance } from '../shared/luminance'
+
+/** Кадр изделия и его карта рельефа — по адресу кадра, один раз на вкладку.
+ *  Изделие на всех карточках одно и то же (худи — везде худи): грузить и
+ *  разбирать его заново при каждом открытии окна и для каждой миниатюры
+ *  незачем — меняются только цвет и принт (правка владельца 25.09). */
+const garments = new Map<string, Promise<{ img: HTMLImageElement; map: ReturnType<typeof buildLuminance> } | null>>()
+
+function garmentOf(src: string) {
+  let got = garments.get(src)
+  if (!got) {
+    got = new Promise((resolve) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const probe = document.createElement('canvas')
+        probe.width = img.naturalWidth
+        probe.height = img.naturalHeight
+        const ctx = probe.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return resolve(null)
+        ctx.drawImage(img, 0, 0)
+        const data = ctx.getImageData(0, 0, probe.width, probe.height).data
+        resolve({ img, map: buildLuminance(data, probe.width, probe.height, 6) })
+      }
+      // Не загрузился — забываем, чтобы следующее открытие попробовало снова.
+      img.onerror = () => {
+        garments.delete(src)
+        resolve(null)
+      }
+      img.src = src
+    })
+    garments.set(src, got)
+  }
+  return got
+}
+
+/** Прогреть кадры заранее — витрина зовёт это, пока человек выбирает карточку. */
+export function warmGarments(srcs: string[]): void {
+  for (const s of srcs) void garmentOf(s)
+}
 import { drawText } from '../shared/text'
 import {
   anchorOnSurface,
@@ -137,18 +176,10 @@ export function GarmentCanvas(props: CanvasProps) {
     const r = renderer.current
     if (!r) return
 
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      if (!alive) return
-      const probe = document.createElement('canvas')
-      probe.width = img.naturalWidth
-      probe.height = img.naturalHeight
-      const ctx = probe.getContext('2d', { willReadFrequently: true })
-      if (!ctx) return
-      ctx.drawImage(img, 0, 0)
-      const data = ctx.getImageData(0, 0, probe.width, probe.height).data
-      const map = buildLuminance(data, probe.width, probe.height, 6)
+    void garmentOf(frameSrc).then((g) => {
+      if (!alive || !g) return
+      const { img, map } = g
+      const probe = { width: img.naturalWidth, height: img.naturalHeight }
       r.setGarment(img, map.blurred, map.raw, map.width, map.height, map.white)
       // Маска перекрытия считается один раз на состояние: зона не меняется,
       // пока не сменили кадр.
@@ -158,8 +189,7 @@ export function GarmentCanvas(props: CanvasProps) {
       const covers = OCCLUDERS.map((name) => state.zones[name]).filter((z): z is [number, number][] => !!z)
       r.setOccluder(rasteriseAll(covers, probe.width, probe.height, occluderCanvas.current ?? undefined))
       drawAll()
-    }
-    img.src = frameSrc
+    })
     return () => {
       alive = false
     }

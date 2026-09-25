@@ -75,6 +75,13 @@ export async function fetchProduct(code: string): Promise<Product> {
   return (await r.json()) as Product
 }
 
+/** Изделие — одно на все карточки: в кэше запросов на всю вкладку. */
+export const productQuery = (code: string) => ({
+  queryKey: ['product', code],
+  queryFn: () => fetchProduct(code),
+  staleTime: Infinity,
+})
+
 export function frameUrl(code: string, state: string): string {
   return `${BASE}products/${code}/states/${state}/frame`
 }

@@ -97,7 +97,10 @@ def derivative(digest: str, preset: str) -> Response:
         raise HTTPException(404, f"Ступени {preset} не существует") from None
     except service.AssetMissing:
         raise HTTPException(404, f"Файла {digest} нет в хранилище") from None
-    return Response(content, media_type=content_type)
+    # Имя — хеш содержимого: по этому адресу другое содержимое не появится
+    # никогда, браузеру незачем спрашивать второй раз.
+    return Response(content, media_type=content_type,
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 # Узнавание запоминает векторы, теги и названия файлов — тоже запись.

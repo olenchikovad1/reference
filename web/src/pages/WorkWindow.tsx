@@ -1,5 +1,6 @@
 import { Modal, TextInput, buttonClass } from '@platform/ui'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
@@ -7,7 +8,7 @@ import { WorkFrame } from '../candidates/WorkFrame'
 import { DEFAULT_PARAMS, type RenderParams } from '../candidates/renderer'
 import { fetchPalette, toCss, toUnit, type Colour } from '../shared/api/colours'
 import { fetchPrints, printUrl, type PrintItem } from '../shared/api/prints'
-import { fetchProduct, frameUrl, type Product } from '../shared/api/products'
+import { frameUrl, productQuery, type Product } from '../shared/api/products'
 import {
   EMPTY,
   add,
@@ -84,6 +85,15 @@ import { useHistoryState } from '../shared/useHistory'
 
 const PRODUCT = 'B-HDY-14'
 
+/** Лист для узнавания «такой принт уже был», точек на сантиметр. */
+const RECOGNITION_PX_PER_CM = 12
+
+/** Сторона снимка для витрины, точек: карточка витрины меньше. */
+const VIEW_SIZE = 360
+
+/** Ширина места под панель настроек справа на холсте — занято всегда. */
+const PANEL_SPACE = 344
+
 /** Масштаб миниатюры стороны к кадру. Кадр — около тысячи точек, миниатюра
  *  на экране — меньше сотни; четверть оставляет запас на плотный экран. */
 const THUMB_SCALE = 0.25
@@ -92,6 +102,8 @@ const noop = () => undefined
 // Имена сторон по-русски. Коды уходят на фабрику, имена — человеку.
 const SIDE_NAMES: Record<string, string> = { front: 'перед', back: 'спина', left: 'левый бок' }
 type Overlay = 'none' | 'anchors' | 'zones' | 'all'
+/** Находка проверки со стороной, на которой она. */
+type SideFinding = Finding & { side: string }
 
 /** Шпаргалка «?»: всё, что окно умеет без мыши. */
 const KEYS: [string, string][] = [
@@ -114,6 +126,7 @@ export function WorkWindow() {
   const { ref = 'new' } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
+  const queries = useQueryClient()
   const [product, setProduct] = useState<Product | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [stateCode, setStateCode] = useState('front')
@@ -228,11 +241,15 @@ export function WorkWindow() {
   const measurer = useRef<CanvasRenderingContext2D | null>(null)
 
   useEffect(() => {
-    fetchProduct(PRODUCT).then(setProduct).catch((e: Error) => setError(e.message))
-    fetchPalette()
+    // Изделие, палитра и набор одни на все карточки: грузятся один раз за
+    // вкладку и берутся из кэша при каждом следующем открытии окна.
+    queries.fetchQuery(productQuery(PRODUCT)).then(setProduct).catch((e: Error) => setError(e.message))
+    queries
+      .fetchQuery({ queryKey: ['palette'], queryFn: fetchPalette, staleTime: Infinity })
       .then((p) => setColours(p.colors))
       .catch(() => undefined)
-    fetchPrints()
+    queries
+      .fetchQuery({ queryKey: ['prints'], queryFn: fetchPrints, staleTime: Infinity })
       .then(setPrints)
       .catch(() => undefined)
     // Браузер грузит шрифт лениво — до первого применения. Без явного ожидания
@@ -399,29 +416,36 @@ export function WorkWindow() {
   // панели проверок незачем обновляться на каждый кадр, а считаются они по
   // ткани дороже, чем рисуется сам принт. Отстают на кадр-другой и догоняют,
   // как только рука остановилась.
-  const checked = useDeferredValue(visible)
-  const findings = [
-    ...checkZones(
-      checked,
-      state ?? { code: '', kind: 'precise', anchors: {}, zones: {}, lines: {} },
-      calibration,
-      field,
-      torso && state ? { torso, anchors: state.anchors, fieldCm } : null,
-      hoodDownScale,
-    ),
-    ...check(
-    checked,
-    rules
-      ? {
-          minLetterCm: rules.min_letter_cm,
-          warnLetterCm: rules.warn_letter_cm,
-          minStrokeCm: rules.min_stroke_cm,
-          maxColours: rules.max_colours,
-        }
-      : undefined,
-    ),
-  ]
-  const keyOf = (f: Finding) => `${f.rule}:${f.elementId ?? '-'}`
+  // Проверки — по ВСЕМ точным сторонам, а не по открытой: пересечённая молния
+  // на переде не исчезает оттого, что смотрят на спину (правка владельца 25.09).
+  const checked = useDeferredValue(sized)
+  const findings: SideFinding[] = useMemo(
+    () =>
+      (product?.states ?? [])
+        .filter((s) => s.kind !== 'illustrative')
+        .flatMap((s) => {
+          const side = onSide(checked, s.code)
+          if (side.elements.length === 0) return []
+          const sideField = fieldFor(product?.print_fields ?? null, size ?? 0, s.code, s.zones?.print, calibration)
+          const sideFieldCm = fieldSize(product?.print_fields ?? null, size, s.code)
+          return [
+            ...checkZones(side, s, calibration, sideField, torso ? { torso, anchors: s.anchors, fieldCm: sideFieldCm } : null, hoodDownScale),
+            ...check(
+              side,
+              rules
+                ? {
+                    minLetterCm: rules.min_letter_cm,
+                    warnLetterCm: rules.warn_letter_cm,
+                    minStrokeCm: rules.min_stroke_cm,
+                    maxColours: rules.max_colours,
+                  }
+                : undefined,
+            ),
+          ].map((f) => ({ ...f, side: s.code }))
+        }),
+    [checked, product, size, calibration, torso, hoodDownScale, rules],
+  )
+  const keyOf = (f: SideFinding) => `${f.side}:${f.rule}:${f.elementId ?? '-'}`
   const open = findings.filter((f) => !dismissed.has(keyOf(f)))
 
   // Когда шрифты доехали, пропорции надписей пересчитываются: измеренные по
@@ -538,7 +562,11 @@ export function WorkWindow() {
     // Сохраняется СТОРОНА, а не изделие целиком: перед и спина печатаются
     // разными прогонами, и «такой принт уже был» — вопрос про сторону.
     if (visible.elements.length === 0) return null
-    const canvas = renderSheet(visible, images.current, 120)
+    // Лист для узнавания — мелкий: модель всё равно сжимает картинку до 224
+    // точек, а лист в 120 точек на сантиметр (3600 на 30 см) рисовался,
+    // кодировался и считался вектором секундами. Печатный лист на фабрику
+    // выгружается отдельно и в полном разрешении.
+    const canvas = renderSheet(visible, images.current, RECOGNITION_PX_PER_CM)
     const sheet = await uploadCanvas(canvas, `${PRODUCT}-${stateCode}-list.png`)
     return {
       name: `${PRODUCT} · ${SIDE_NAMES[stateCode] ?? stateCode} · ${colourCode}${size ? ' · ' + size : ''}`,
@@ -582,9 +610,10 @@ export function WorkWindow() {
     if (saving) return false
     setSaving(true)
     try {
-      const body = await versionBody()
+      // Лист и снимки сторон — одновременно, а не друг за другом.
+      const [body, views] = await Promise.all([versionBody(), snapshotSides()])
       if (!body) return false
-      const saved = await send({ ...body, views: await snapshotSides() })
+      const saved = await send({ ...body, views })
       const card = await openReference(saved.id)
       // Правки легли в версию — черновик больше не предлагать; при «сохранить
       // как» правки ушли в новый референс, и прежнему они тоже не черновик.
@@ -611,17 +640,24 @@ export function WorkWindow() {
    *  не дошла — ждём её, иначе на витрине окажется предпоследний вид. Снимок
    *  не сохранился — версия всё равно сохраняется, витрина покажет имя. */
   async function snapshotSides(): Promise<Record<string, string>> {
-    if (thumbWork !== sized) await new Promise((r) => setTimeout(r, 300))
-    const out: Record<string, string> = {}
-    for (const code of ['front', 'back']) {
-      const canvas = thumbCanvases.current[code]
-      if (!canvas) continue
-      try {
-        out[code] = await uploadCanvas(canvas, `${PRODUCT}-${code}-view.png`)
-      } catch {
-        // см. выше: без снимка — не повод терять версию
-      }
+    if (thumbWork !== sized) {
+      // Миниатюры идут за работой с задержкой — догоняем их сразу и ждём два
+      // кадра отрисовки, а не паузу наугад.
+      setThumbWork(sized)
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
     }
+    const out: Record<string, string> = {}
+    await Promise.all(
+      ['front', 'back'].map(async (code) => {
+        const canvas = thumbCanvases.current[code]
+        if (!canvas) return
+        try {
+          out[code] = await uploadCanvas(shrink(canvas, VIEW_SIZE), `${PRODUCT}-${code}-view.png`)
+        } catch {
+          // см. выше: без снимка — не повод терять версию
+        }
+      }),
+    )
     return out
   }
 
@@ -1594,7 +1630,7 @@ export function WorkWindow() {
 
   return (
     <>
-      <WorkFrame label={`рабочее окно: ${title}`} bar={bar}>
+      <WorkFrame label={`рабочее окно: ${title}`} bar={bar} onBackdrop={close}>
         <div
           ref={area}
           tabIndex={0}
@@ -1612,8 +1648,11 @@ export function WorkWindow() {
             data-stage
             ref={stage}
             className="absolute inset-y-0 left-0 flex items-center justify-center"
-            // Панель настроек открыта — изделие отодвигается от неё, а не прячется под ней.
-            style={{ right: panel ? 344 : 0 }}
+            // Место под панель настроек занято всегда. Раньше холст сжимался,
+            // когда панель открывалась, — а открывает её нажатие на принт, и
+            // изделие меняло масштаб прямо под мышью: перетащить принт было
+            // нельзя (правка владельца 25.09).
+            style={{ right: PANEL_SPACE }}
           >
             <div style={{ width: box, height: box, position: 'relative' }}>
               <div
@@ -1731,8 +1770,13 @@ export function WorkWindow() {
           {/* Виды — иконками изделия с принтом: что лежит на спине, видно до нажатия. */}
           <div className="absolute right-3 top-3 flex gap-2" aria-label="виды изделия">
             {product.states.map((s, i) => (
+              <div key={s.code} className="flex flex-col items-center gap-0.5">
+              {/* Подпись над иконкой: по картинке перед от спины отличают не все,
+                  а подсказка при наведении видна не сразу. */}
+              <span className={`text-[11px] ${s.code === state.code ? 'font-semibold' : 'text-muted-foreground'}`}>
+                {s.display_name}
+              </span>
               <button
-                key={s.code}
                 onClick={() => setStateCode(s.code)}
                 aria-pressed={s.code === state.code}
                 title={`${s.display_name}${s.kind === 'illustrative' ? ' — только показ, размещать по нему нельзя' : ''} · клавиша ${i + 1}`}
@@ -1761,17 +1805,25 @@ export function WorkWindow() {
                 />
                 <span className="absolute left-1 top-0 text-[10px] text-muted-foreground">{i + 1}</span>
               </button>
+              </div>
             ))}
           </div>
 
-          {panel && (
-            <div
-              className="pf-card absolute bottom-3 right-3 top-[92px] w-80 overflow-y-auto border border-line p-3 text-sm"
-              aria-label={panel === 'element' ? 'настройки выбранного' : 'настройки изделия'}
-            >
-              {panel === 'element' ? elementPanel : garmentPanel}
-            </div>
-          )}
+          <div
+            className="pf-card absolute bottom-3 right-3 top-[112px] w-80 overflow-y-auto border border-line p-3 text-sm"
+            aria-label={panel === 'element' ? 'настройки выбранного' : panel === 'garment' ? 'настройки изделия' : 'настройки'}
+          >
+            {panel === 'element' ? (
+              elementPanel
+            ) : panel === 'garment' ? (
+              garmentPanel
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Нажмите на принт или надпись — здесь появятся размер, положение и поворот; на изделие — его цвет, размер
+                и показ. Tab — по объектам с клавиатуры.
+              </p>
+            )}
+          </div>
 
           <div className="absolute bottom-3 flex max-w-lg flex-col gap-2" style={{ left: libraryOpen ? 312 : 12 }}>
             {visible.elements.length === 0 && (
@@ -1933,7 +1985,17 @@ export function WorkWindow() {
                   key={keyOf(f)}
                   className={`flex items-start gap-1 rounded border-l-4 px-2 py-1 text-xs ${f.weight === 'blocking' ? 'border-destructive bg-destructive-soft' : 'border-warning bg-tone-amber-soft'}`}
                 >
-                  <span className="flex-1">{f.message}</span>
+                  <button
+                    className="flex-1 text-left"
+                    title="Показать эту сторону и выбрать элемент"
+                    onClick={() => {
+                      setStateCode(f.side)
+                      if (f.elementId) setComposition((c) => select(c, f.elementId!))
+                    }}
+                  >
+                    <span className="text-muted-foreground">{SIDE_NAMES[f.side] ?? f.side}: </span>
+                    {f.message}
+                  </button>
                   {f.weight === 'warning' && (
                     <button
                       title="Так и задумано. Кто закрыл — появится вместе со входом платформы"
@@ -2087,6 +2149,17 @@ export function WorkWindow() {
 }
 
 /** Настройки подбора уходят файлом: иначе они испарятся вместе с вкладкой. */
+/** Копия холста не больше `size` точек по длинной стороне: снимок для витрины
+ *  кодируется мгновенно, а не секунду, как холст отрисовки. */
+function shrink(src: HTMLCanvasElement, size: number): HTMLCanvasElement {
+  const k = Math.min(1, size / Math.max(src.width, src.height))
+  const c = document.createElement('canvas')
+  c.width = Math.max(1, Math.round(src.width * k))
+  c.height = Math.max(1, Math.round(src.height * k))
+  c.getContext('2d')?.drawImage(src, 0, 0, c.width, c.height)
+  return c
+}
+
 function download(params: RenderParams) {
   const blob = new Blob([JSON.stringify(params, null, 2)], { type: 'application/json' })
   const a = document.createElement('a')

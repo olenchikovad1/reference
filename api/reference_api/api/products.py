@@ -25,7 +25,10 @@ def get_product(code: str) -> Product:
 def get_frame(code: str, state: str) -> Response:
     """Кадр состояния байтами PNG."""
     try:
-        return Response(service.frame(code, state), media_type="image/png")
+        # Кадр меняется, только когда технолог заменит исходник, — час кэша
+        # снимает повторную загрузку при каждом открытии окна.
+        return Response(service.frame(code, state), media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=3600"})
     except service.ProductNotFound:
         raise HTTPException(404, f"Изделие {code} не описано") from None
     except service.StateNotFound:
