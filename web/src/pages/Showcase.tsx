@@ -12,10 +12,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { assetUrl, searchAssets } from '../shared/api/assets'
+import { assetUrl } from '../shared/api/assets'
 import { fetchPalette, toCss } from '../shared/api/colours'
 import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
-import { listReferences, searchReferences, type Card } from '../shared/api/references'
+import { findReferences, listReferences, type Card } from '../shared/api/references'
 
 /** Строк на витрине — ровно три, при любой высоте окна. */
 const ROWS = 3
@@ -32,7 +32,11 @@ export function Showcase() {
   const height = useFreeHeight()
   const grid = useRef<HTMLDivElement | null>(null)
 
-  const shown = found.ids === null ? cards.data : cards.data?.filter((c) => found.ids!.has(c.id))
+  // В поиске — порядок совпадения (свой тег первым), без него — свежие первыми.
+  const shown =
+    found.ids === null
+      ? cards.data
+      : found.ids.flatMap((id) => cards.data?.find((c) => c.id === id) ?? [])
   const rowHeight = Math.max(120, (height.value - GAP * (ROWS - 1)) / ROWS)
 
   /** Стрелки ходят по карточкам: вверх-вниз — в столбце, вбок — на столбец. */
@@ -232,14 +236,15 @@ function modelsOf(node: TreeNode): TreeNode['models'] {
 }
 
 /**
- * Поиск по витрине: по картинкам — по весам (план 071), и по надписям — точно.
- * Возвращает номера референсов; null — не ищем, показывается всё.
+ * Поиск по витрине (US-0493): свои теги первыми, затем надпись дословно,
+ * затем картинки по весам (план 071), — порядок решает сервис. Возвращает
+ * номера референсов по порядку; null — не ищем, показывается всё.
  *
  * С задержкой: запрос на каждую букву — это «с», «сн», «сне» в сервис, из
  * которых нужен последний.
  */
-function useFound(query: string): { ids: Set<number> | null; error: string | null } {
-  const [ids, setIds] = useState<Set<number> | null>(null)
+function useFound(query: string): { ids: number[] | null; error: string | null } {
+  const [ids, setIds] = useState<number[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     const q = query.trim()
@@ -250,10 +255,10 @@ function useFound(query: string): { ids: Set<number> | null; error: string | nul
     }
     let stale = false
     const t = setTimeout(() => {
-      Promise.all([searchAssets(q), searchReferences(q)])
-        .then(([pictures, texts]) => {
+      findReferences(q)
+        .then((rows) => {
           if (stale) return
-          setIds(new Set([...pictures.flatMap((f) => f.references.map((r) => r.id)), ...texts.map((r) => r.id)]))
+          setIds(rows.map((r) => r.id))
           setError(null)
         })
         .catch((e: Error) => !stale && setError(`Поиск не ответил: ${e.message}`))

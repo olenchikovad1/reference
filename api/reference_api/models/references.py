@@ -145,3 +145,57 @@ class ReferenceText(Base):
             postgresql_ops={"normalised": "gin_trgm_ops"},
         ),
     )
+
+
+class ReferenceTag(Base):
+    """Свой тег референса — то, чего модель не увидит: «школьная линейка»,
+    «повтор бестселлера». В поиске важнее любого автотега (US-0493).
+
+    Рядом с написанным лежит нормализованный: по нему идёт поиск — и точный, и
+    триграммный (как у надписей, решение 0010), и форма слова не мешает
+    найти «школьную линейку» по «школьн».
+    """
+
+    __tablename__ = "reference_tags"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reference_id: Mapped[int] = mapped_column(
+        ForeignKey("reference_cards.id", ondelete="CASCADE"), nullable=False
+    )
+    #: Как написал человек — это и показывается.
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: Нижний регистр, схлопнутые пробелы.
+    normalised: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: Кто дописал — id субъекта платформы; пусто — без входа.
+    author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("reference_id", "normalised", name="uq_reference_tag"),
+        Index("ix_reference_tags_trgm", "normalised", postgresql_using="gin",
+              postgresql_ops={"normalised": "gin_trgm_ops"}),
+    )
+
+
+class ReferenceHiddenTag(Base):
+    """Автотег, скрытый у референса как неверный: «танк» у надписи TANK POWER.
+
+    Хранится у референса, а не у картинки: у другой работы та же картинка
+    может быть и правда про танк. Модель тег не возвращает — пересчёт
+    автотегов идёт по картинкам и сюда не смотрит.
+    """
+
+    __tablename__ = "reference_hidden_tags"
+
+    reference_id: Mapped[int] = mapped_column(
+        ForeignKey("reference_cards.id", ondelete="CASCADE"), primary_key=True
+    )
+    #: Код автотега из словаря модели.
+    code: Mapped[str] = mapped_column(String(120), primary_key=True)
+    #: Имя тега по-русски: по нему скрытый тег перестаёт находить референс.
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

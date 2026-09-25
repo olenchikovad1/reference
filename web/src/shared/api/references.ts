@@ -103,7 +103,45 @@ export interface ReferenceFull {
   /** Номер и работа последней версии. */
   number: number
   work: unknown
+  tags: RefTags
 }
+
+/** Свои теги референса и скрытые у него автотеги (US-0493). */
+export interface RefTags {
+  own: string[]
+  hidden: { code: string; name: string }[]
+}
+
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const r = await fetch(`${BASE}${path}`, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!r.ok) throw new Error(`Теги: ${r.status}`)
+  return (await r.json()) as T
+}
+
+export const addTag = (id: number, name: string) => send<RefTags>('POST', `references/${id}/tags`, { name })
+export const removeTag = (id: number, name: string) =>
+  send<RefTags>('DELETE', `references/${id}/tags?name=${encodeURIComponent(name)}`)
+export const hideTag = (id: number, code: string, name: string) =>
+  send<RefTags>('POST', `references/${id}/hidden-tags`, { code, name })
+export const unhideTag = (id: number, code: string) =>
+  send<RefTags>('DELETE', `references/${id}/hidden-tags?code=${encodeURIComponent(code)}`)
+/** Уже заведённые свои теги — подсказка при вводе. */
+export const tagNames = (prefix: string) => send<string[]>('GET', `references/tag-names?prefix=${encodeURIComponent(prefix)}`)
+
+/** Найденный референс: свой тег первым, надпись дословно, картинка по смыслу. */
+export interface FoundReference {
+  id: number
+  name: string
+  by: 'tag' | 'slogan' | 'picture'
+  rank: number
+  what: string | null
+}
+
+export const findReferences = (q: string) => send<FoundReference[]>('GET', `references/find?q=${encodeURIComponent(q)}`)
 
 async function get<T>(path: string, what: string): Promise<T> {
   const r = await fetch(`${BASE}${path}`)

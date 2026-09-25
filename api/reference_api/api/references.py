@@ -7,6 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from reference_api.db import session
 from reference_api.schemas.references import (
     CardOut,
+    FoundReferenceOut,
+    HiddenTagIn,
+    TagIn,
+    TagsOut,
     ForkOut,
     FoundOut,
     ReferenceMatchOut,
@@ -87,6 +91,62 @@ async def add_version(
     return _saved(saved)
 
 
+def _tags(t: service.Tags) -> TagsOut:
+    return TagsOut(own=t.own, hidden=[HiddenTagIn(code=c, name=n) for c, n in t.hidden])
+
+
+@router.get("/find", response_model=list[FoundReferenceOut])
+async def find(q: str, db: AsyncSession = Depends(session)) -> list[FoundReferenceOut]:
+    """Поиск на витрине: свои теги первыми, затем надпись дословно, затем
+    картинки по смыслу. Скрытый у референса автотег его больше не находит."""
+    return [
+        FoundReferenceOut(id=f.reference_id, name=f.name, by=f.by, rank=round(f.rank, 3), what=f.what)
+        for f in await service.find(db, q)
+    ]
+
+
+@router.get("/tag-names", response_model=list[str])
+async def tag_names(prefix: str = "", db: AsyncSession = Depends(session)) -> list[str]:
+    """Подсказка при вводе своего тега — уже заведённые, частые первыми."""
+    return await service.tag_names(db, prefix)
+
+
+@router.post(
+    "/{reference_id}/tags", response_model=TagsOut, dependencies=[requires("references", Action.WRITE)]
+)
+async def add_tag(reference_id: int, body: TagIn, request: Request, db: AsyncSession = Depends(session)) -> TagsOut:
+    """Свой тег — важнее любого автотега в поиске."""
+    try:
+        return _tags(await service.add_tag(db, reference_id, body.name, _author(request)))
+    except service.NoSuchReference as missing:
+        raise HTTPException(404, str(missing)) from None
+
+
+@router.delete(
+    "/{reference_id}/tags", response_model=TagsOut, dependencies=[requires("references", Action.WRITE)]
+)
+async def remove_tag(reference_id: int, name: str, db: AsyncSession = Depends(session)) -> TagsOut:
+    return _tags(await service.remove_tag(db, reference_id, name))
+
+
+@router.post(
+    "/{reference_id}/hidden-tags", response_model=TagsOut, dependencies=[requires("references", Action.WRITE)]
+)
+async def hide_tag(reference_id: int, body: HiddenTagIn, db: AsyncSession = Depends(session)) -> TagsOut:
+    """Неверный автотег скрыт у этого референса и больше его не находит."""
+    try:
+        return _tags(await service.hide_tag(db, reference_id, body.code, body.name))
+    except service.NoSuchReference as missing:
+        raise HTTPException(404, str(missing)) from None
+
+
+@router.delete(
+    "/{reference_id}/hidden-tags", response_model=TagsOut, dependencies=[requires("references", Action.WRITE)]
+)
+async def unhide_tag(reference_id: int, code: str, db: AsyncSession = Depends(session)) -> TagsOut:
+    return _tags(await service.unhide_tag(db, reference_id, code))
+
+
 @router.get("/search", response_model=list[FoundOut])
 async def search(q: str, db: AsyncSession = Depends(session)) -> list[FoundOut]:
     """Точный поиск по надписи.
@@ -139,6 +199,7 @@ async def open_card(reference_id: int, db: AsyncSession = Depends(session)) -> R
         ],
         number=last.number,
         work=last.work,
+        tags=_tags(await service.tags_of(db, card.id)),
     )
 
 

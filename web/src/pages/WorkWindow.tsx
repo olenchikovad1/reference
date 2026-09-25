@@ -41,8 +41,14 @@ import type { ReferenceMatch } from '../shared/api/references'
 import {
   openReference,
   openVersion,
+  addTag,
+  hideTag,
+  removeTag,
   saveReference,
   saveVersion,
+  tagNames,
+  unhideTag,
+  type RefTags,
   type ReferenceFull,
   type Saved,
   type VersionBody,
@@ -162,6 +168,10 @@ export function WorkWindow() {
   // Выбрано изделие (не принт): панель его цвета, размера и показа.
   const [garmentPicked, setGarmentPicked] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  // Свои теги и скрытые автотеги открытого референса (US-0493).
+  const [refTags, setRefTags] = useState<RefTags | null>(null)
+  const [tagDraft, setTagDraft] = useState('')
+  const [tagHints, setTagHints] = useState<string[]>([])
   const [libraryOpen, setLibraryOpen] = useState(false)
   // Узнанное. Пусто — окна нет вовсе: окно «совпадений нет» превращает
   // подсказку в помеху, и его перестают читать вместе с полезными.
@@ -1015,6 +1025,27 @@ export function WorkWindow() {
     if (ready) area.current?.focus({ preventScroll: true })
   }, [ready])
 
+  // Теги приходят вместе с референсом; новый — без них, пока не сохранён.
+  useEffect(() => {
+    setRefTags(current?.tags ?? null)
+  }, [current])
+
+  // Подсказка из уже заведённых своих тегов — по мере ввода.
+  useEffect(() => {
+    const q = tagDraft.trim()
+    if (!q) return setTagHints([])
+    const t = setTimeout(() => void tagNames(q).then(setTagHints).catch(() => setTagHints([])), 250)
+    return () => clearTimeout(t)
+  }, [tagDraft])
+
+  /** Изменить теги: ответ сервиса — новые теги целиком. Не вышло — сказать. */
+  function retag(change: (id: number) => Promise<RefTags>) {
+    if (!current) return
+    void change(current.id)
+      .then(setRefTags)
+      .catch((e: Error) => setDropHint(`Теги не сохранились: ${e.message} — повторите.`))
+  }
+
   // Выбрали принт — панель изделия уступает ему место.
   useEffect(() => {
     if (composition.selectedId) setGarmentPicked(false)
@@ -1211,6 +1242,14 @@ export function WorkWindow() {
     )
 
   const cal = product.calibration
+  const hiddenCodes = new Set((refTags?.hidden ?? []).map((h) => h.code))
+  const autoTags = [
+    ...composition.elements
+      .flatMap((el) => (el.kind === 'image' ? (tagsOf[digestOf(el.src)]?.tags ?? []) : []))
+      .filter((tg) => tg.strong && !hiddenCodes.has(tg.code))
+      .reduce((m, tg) => (m.get(tg.code)?.score ?? -1) < tg.score ? m.set(tg.code, tg) : m, new Map<string, Tag>())
+      .values(),
+  ].sort((a, b) => b.score - a.score)
   const title = current ? `№${current.id} · ${current.name}` : `${product.display_name} · новый референс`
   const target = selected ? otherSide(selected.placement.side ?? 'front') : null
   const panel: 'element' | 'garment' | null = selected ? 'element' : garmentPicked ? 'garment' : null
@@ -1763,6 +1802,70 @@ export function WorkWindow() {
         </div>
 
         <aside className="w-72 shrink-0 overflow-y-auto border-l border-line p-3 text-sm" aria-label="теги и история">
+          <Section title="Теги">
+            {!current && <p className="text-xs text-muted-foreground">свои теги — после первого сохранения</p>}
+            {current && refTags && (
+              <>
+                <div className="flex flex-wrap gap-1">
+                  {refTags.own.map((name) => (
+                    <span key={name} className="rounded bg-primary-soft px-2 py-0.5 text-xs" title="свой тег — в поиске важнее автотегов">
+                      {name}
+                      <button className="ml-1 text-muted-foreground" aria-label={`убрать тег ${name}`} onClick={() => retag((id) => removeTag(id, name))}>
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <TextInput
+                  value={tagDraft}
+                  list="own-tag-hints"
+                  placeholder="свой тег: школьная линейка…"
+                  aria-label="добавить свой тег"
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' || !tagDraft.trim()) return
+                    const name = tagDraft.trim()
+                    setTagDraft('')
+                    retag((id) => addTag(id, name))
+                  }}
+                />
+                <datalist id="own-tag-hints">
+                  {tagHints.map((h) => (
+                    <option key={h} value={h} />
+                  ))}
+                </datalist>
+              </>
+            )}
+            {autoTags.length > 0 && (
+              <div className="flex flex-wrap gap-1" aria-label="автотеги">
+                {autoTags.map((tg) => (
+                  <span key={tg.code} style={S.tagChip} title={`автотег, вес ${tg.score.toFixed(4)} · ${tg.model}`}>
+                    {tg.name} <span style={S.tagScore}>{weightText(tg.score)}</span>
+                    {current && (
+                      <button
+                        className="ml-1 text-muted-foreground"
+                        title="Неверный — скрыть у этого референса: перестанет находить его в поиске"
+                        aria-label={`скрыть автотег ${tg.name}`}
+                        onClick={() => retag((id) => hideTag(id, tg.code, tg.name))}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+            {(refTags?.hidden.length ?? 0) > 0 && (
+              <p className="text-xs text-muted-foreground">
+                скрыто:{' '}
+                {refTags!.hidden.map((h) => (
+                  <button key={h.code} className="mr-1 underline" title="вернуть автотег" onClick={() => retag((id) => unhideTag(id, h.code))}>
+                    {h.name}
+                  </button>
+                ))}
+              </p>
+            )}
+          </Section>
           <Section title={`На изделии · ${SIDE_NAMES[stateCode] ?? stateCode}`}>
             {visible.elements.length === 0 && <p className="text-xs text-muted-foreground">на этой стороне пусто</p>}
             <div className="flex flex-col gap-1">

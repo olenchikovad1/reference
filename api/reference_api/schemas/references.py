@@ -99,6 +99,33 @@ class ForkOut(BaseModel):
     name: str
 
 
+class HiddenTagIn(BaseModel):
+    """Автотег, скрываемый у референса: код из словаря модели и имя."""
+
+    code: str
+    name: str
+
+
+class TagIn(BaseModel):
+    name: str
+
+
+class TagsOut(BaseModel):
+    #: Свои теги, как написаны.
+    own: list[str]
+    #: Скрытые автотеги.
+    hidden: list[HiddenTagIn]
+
+
+class FoundReferenceOut(BaseModel):
+    id: int
+    name: str
+    #: tag — свой тег, slogan — надпись дословно, picture — картинка по смыслу.
+    by: str
+    rank: float
+    what: str | None = None
+
+
 class ReferenceOut(BaseModel):
     """Референс целиком: версии для листания и работа последней из них."""
 
@@ -112,6 +139,7 @@ class ReferenceOut(BaseModel):
     number: int
     #: Пусто — версия сохранена до того, как работу начали хранить.
     work: dict | None
+    tags: TagsOut
 
 
 class VersionOut(VersionMetaOut):

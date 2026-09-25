@@ -4,10 +4,16 @@
 карточки: находка — референс, а не одно из его сохранений.
 """
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from reference_api.models.references import Reference, ReferenceText, ReferenceVersion
+from reference_api.models.references import (
+    Reference,
+    ReferenceHiddenTag,
+    ReferenceTag,
+    ReferenceText,
+    ReferenceVersion,
+)
 
 
 async def create(
@@ -186,3 +192,92 @@ async def latest(db: AsyncSession, limit: int = 50) -> list[tuple[Reference, Ref
         .limit(limit)
     )
     return [(c, v) for c, v in rows]
+
+
+async def tags(db: AsyncSession, card_id: int) -> list[ReferenceTag]:
+    rows = await db.execute(
+        select(ReferenceTag).where(ReferenceTag.reference_id == card_id).order_by(ReferenceTag.created_at)
+    )
+    return list(rows.scalars())
+
+
+async def add_tag(db: AsyncSession, card_id: int, name: str, normalised: str, author_id: str | None) -> None:
+    """Свой тег; тот же по нормализованному — не второй, а тот же."""
+    exists = await db.scalar(
+        select(ReferenceTag.id).where(ReferenceTag.reference_id == card_id, ReferenceTag.normalised == normalised)
+    )
+    if exists is None:
+        db.add(ReferenceTag(reference_id=card_id, name=name, normalised=normalised, author_id=author_id))
+    await db.commit()
+
+
+async def remove_tag(db: AsyncSession, card_id: int, normalised: str) -> None:
+    await db.execute(
+        delete(ReferenceTag).where(ReferenceTag.reference_id == card_id, ReferenceTag.normalised == normalised)
+    )
+    await db.commit()
+
+
+async def hidden_tags(db: AsyncSession, card_id: int) -> list[ReferenceHiddenTag]:
+    rows = await db.execute(
+        select(ReferenceHiddenTag)
+        .where(ReferenceHiddenTag.reference_id == card_id)
+        .order_by(ReferenceHiddenTag.created_at)
+    )
+    return list(rows.scalars())
+
+
+async def hide_tag(db: AsyncSession, card_id: int, code: str, name: str) -> None:
+    if await db.get(ReferenceHiddenTag, (card_id, code)) is None:
+        db.add(ReferenceHiddenTag(reference_id=card_id, code=code, name=name))
+    await db.commit()
+
+
+async def unhide_tag(db: AsyncSession, card_id: int, code: str) -> None:
+    await db.execute(
+        delete(ReferenceHiddenTag).where(ReferenceHiddenTag.reference_id == card_id, ReferenceHiddenTag.code == code)
+    )
+    await db.commit()
+
+
+async def by_own_tag(
+    db: AsyncSession, normalised: str, threshold: float, limit: int = 50
+) -> list[tuple[Reference, ReferenceTag, float]]:
+    """Референсы по своему тегу — триграммами по слову (решение 0010):
+    «школьн» и «школьной линейки» находят «школьная линейка». Порог
+    параметром — по той же причине, что у надписей."""
+    score = func.word_similarity(normalised, ReferenceTag.normalised)
+    rows = await db.execute(
+        select(Reference, ReferenceTag, score.label("score"))
+        .join(ReferenceTag, ReferenceTag.reference_id == Reference.id)
+        .where(score >= threshold)
+        .order_by(score.desc())
+        .limit(limit)
+    )
+    return [(r, t, float(s)) for r, t, s in rows]
+
+
+async def hiding(db: AsyncSession, card_ids: list[int], normalised: str, threshold: float) -> set[int]:
+    """Какие из референсов скрыли автотег, похожий на запрос: по нему их
+    больше не находить."""
+    if not card_ids:
+        return set()
+    rows = await db.execute(
+        select(ReferenceHiddenTag.reference_id).where(
+            ReferenceHiddenTag.reference_id.in_(card_ids),
+            func.word_similarity(normalised, func.lower(ReferenceHiddenTag.name)) >= threshold,
+        )
+    )
+    return set(rows.scalars())
+
+
+async def tag_names(db: AsyncSession, prefix: str, limit: int = 12) -> list[str]:
+    """Уже заведённые свои теги — подсказка при вводе, частые первыми."""
+    rows = await db.execute(
+        select(func.min(ReferenceTag.name), func.count())
+        .where(ReferenceTag.normalised.startswith(prefix))
+        .group_by(ReferenceTag.normalised)
+        .order_by(func.count().desc(), func.min(ReferenceTag.name))
+        .limit(limit)
+    )
+    return [n for n, _ in rows]
