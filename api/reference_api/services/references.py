@@ -335,20 +335,63 @@ class NotInTrash(Exception):
     """Стереть можно только лежащее в корзине: живой референс сначала туда."""
 
 
-async def copy(db: AsyncSession, reference_id: int, author_id: str | None) -> Saved:
+class NotInDrop(ValueError):
+    """В ассортименте дропа нет модели, на которой референс."""
+
+
+async def colour_model_in_drop(db: AsyncSession, colour_model_id: int | None, drop_id: int):
+    """Цветомодель той же модели в ассортименте дропа: того же цвета, если он
+    там есть, иначе первая по коду цвета. Нет модели в дропе — отказ с
+    причиной (US-0501)."""
+    from reference_api.repositories import drops as drops_repo
+
+    drop = await drops_repo.drop(db, drop_id)
+    if drop is None:
+        raise NotInDrop("такого дропа нет")
+    if drop.retired:
+        raise NotInDrop(f"дроп «{drop.name}» погашен")
+    here = await drops_repo.colour_model(db, colour_model_id) if colour_model_id else None
+    if here is None:
+        raise NotInDrop("у референса нет цветомодели — не с чем искать модель в дропе")
+    same = [cm for cm in drop.items if cm.model_id == here.model_id]
+    if not same:
+        raise NotInDrop(f"в «{drop.name}» нет модели {here.model.code}")
+    return next((cm for cm in same if cm.colour_code == here.colour_code), sorted(same, key=lambda c: c.colour_code)[0])
+
+
+async def copy(db: AsyncSession, reference_id: int, author_id: str | None, drop_id: int | None = None) -> Saved:
     """«Копировать» с витрины: новый референс, первая версия — последняя
     версия исходного как есть, с отметкой, от какого пошёл. Без открытия и без
-    узнавания: копия заведомо «уже была», это и есть её смысл."""
+    узнавания: копия заведомо «уже была», это и есть её смысл. С дропом —
+    «скопировать в дроп»: копия встаёт на цветомодель той же модели в его
+    ассортименте, цвет работы — её цвет."""
     card = await repo.get(db, reference_id)
     if card is None:
         raise NoSuchReference("референса с таким номером нет")
     last = (await repo.versions(db, reference_id))[-1]
-    new = await repo.create(db, card.name, colour_model_id=card.colour_model_id, forked_from_version_id=last.id)
+    colour_model_id, work = card.colour_model_id, last.work
+    if drop_id is not None:
+        cm = await colour_model_in_drop(db, card.colour_model_id, drop_id)
+        colour_model_id = cm.id
+        work = {**(last.work or {}), "colourCode": cm.colour_code} if last.work else last.work
+    new = await repo.create(db, card.name, colour_model_id=colour_model_id, forked_from_version_id=last.id)
     version = await repo.add_version(
         db, new, card.name, last.sheet_digest, list(last.image_digests),
-        [(t.text, t.normalised) for t in last.texts], last.work, author_id, last.views,
+        [(t.text, t.normalised) for t in last.texts], work, author_id, last.views,
     )
     return Saved(new.id, version.number, [])
+
+
+async def move_to_drop(db: AsyncSession, reference_id: int, drop_id: int) -> None:
+    """«Назначить дроп»: референс переходит на цветомодель той же модели в
+    ассортименте дропа. Меняется карточка, а не версия (И-6 про версии):
+    дроп референс берёт от цветомодели."""
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    cm = await colour_model_in_drop(db, card.colour_model_id, drop_id)
+    card.colour_model_id = cm.id
+    await db.commit()
 
 
 async def trash(db: AsyncSession, reference_id: int, by: str | None) -> None:

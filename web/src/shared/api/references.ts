@@ -106,11 +106,29 @@ async function act(method: string, path: string): Promise<void> {
   if (!r.ok) throw new Error(r.status === 409 ? 'Сначала в корзину' : `Не вышло: ${r.status}`)
 }
 
-/** Копия последней версии без открытия, с отметкой, от какого пошла. */
-export async function copyReference(id: number): Promise<Saved> {
-  const r = await fetch(`${BASE}references/${id}/copy`, { method: 'POST' })
-  if (!r.ok) throw new Error(`Копия не вышла: ${r.status}`)
+/** Причина отказа сервиса словами — из его ответа, а не кодом. */
+async function refusal(r: Response, what: string): Promise<Error> {
+  try {
+    const body = (await r.json()) as { detail?: unknown }
+    if (typeof body.detail === 'string') return new Error(body.detail)
+  } catch {
+    // ответ не JSON — остаётся код
+  }
+  return new Error(`${what}: ${r.status}`)
+}
+
+/** Копия последней версии без открытия, с отметкой, от какого пошла. С
+ *  дропом — «скопировать в дроп» (US-0501). */
+export async function copyReference(id: number, dropId?: number): Promise<Saved> {
+  const r = await fetch(`${BASE}references/${id}/copy${dropId ? `?drop_id=${dropId}` : ''}`, { method: 'POST' })
+  if (!r.ok) throw await refusal(r, 'копия не вышла')
   return (await r.json()) as Saved
+}
+
+/** «Назначить дроп»: референс на цветомодель той же модели в дропе. */
+export async function moveToDrop(id: number, dropId: number): Promise<void> {
+  const r = await fetch(`${BASE}references/${id}/drop?drop_id=${dropId}`, { method: 'POST' })
+  if (!r.ok) throw await refusal(r, 'не назначился')
 }
 export const trashReference = (id: number) => act('POST', `references/${id}/trash`)
 export const restoreReference = (id: number) => act('POST', `references/${id}/restore`)

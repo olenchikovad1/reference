@@ -201,12 +201,29 @@ async def trash_list(db: AsyncSession = Depends(session)) -> list[TrashedOut]:
 
 
 @router.post("/{reference_id}/copy", response_model=SavedOut, dependencies=[requires("references", Action.WRITE)])
-async def copy(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> SavedOut:
-    """Копия последней версии без открытия, с отметкой, от какого пошла."""
+async def copy(
+    reference_id: int, request: Request, drop_id: int | None = None, db: AsyncSession = Depends(session)
+) -> SavedOut:
+    """Копия последней версии без открытия, с отметкой, от какого пошла.
+    С `drop_id` — «скопировать в дроп» (US-0501)."""
     try:
-        return _saved(await service.copy(db, reference_id, _author(request)))
+        return _saved(await service.copy(db, reference_id, _author(request), drop_id))
     except service.NoSuchReference as missing:
         raise HTTPException(404, str(missing)) from None
+    except service.NotInDrop as refusal:
+        raise HTTPException(422, str(refusal)) from None
+
+
+@router.post("/{reference_id}/drop", status_code=204, dependencies=[requires("references", Action.WRITE)])
+async def move_to_drop(reference_id: int, drop_id: int, db: AsyncSession = Depends(session)) -> None:
+    """«Назначить дроп» (US-0501): референс переходит на цветомодель той же
+    модели в ассортименте дропа; нет модели там — отказ с причиной."""
+    try:
+        await service.move_to_drop(db, reference_id, drop_id)
+    except service.NoSuchReference as missing:
+        raise HTTPException(404, str(missing)) from None
+    except service.NotInDrop as refusal:
+        raise HTTPException(422, str(refusal)) from None
 
 
 @router.post("/{reference_id}/trash", status_code=204, dependencies=[requires("references", Action.DELETE)])

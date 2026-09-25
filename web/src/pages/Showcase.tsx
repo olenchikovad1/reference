@@ -7,7 +7,7 @@
 // отрисовка на лету: шестьдесят карточек не должны рисовать сто двадцать
 // изделий.
 
-import { EmptyState, Modal, PageHeader, TextInput, buttonClass } from '@platform/ui'
+import { EmptyState, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -22,7 +22,8 @@ import { useCan } from '../shared/api/platform'
 import { assetUrl } from '../shared/api/assets'
 import { fetchPalette, toCss } from '../shared/api/colours'
 import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
-import { copyReference, eraseForever, findReferences, listReferences, trashReference, type Card } from '../shared/api/references'
+import { copyReference, eraseForever, findReferences, listReferences, moveToDrop, trashReference, type Card } from '../shared/api/references'
+import { fetchDrops } from '../shared/api/drops'
 
 /** Строк на витрине — ровно три, при любой высоте окна. */
 const ROWS = 3
@@ -50,6 +51,53 @@ export function Showcase() {
   const canErase = useCan(CODE, 'references', 'delete-forever')
   const [trashing, setTrashing] = useState<Card | null>(null)
   const [erasing, setErasing] = useState<Card | null>(null)
+  // Выделение (US-0501): Ctrl — добавить или убрать, Shift — от последнего
+  // выделенного до этой, пробел — с клавиатуры.
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  // Якорь диапазона — в ref: щелчки идут быстрее отрисовки, и из состояния
+  // Shift брал бы прошлый якорь.
+  const anchor = useRef<number | null>(null)
+  const [bulkDrop, setBulkDrop] = useState('')
+  const [bulkTrash, setBulkTrash] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkReport, setBulkReport] = useState<string | null>(null)
+  const drops = useQuery({ queryKey: ['drops'], queryFn: fetchDrops })
+
+  function pick(id: number, e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) {
+    const order = (shownRef.current ?? []).map((c) => c.id)
+    // Якорь — до обновления: функция обновления выполняется позже, когда он
+    // уже переписан этим же щелчком.
+    const from = anchor.current
+    setSelected((s) => {
+      const next = new Set(s)
+      if (e.shiftKey && from !== null && order.includes(from)) {
+        const [a, b] = [order.indexOf(from), order.indexOf(id)].sort((x, y) => x - y)
+        order.slice(a, b + 1).forEach((x) => next.add(x))
+      } else if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    anchor.current = id
+  }
+
+  /** Действие над выделенным — по одной карточке, до конца: не вышло с одной —
+   *  сказано, с какой и почему, остальные сделаны. */
+  async function bulk(what: string, run: (id: number) => Promise<unknown>) {
+    const ids = [...selected]
+    setBulkBusy(true)
+    const failed: string[] = []
+    for (const id of ids) {
+      try {
+        await run(id)
+      } catch (e) {
+        failed.push(`№${id} — ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+    setBulkBusy(false)
+    await queries.invalidateQueries({ queryKey: ['references'] })
+    setBulkReport(`${what}: сделано ${ids.length - failed.length} из ${ids.length}.${failed.length ? ' Не вышло: ' + failed.join('; ') : ''}`)
+    setSelected(new Set(failed.map((f) => Number(f.slice(1, f.indexOf(' ')))).filter(Boolean)))
+  }
   const [eraseReason, setEraseReason] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const act = (run: () => Promise<unknown>) =>
@@ -61,6 +109,7 @@ export function Showcase() {
       .catch((e: Error) => setActionError(`${e.message} — повторите; если повторится, сервис не отвечает.`))
 
   // В поиске — порядок совпадения (свой тег первым), без него — свежие первыми.
+  const shownRef = useRef<Card[] | undefined>(undefined)
   const shown = (
     found.ids === null ? cards.data : found.ids.flatMap((id) => cards.data?.find((c) => c.id === id) ?? [])
   )?.filter((c) =>
@@ -71,11 +120,22 @@ export function Showcase() {
   )
   const rowHeight = Math.max(120, (height.value - GAP * (ROWS - 1)) / ROWS)
 
-  /** Стрелки ходят по карточкам: вверх-вниз — в столбце, вбок — на столбец. */
+  shownRef.current = shown
+
+  /** Стрелки ходят по карточкам: вверх-вниз — в столбце, вбок — на столбец;
+   *  пробел выделяет. */
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
     const all = [...(grid.current?.querySelectorAll<HTMLButtonElement>('[data-card]') ?? [])]
     const at = all.indexOf(document.activeElement as HTMLButtonElement)
     if (at < 0) return
+    if (e.key === ' ') {
+      const id = Number((document.activeElement as HTMLElement).dataset.cardId)
+      if (id) {
+        e.preventDefault()
+        pick(id, { ctrlKey: true, metaKey: false, shiftKey: e.shiftKey })
+      }
+      return
+    }
     const by: Record<string, number> = { ArrowDown: 1, ArrowUp: -1, ArrowRight: ROWS, ArrowLeft: -ROWS }
     if (!(e.key in by)) return
     e.preventDefault()
@@ -113,6 +173,57 @@ export function Showcase() {
         }
       />
       <DropFilterBar {...drop} />
+      {selected.size > 0 && (
+        <div className="pf-card mb-2 flex flex-wrap items-center gap-2 border border-line p-2 text-sm" role="region" aria-label="действия над выделенным">
+          <strong>выделено {selected.size}</strong>
+          <div className="w-56">
+            <Select
+              aria-label="дроп для выделенных"
+              options={(drops.data ?? []).filter((d) => !d.retired).map((d) => ({ value: String(d.id), label: d.name }))}
+              placeholder="дроп…"
+              value={bulkDrop}
+              onChange={(e) => setBulkDrop(e.target.value)}
+            />
+          </div>
+          <button
+            className={buttonClass({ tone: 'accent', variant: 'outline', small: true })}
+            disabled={!bulkDrop || bulkBusy}
+            onClick={() => void bulk('назначить дроп', (id) => moveToDrop(id, Number(bulkDrop)))}
+          >
+            назначить дроп
+          </button>
+          <button
+            className={buttonClass({ tone: 'accent', variant: 'outline', small: true })}
+            disabled={!bulkDrop || bulkBusy}
+            onClick={() => void bulk('скопировать в дроп', (id) => copyReference(id, Number(bulkDrop)))}
+          >
+            скопировать в дроп
+          </button>
+          {canTrash && (
+            <button className={buttonClass({ tone: 'danger', variant: 'outline', small: true })} disabled={bulkBusy} onClick={() => setBulkTrash(true)}>
+              удалить {selected.size}
+            </button>
+          )}
+          <button
+            className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+            onClick={() => {
+              setSelected(new Set())
+              anchor.current = null
+            }}
+          >
+            снять выделение
+          </button>
+          <span className="text-xs text-muted-foreground">Ctrl — добавить, Shift — диапазон, пробел — с клавиатуры</span>
+        </div>
+      )}
+      {bulkReport && (
+        <p role="status" className="mb-2 flex gap-2 text-sm">
+          <span className="flex-1">{bulkReport}</span>
+          <button onClick={() => setBulkReport(null)} aria-label="скрыть отчёт">
+            ×
+          </button>
+        </p>
+      )}
       {found.error && <p className="text-sm text-muted-foreground">{found.error} — поиск повторится, если изменить запрос.</p>}
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}
 
@@ -158,7 +269,8 @@ export function Showcase() {
             <ShowcaseCard
               key={c.id}
               card={c}
-              onOpen={() => navigate(`/references/${c.id}`)}
+              onOpen={(e) => (e.ctrlKey || e.metaKey || e.shiftKey ? pick(c.id, e) : navigate(`/references/${c.id}`))}
+              selected={selected.has(c.id)}
               reasons={found.ids === null ? undefined : found.why.get(c.id)}
               onCopy={canCopy ? () => void act(() => copyReference(c.id)) : undefined}
               onTrash={canTrash ? () => setTrashing(c) : undefined}
@@ -202,6 +314,30 @@ export function Showcase() {
       >
         {trashing &&
           `Референс №${trashing.id} пропадёт с витрины и из поиска. 30 дней его можно вернуть из корзины целиком, с историей.`}
+      </Modal>
+
+      <Modal
+        open={bulkTrash}
+        onClose={() => setBulkTrash(false)}
+        title={`Удалить ${selected.size} в корзину?`}
+        actions={
+          <>
+            <button className={buttonClass({ tone: 'neutral', variant: 'outline' })} onClick={() => setBulkTrash(false)}>
+              оставить
+            </button>
+            <button
+              className={buttonClass({ tone: 'danger', variant: 'solid' })}
+              onClick={() => {
+                setBulkTrash(false)
+                void bulk('удалить в корзину', (id) => trashReference(id))
+              }}
+            >
+              удалить {selected.size}
+            </button>
+          </>
+        }
+      >
+        Выделенные референсы пропадут с витрины и из поиска; 30 дней их можно вернуть из корзины целиком, с историей.
       </Modal>
 
       <Modal
@@ -268,11 +404,14 @@ function ShowcaseCard({
   onTrash,
   onErase,
   reasons,
+  selected,
 }: {
   card: Card
+  /** Выделена для действия над несколькими (US-0501). */
+  selected?: boolean
   /** Почему найдена — при поиске (US-0498). */
   reasons?: string[]
-  onOpen: () => void
+  onOpen: (e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => void
   onCopy?: () => void
   onTrash?: () => void
   onErase?: () => void
@@ -284,8 +423,10 @@ function ShowcaseCard({
     <div className="group relative flex min-h-0 flex-col">
     <button
       data-card
-      onClick={onOpen}
-      className="pf-card flex min-h-0 flex-1 flex-col overflow-hidden border border-line text-left"
+      data-card-id={card.id}
+      aria-pressed={selected}
+      onClick={(e) => onOpen(e)}
+      className={`pf-card flex min-h-0 flex-1 flex-col overflow-hidden border text-left ${selected ? 'border-primary ring-2 ring-primary' : 'border-line'}`}
       title={`${card.name} · версия ${card.number}`}
     >
       <div className="relative min-h-0 flex-1">
