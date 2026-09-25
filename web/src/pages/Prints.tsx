@@ -4,7 +4,7 @@
 // русским словом (план 071). Файлы бросаются прямо на страницу: уходят в
 // библиотеку и сразу получают теги и название.
 
-import { EmptyState, PageHeader, TextInput, buttonClass } from '@platform/ui'
+import { Checkbox, EmptyState, PageHeader, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -174,13 +174,14 @@ export function Prints() {
           {items.map(({ item, weight }) => (
             <article key={item.digest} className="pf-card flex flex-col overflow-hidden border border-line text-sm">
               <div className="relative aspect-square bg-muted">
-                <input
-                  type="checkbox"
-                  className="absolute left-2 top-2 z-10 h-4 w-4"
-                  checked={picked.has(item.digest)}
-                  onChange={() => toggle(item.digest)}
-                  aria-label={`выбрать ${item.name?.name ?? item.file_name}`}
-                />
+                <div className="absolute left-2 top-2 z-10">
+                  <Checkbox
+                    label=""
+                    aria-label={`выбрать ${item.name?.name ?? item.file_name}`}
+                    checked={picked.has(item.digest)}
+                    onChange={() => toggle(item.digest)}
+                  />
+                </div>
                 <img src={assetUrl(item.digest, 'thumb')} alt={item.name?.name ?? item.file_name} className="h-full w-full object-contain" />
                 {weight !== undefined && (
                   <span className="absolute right-1 top-1 rounded bg-card px-1 text-xs" title="насколько картинка про запрос относительно всей библиотеки">

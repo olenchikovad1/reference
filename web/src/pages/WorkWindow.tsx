@@ -61,9 +61,10 @@ import { windowKey } from '../shared/keys'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
 import { useFrameAlpha } from '../shared/frameAlpha'
 import { detectAlpha } from '../shared/dropped'
-import { fetchCatalogue, fetchBoard } from '../shared/api/drops'
+import { fetchBoard, fetchCatalogue, fetchDrops } from '../shared/api/drops'
 import { fetchTexts } from '../shared/api/texts'
 import { approvedIn, PICK_TYPE, WorkPicker, type Pick as Picked } from './WorkPicker'
+import { ColourCompare, type ColourChoice } from './ColourCompare'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../shared/grading'
 import { forget, forgetDraft, load, loadDraft, save, type SavedState } from '../shared/saved'
@@ -190,6 +191,7 @@ export function WorkWindow() {
   const [tagDraft, setTagDraft] = useState('')
   const [tagHints, setTagHints] = useState<string[]>([])
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
   // Узнанное. Пусто — окна нет вовсе: окно «совпадений нет» превращает
   // подсказку в помеху, и его перестают читать вместе с полезными.
   const [seen, setSeen] = useState<Match[]>([])
@@ -1169,6 +1171,8 @@ export function WorkWindow() {
       ])
     return cmId ? walk(catalogue.data) : []
   }, [catalogue.data, cmId])
+  const dropList = useQuery({ queryKey: ['drops'], queryFn: fetchDrops, staleTime: 60_000 })
+  const catalogueDropName = (id: number) => dropList.data?.find((d) => d.id === id)?.name
   const board = useQuery({
     queryKey: ['drops', refDropIds[0], 'board'],
     queryFn: () => fetchBoard(refDropIds[0]),
@@ -1177,6 +1181,62 @@ export function WorkWindow() {
   const approved = approvedIn(board.data)
   const isApproved = (el: (typeof composition.elements)[number]) =>
     el.kind === 'image' ? approved.has(`image:${digestOf(el.src)}`) : approved.has(`text:${el.text.replace(/\s+/g, ' ').trim().toUpperCase()}`)
+
+  // Цвета для сравнения (US-0500): из ассортимента дропа референса, иначе
+  // вся палитра; у каждого — цветомодель этого изделия, если она есть.
+  const colourChoices: ColourChoice[] = useMemo(() => {
+    const walk = (nodes: typeof catalogue.data): { id: number; colour_code: string; drop_ids: number[] }[] =>
+      (nodes ?? []).flatMap((n) => [
+        ...n.models.filter((m) => m.code === PRODUCT).flatMap((m) => m.colour_models),
+        ...walk(n.children),
+      ])
+    const models = walk(catalogue.data)
+    const drop = refDropIds[0]
+    const codes = drop ? models.filter((cm) => cm.drop_ids.includes(drop)).map((cm) => cm.colour_code) : colours.map((c) => c.code)
+    return codes.flatMap((code) => {
+      const c = colours.find((x) => x.code === code)
+      if (!c) return []
+      return [{ code, name: c.group, rgb: c.rgb, colourModelId: models.find((cm) => cm.colour_code === code)?.id ?? null }]
+    })
+  }, [catalogue.data, refDropIds, colours])
+
+  /** Сохранить выбранные цвета референсами — по одному на цветомодель, одной
+   *  командой. Лист один (от цвета он не зависит), снимки — с превью каждого
+   *  цвета, работа — та же с другим кодом цвета. */
+  async function saveColours(picked: ColourChoice[], canvases: Record<string, Record<string, HTMLCanvasElement | null>>) {
+    if (saving || picked.length === 0) return
+    setSaving(true)
+    try {
+      const body = await versionBody()
+      if (!body) return
+      const made: number[] = []
+      for (const c of picked) {
+        const views: Record<string, string> = {}
+        await Promise.all(
+          ['front', 'back'].map(async (side) => {
+            const cv = canvases[c.code]?.[side]
+            if (cv) views[side] = await uploadCanvas(shrink(cv, VIEW_SIZE), `${PRODUCT}-${side}-${c.code}-view.png`)
+          }),
+        )
+        const saved = await saveReference({
+          ...body,
+          name: `${PRODUCT} · ${c.name.toLowerCase()}`,
+          work: { ...(body.work as Record<string, unknown>), colourCode: c.code },
+          views,
+          colour_model_id: c.colourModelId,
+          forked_from: current && viewing ? { reference_id: current.id, number: viewing } : null,
+        })
+        made.push(saved.id)
+      }
+      void queries.invalidateQueries({ queryKey: ['references'] })
+      setCompareOpen(false)
+      setDropHint(`Сохранено референсов: ${made.map((n) => `№${n}`).join(', ')} — они на витрине.`)
+    } catch (e) {
+      setDropHint(`Не сохранилось: ${e instanceof Error ? e.message : String(e)} — повторите.`)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const onGarment = useFrameAlpha(product && state ? frameUrl(product.code, state.code) : null)
 
@@ -1408,6 +1468,14 @@ export function WorkWindow() {
           </button>
         </>
       )}
+      <button
+        className={small()}
+        onClick={() => setCompareOpen((v) => !v)}
+        aria-pressed={compareOpen}
+        title="Тот же принт на нескольких цветах рядом"
+      >
+        сравнить цвета
+      </button>
       <button className={small()} onClick={() => setHelpOpen(true)} title="Клавиши окна — ?" aria-label="шпаргалка по клавишам">
         ?
       </button>
@@ -1777,6 +1845,24 @@ export function WorkWindow() {
               </div>
             </div>
           </div>
+
+          {compareOpen && (
+            <ColourCompare
+              product={product}
+              composition={sized}
+              calibration={calibration}
+              torso={torso}
+              anchorsBySide={anchorsBySide}
+              params={params}
+              images={images.current}
+              imagesVersion={imagesVersion}
+              choices={colourChoices}
+              fromDrop={refDropIds.length ? (catalogueDropName(refDropIds[0]) ?? null) : null}
+              saving={saving}
+              onSave={(picked, canvases) => void saveColours(picked, canvases)}
+              onClose={() => setCompareOpen(false)}
+            />
+          )}
 
           {/* Что нанести — первым, слева сверху: ненайденная возможность равна отсутствующей. */}
           <div className="absolute left-3 top-3 flex gap-2">

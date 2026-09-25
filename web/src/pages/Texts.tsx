@@ -4,7 +4,7 @@
 // «ЛЕТО 2025» находит и «ЛЕТО 2024» — похожим, с отметкой (решение 0010).
 // Надпись можно завести заранее, под будущий дроп.
 
-import { DataTable, EmptyState, PageHeader, TextInput, buttonClass, type DataColumn } from '@platform/ui'
+import { Checkbox, DataTable, EmptyState, PageHeader, TextInput, buttonClass, type DataColumn } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -66,15 +66,15 @@ export function Texts() {
       sortable: false,
       width: 'w-10',
       cell: (r) => (
-        <input
-          type="checkbox"
-          checked={picked.has(r.key)}
+        <Checkbox
+          label=""
           aria-label={`выбрать «${r.text}»`}
-          onChange={() =>
+          checked={picked.has(r.key)}
+          onChange={(on) =>
             setPicked((s) => {
               const next = new Set(s)
-              if (next.has(r.key)) next.delete(r.key)
-              else next.add(r.key)
+              if (on) next.add(r.key)
+              else next.delete(r.key)
               return next
             })
           }
