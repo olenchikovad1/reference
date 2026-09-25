@@ -87,6 +87,35 @@ export interface Card extends Saver {
   /** Цвет изделия и дропы цветомодели; пусто — без цветомодели. */
   colour_code: string | null
   drops: string[]
+  /** От какого референса пошла копия; пусто — начат с чистого листа. */
+  forked_from_id: number | null
+}
+
+/** Референс в корзине: когда удалён и когда сотрётся сам (решение 0014). */
+export interface Trashed extends Card {
+  deleted_at: string
+  purge_at: string
+}
+
+async function act(method: string, path: string): Promise<void> {
+  const r = await fetch(`${BASE}${path}`, { method })
+  if (!r.ok) throw new Error(r.status === 409 ? 'Сначала в корзину' : `Не вышло: ${r.status}`)
+}
+
+/** Копия последней версии без открытия, с отметкой, от какого пошла. */
+export async function copyReference(id: number): Promise<Saved> {
+  const r = await fetch(`${BASE}references/${id}/copy`, { method: 'POST' })
+  if (!r.ok) throw new Error(`Копия не вышла: ${r.status}`)
+  return (await r.json()) as Saved
+}
+export const trashReference = (id: number) => act('POST', `references/${id}/trash`)
+export const restoreReference = (id: number) => act('POST', `references/${id}/restore`)
+/** Стереть насовсем — только из корзины и только с функцией её очистки. */
+export const eraseReference = (id: number) => act('DELETE', `references/${id}`)
+export async function listTrash(): Promise<Trashed[]> {
+  const r = await fetch(`${BASE}references/trash`)
+  if (!r.ok) throw new Error(`Корзина: ${r.status}`)
+  return (await r.json()) as Trashed[]
 }
 
 export interface VersionMeta extends Saver {

@@ -7,6 +7,7 @@
 
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -280,3 +281,76 @@ async def find(db: AsyncSession, query: str) -> list[FoundReference]:
             if card.id not in hidden and card.id not in out:
                 out[card.id] = FoundReference(card.id, card.name, "picture", f.weight, f.name)
     return sorted(out.values(), key=lambda r: -r.rank)
+
+
+class NotInTrash(Exception):
+    """Стереть можно только лежащее в корзине: живой референс сначала туда."""
+
+
+async def copy(db: AsyncSession, reference_id: int, author_id: str | None) -> Saved:
+    """«Копировать» с витрины: новый референс, первая версия — последняя
+    версия исходного как есть, с отметкой, от какого пошёл. Без открытия и без
+    узнавания: копия заведомо «уже была», это и есть её смысл."""
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    last = (await repo.versions(db, reference_id))[-1]
+    new = await repo.create(db, card.name, colour_model_id=card.colour_model_id, forked_from_version_id=last.id)
+    version = await repo.add_version(
+        db, new, card.name, last.sheet_digest, list(last.image_digests),
+        [(t.text, t.normalised) for t in last.texts], last.work, author_id, last.views,
+    )
+    return Saved(new.id, version.number, [])
+
+
+async def trash(db: AsyncSession, reference_id: int, by: str | None) -> None:
+    """В корзину — одинаково для всех референсов, согласованных тоже (0014)."""
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    if card.deleted_at is None:
+        await repo.to_trash(db, card, datetime.now(UTC), by)
+
+
+async def restore(db: AsyncSession, reference_id: int) -> None:
+    """Из корзины — целиком, со всей историей: версии не трогались."""
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    if card.deleted_at is not None:
+        await repo.from_trash(db, card)
+
+
+async def erase(db: AsyncSession, reference_id: int) -> None:
+    """«Удалить насовсем» из корзины. Живой референс так не стирается —
+    сначала корзина: второго, быстрого пути нет (решение 0014)."""
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    if card.deleted_at is None:
+        raise NotInTrash("референс не в корзине — сначала удалите его в корзину")
+    await repo.erase(db, reference_id)
+
+
+def purge_date(deleted_at: datetime) -> datetime:
+    """Когда удалённое сотрётся само."""
+    return deleted_at + timedelta(days=settings().trash_days)
+
+
+async def purge_expired(db: AsyncSession, now: datetime | None = None) -> int:
+    """Стереть пролежавшее в корзине дольше срока. Возвращает, сколько."""
+    now = now or datetime.now(UTC)
+    ids = await repo.expired(db, now - timedelta(days=settings().trash_days))
+    for reference_id in ids:
+        await repo.erase(db, reference_id)
+    return len(ids)
+
+
+async def trashed(db: AsyncSession):
+    return await repo.latest(db, trashed=True)
+
+
+async def origins(db: AsyncSession, cards) -> dict[int, int]:
+    """Референс → номер того, от чьей версии он пошёл."""
+    by_version = await repo.origins(db, [c.forked_from_version_id for c in cards if c.forked_from_version_id])
+    return {c.id: by_version[c.forked_from_version_id] for c in cards if c.forked_from_version_id in by_version}

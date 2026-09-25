@@ -8,14 +8,17 @@
 // изделий.
 
 import { EmptyState, Modal, PageHeader, TextInput, buttonClass } from '@platform/ui'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+
+import { CODE } from '../app/shell'
+import { useCan } from '../shared/api/platform'
 
 import { assetUrl } from '../shared/api/assets'
 import { fetchPalette, toCss } from '../shared/api/colours'
 import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
-import { findReferences, listReferences, type Card } from '../shared/api/references'
+import { copyReference, findReferences, listReferences, trashReference, type Card } from '../shared/api/references'
 
 /** Строк на витрине — ровно три, при любой высоте окна. */
 const ROWS = 3
@@ -31,6 +34,18 @@ export function Showcase() {
   const found = useFound(query)
   const height = useFreeHeight()
   const grid = useRef<HTMLDivElement | null>(null)
+  const queries = useQueryClient()
+  const canCopy = useCan(CODE, 'references', 'write')
+  const canTrash = useCan(CODE, 'references', 'delete')
+  const [trashing, setTrashing] = useState<Card | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const act = (run: () => Promise<unknown>) =>
+    run()
+      .then(() => {
+        setActionError(null)
+        return queries.invalidateQueries({ queryKey: ['references'] })
+      })
+      .catch((e: Error) => setActionError(`${e.message} — повторите; если повторится, сервис не отвечает.`))
 
   // В поиске — порядок совпадения (свой тег первым), без него — свежие первыми.
   const shown =
@@ -74,10 +89,14 @@ export function Showcase() {
                 сбросить
               </button>
             )}
+            <Link to="/references/trash" className={buttonClass({ tone: 'neutral', variant: 'outline' })}>
+              корзина
+            </Link>
           </div>
         }
       />
       {found.error && <p className="text-sm text-muted-foreground">{found.error} — поиск повторится, если изменить запрос.</p>}
+      {actionError && <p className="text-sm text-destructive">{actionError}</p>}
 
       {cards.isError ? (
         <EmptyState
@@ -118,7 +137,13 @@ export function Showcase() {
           </button>
           {cards.isPending && <p className="text-sm text-muted-foreground">Загружаю референсы…</p>}
           {shown?.map((c) => (
-            <ShowcaseCard key={c.id} card={c} onOpen={() => navigate(`/references/${c.id}`)} />
+            <ShowcaseCard
+              key={c.id}
+              card={c}
+              onOpen={() => navigate(`/references/${c.id}`)}
+              onCopy={canCopy ? () => void act(() => copyReference(c.id)) : undefined}
+              onTrash={canTrash ? () => setTrashing(c) : undefined}
+            />
           ))}
           {cards.data?.length === 0 && (
             <p className="self-center text-sm text-muted-foreground">
@@ -133,6 +158,32 @@ export function Showcase() {
         </div>
       )}
 
+      <Modal
+        open={trashing !== null}
+        onClose={() => setTrashing(null)}
+        title="Удалить в корзину?"
+        actions={
+          <>
+            <button className={buttonClass({ tone: 'neutral', variant: 'outline' })} onClick={() => setTrashing(null)}>
+              оставить
+            </button>
+            <button
+              className={buttonClass({ tone: 'danger', variant: 'solid' })}
+              onClick={() => {
+                const c = trashing
+                setTrashing(null)
+                if (c) void act(() => trashReference(c.id))
+              }}
+            >
+              в корзину
+            </button>
+          </>
+        }
+      >
+        {trashing &&
+          `Референс №${trashing.id} пропадёт с витрины и из поиска. 30 дней его можно вернуть из корзины целиком, с историей.`}
+      </Modal>
+
       <CreateDialog
         open={creating}
         onClose={() => setCreating(false)}
@@ -144,15 +195,29 @@ export function Showcase() {
   )
 }
 
-/** Карточка: перед в левом нижнем углу, спина в правом верхнем, внахлёст. */
-function ShowcaseCard({ card, onOpen }: { card: Card; onOpen: () => void }) {
+/** Карточка: перед в левом нижнем углу, спина в правом верхнем, внахлёст.
+ *  Нажатие открывает окно; «копия» и «удалить» — отдельными кнопками в углу,
+ *  а не меню: делают их часто и без открытия. */
+function ShowcaseCard({
+  card,
+  onOpen,
+  onCopy,
+  onTrash,
+}: {
+  card: Card
+  onOpen: () => void
+  onCopy?: () => void
+  onTrash?: () => void
+}) {
   const front = card.views.front
   const back = card.views.back
+  const corner = buttonClass({ tone: 'neutral', variant: 'outline', small: true })
   return (
+    <div className="group relative flex min-h-0 flex-col">
     <button
       data-card
       onClick={onOpen}
-      className="pf-card flex min-h-0 flex-col overflow-hidden border border-line text-left"
+      className="pf-card flex min-h-0 flex-1 flex-col overflow-hidden border border-line text-left"
       title={`${card.name} · версия ${card.number}`}
     >
       <div className="relative min-h-0 flex-1">
@@ -174,9 +239,25 @@ function ShowcaseCard({ card, onOpen }: { card: Card; onOpen: () => void }) {
         </div>
         <div className="truncate text-muted-foreground">
           {card.drops[0] ?? 'без дропа'} · {new Date(card.saved_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+          {card.forked_from_id && ` · от №${card.forked_from_id}`}
         </div>
       </div>
     </button>
+      {(onCopy || onTrash) && (
+        <div className="absolute left-1 top-1 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          {onCopy && (
+            <button className={corner} onClick={onCopy} title="Копия последней версии — рядом, с отметкой «от №…»">
+              копия
+            </button>
+          )}
+          {onTrash && (
+            <button className={corner} onClick={onTrash} title="В корзину: 30 дней можно вернуть">
+              удалить
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

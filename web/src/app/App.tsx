@@ -14,6 +14,7 @@ import { WorkWindow } from '../pages/WorkWindow'
 import { Drops } from '../pages/Drops'
 import { Products } from '../pages/Products'
 import { Showcase } from '../pages/Showcase'
+import { Trash } from '../pages/Trash'
 import { NotFound, Placeholder } from '../pages/Placeholder'
 import { useProfile, useSections, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { BASE, SECTIONS, type SectionPlace } from './sections'
@@ -27,6 +28,7 @@ const PLATFORM_URL = import.meta.env.VITE_PLATFORM_URL ?? 'http://localhost:8100
 /** Сделанные страницы разделов; остальные — заглушки со смыслом. */
 const PAGES: Record<string, () => ReactElement> = {
   references: () => <Showcase />,
+  'references/trash': () => <Trash />,
   drops: () => <Drops />,
   products: () => <Products />,
 }
@@ -34,9 +36,10 @@ const PAGES: Record<string, () => ReactElement> = {
 /** Страница раздела, а поверх неё — окно (`overlay`), если оно открыто по
  *  адресу: рабочее окно референса лежит поверх витрины, и «назад» его
  *  закрывает. Право то же, что на раздел. */
-function Guarded({ section, overlay }: { section: SectionPlace; overlay?: ReactElement }) {
+function Guarded({ section, sub, overlay }: { section: SectionPlace; sub?: string; overlay?: ReactElement }) {
   const own = useSections(CODE)
-  const page = PAGES[section.code]
+  // Подпункт со своей страницей (корзина) — она; нет — страница раздела.
+  const page = (sub && PAGES[`${section.code}/${sub}`]) || PAGES[section.code]
   const shown = (name: string) => (
     <>
       {page ? page() : <Placeholder section={section} name={name} />}
@@ -61,7 +64,9 @@ function Pages() {
       />
       {SECTIONS.flatMap((s) => [
         <Route key={s.code} path={s.path} element={<Guarded section={s} />} />,
-        ...s.children.map((c) => <Route key={`${s.code}/${c.code}`} path={c.path} element={<Guarded section={s} />} />),
+        ...s.children.map((c) => (
+          <Route key={`${s.code}/${c.code}`} path={c.path} element={<Guarded section={s} sub={c.code} />} />
+        )),
       ])}
       <Route path="*" element={<NotFound />} />
     </Routes>

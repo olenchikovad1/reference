@@ -42,6 +42,11 @@ class Reference(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    #: В корзине с этого момента (решение 0014). Пусто — живой. Из корзины
+    #: возвращают целиком; через срок корзины она чистится сама.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Кто положил в корзину — id субъекта платформы; пусто — без входа.
+    deleted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     versions: Mapped[list["ReferenceVersion"]] = relationship(
         back_populates="reference",

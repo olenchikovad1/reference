@@ -4,7 +4,9 @@
 карточки: находка — референс, а не одно из его сохранений.
 """
 
-from sqlalchemy import delete, func, select
+from datetime import datetime
+
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.models.references import (
@@ -14,6 +16,11 @@ from reference_api.models.references import (
     ReferenceText,
     ReferenceVersion,
 )
+
+
+#: Живой — не в корзине. Удалённое не узнаётся, не ищется и не стоит на
+#: витрине: иначе «удалил» значило бы «спрятал с одного экрана» (решение 0014).
+ALIVE = Reference.deleted_at.is_(None)
 
 
 async def create(
@@ -99,7 +106,7 @@ async def by_image(
     rows = await db.execute(
         select(Reference, ReferenceVersion.image_digests)
         .join(ReferenceVersion, ReferenceVersion.reference_id == Reference.id)
-        .where(ReferenceVersion.image_digests.overlap(digests), Reference.id != exclude)
+        .where(ReferenceVersion.image_digests.overlap(digests), Reference.id != exclude, ALIVE)
         .order_by(ReferenceVersion.created_at.desc())
     )
     found: dict[int, tuple[Reference, set[str]]] = {}
@@ -115,7 +122,7 @@ async def by_sheet(db: AsyncSession, digests: list[str], exclude: int) -> list[R
     rows = await db.execute(
         select(Reference)
         .join(ReferenceVersion, ReferenceVersion.reference_id == Reference.id)
-        .where(ReferenceVersion.sheet_digest.in_(digests), Reference.id != exclude)
+        .where(ReferenceVersion.sheet_digest.in_(digests), Reference.id != exclude, ALIVE)
     )
     return list(rows.unique().scalars())
 
@@ -128,7 +135,7 @@ async def text_exactly(
         select(Reference, ReferenceText)
         .join(ReferenceVersion, ReferenceVersion.reference_id == Reference.id)
         .join(ReferenceText, ReferenceText.version_id == ReferenceVersion.id)
-        .where(ReferenceText.normalised == normalised, Reference.id != exclude)
+        .where(ReferenceText.normalised == normalised, Reference.id != exclude, ALIVE)
         .order_by(ReferenceVersion.created_at.desc())
     )
     return [(r, t) for r, t in rows]
@@ -152,6 +159,7 @@ async def text_near(
             ReferenceText.normalised != normalised,
             Reference.id != exclude,
             score >= threshold,
+            ALIVE,
         )
         .order_by(score.desc())
         .limit(limit)
@@ -165,16 +173,18 @@ async def search(db: AsyncSession, normalised: str, limit: int = 20) -> list[Ref
         select(Reference)
         .join(ReferenceVersion, ReferenceVersion.reference_id == Reference.id)
         .join(ReferenceText, ReferenceText.version_id == ReferenceVersion.id)
-        .where(ReferenceText.normalised == normalised)
+        .where(ReferenceText.normalised == normalised, ALIVE)
         .order_by(ReferenceVersion.created_at.desc())
         .limit(limit)
     )
     return list(rows.unique().scalars())
 
 
-async def latest(db: AsyncSession, limit: int = 50) -> list[tuple[Reference, ReferenceVersion]]:
+async def latest(
+    db: AsyncSession, limit: int = 50, trashed: bool = False
+) -> list[tuple[Reference, ReferenceVersion]]:
     """Карточки с последней версией, свежие по ней первыми: открывают почти
-    всегда то, что сохраняли последним."""
+    всегда то, что сохраняли последним. `trashed` — корзина вместо витрины."""
     newest = (
         select(ReferenceVersion.reference_id, func.max(ReferenceVersion.number).label("number"))
         .group_by(ReferenceVersion.reference_id)
@@ -188,6 +198,7 @@ async def latest(db: AsyncSession, limit: int = 50) -> list[tuple[Reference, Ref
             (ReferenceVersion.reference_id == Reference.id)
             & (ReferenceVersion.number == newest.c.number),
         )
+        .where(Reference.deleted_at.is_not(None) if trashed else ALIVE)
         .order_by(ReferenceVersion.created_at.desc(), ReferenceVersion.id.desc())
         .limit(limit)
     )
@@ -250,7 +261,7 @@ async def by_own_tag(
     rows = await db.execute(
         select(Reference, ReferenceTag, score.label("score"))
         .join(ReferenceTag, ReferenceTag.reference_id == Reference.id)
-        .where(score >= threshold)
+        .where(score >= threshold, ALIVE)
         .order_by(score.desc())
         .limit(limit)
     )
@@ -281,3 +292,48 @@ async def tag_names(db: AsyncSession, prefix: str, limit: int = 12) -> list[str]
         .limit(limit)
     )
     return [n for n, _ in rows]
+
+
+async def to_trash(db: AsyncSession, card: Reference, when: datetime, by: str | None) -> None:
+    card.deleted_at = when
+    card.deleted_by = by
+    await db.commit()
+
+
+async def from_trash(db: AsyncSession, card: Reference) -> None:
+    card.deleted_at = None
+    card.deleted_by = None
+    await db.commit()
+
+
+async def erase(db: AsyncSession, card_id: int) -> None:
+    """Стереть референс физически: версии с надписями, теги, саму карточку.
+
+    Один из двух путей физического удаления (решение 0014). Файлы картинок и
+    листов не трогаются — их берут другие референсы. Копии, пошедшие от его
+    версий, остаются, но отметка «от какого пошла» у них пустеет: ссылаться
+    больше не на что.
+    """
+    version_ids = select(ReferenceVersion.id).where(ReferenceVersion.reference_id == card_id)
+    await db.execute(
+        update(Reference).where(Reference.forked_from_version_id.in_(version_ids)).values(forked_from_version_id=None)
+    )
+    await db.execute(delete(ReferenceVersion).where(ReferenceVersion.reference_id == card_id))
+    await db.execute(delete(Reference).where(Reference.id == card_id))
+    await db.commit()
+
+
+async def expired(db: AsyncSession, before: datetime) -> list[int]:
+    """Номера референсов, пролежавших в корзине дольше срока."""
+    rows = await db.execute(select(Reference.id).where(Reference.deleted_at < before))
+    return list(rows.scalars())
+
+
+async def origins(db: AsyncSession, version_ids: list[int]) -> dict[int, int]:
+    """Версия → номер её референса: «от какого пошла» для списка карточек."""
+    if not version_ids:
+        return {}
+    rows = await db.execute(
+        select(ReferenceVersion.id, ReferenceVersion.reference_id).where(ReferenceVersion.id.in_(version_ids))
+    )
+    return {v: r for v, r in rows}

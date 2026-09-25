@@ -40,7 +40,7 @@ async def references_by_colour_model(db: AsyncSession, ids: list[int]) -> dict[i
         return {}
     rows = await db.execute(
         select(Reference.colour_model_id, func.count())
-        .where(Reference.colour_model_id.in_(ids))
+        .where(Reference.colour_model_id.in_(ids), Reference.deleted_at.is_(None))
         .group_by(Reference.colour_model_id)
     )
     return {cm: n for cm, n in rows}

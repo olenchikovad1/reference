@@ -22,9 +22,9 @@ address: http://reference-web:5173
 # Приложение внутреннее: внешним субъектам доступ не выдаётся вовсе.
 available_to_external: false
 
-# Первая страница — нынешний экран примерки принта. Прав на неё не выдают: она
-# есть у каждого, кому открыто приложение. Заменится рабочим окном (план 073).
-home: {code: bench, name: Примерка принта, icon: house, tone: slate}
+# Первая страница ведёт на витрину референсов (план 073): временного экрана
+# примерки больше нет. Прав на неё не выдают. Код неизменен — он в гранте.
+home: {code: bench, name: Референсы, icon: house, tone: slate}
 
 # Разделы — ровно страницы меню (US-0484). Коды меняются свободно, пока
 # приложение не зарегистрировано: на них ещё нет ни одного гранта. После
@@ -99,15 +99,18 @@ sections:
 right_sets:
   - code: designer
     name: Дизайнер
-    grants: [references:view, references:write, prints:view, prints:write, texts:view, texts:write,
-             drops:view, products:view, review:view, dictionaries:view]
+    # delete — в корзину и обратно (решение 0014): неудачные варианты дизайнер
+    # убирает сам; стереть насовсем — функция очистки корзины, её нет.
+    grants: [references:view, references:write, references:delete, prints:view, prints:write,
+             texts:view, texts:write, drops:view, products:view, review:view, dictionaries:view]
   - code: editor
     name: Редактор
     grants: [references:view, review:view, review:write, prints:view, texts:view, drops:view,
              dictionaries:view]
   - code: chief-editor
     name: Суперредактор
-    grants: [references:view, references:write, review:view, review:write, prints:view, prints:write,
+    grants: [references:view, references:write, references:delete, review:view, review:write,
+             prints:view, prints:write,
              texts:view, texts:write, drops:view, drops:write, dictionaries:view, dictionaries:write,
              archive:view, review:approve-final, references:export-techpack, references:purge-trash,
              references:delete-forever, prints:mark-defect]

@@ -87,6 +87,15 @@ class CardOut(Saver):
     #: референс сохранён без цветомодели.
     colour_code: str | None = None
     drops: list[str] = []
+    #: От какого референса пошла копия («Сохранить как», «копировать»).
+    forked_from_id: int | None = None
+
+
+class TrashedOut(CardOut):
+    """Референс в корзине: когда удалён и когда сотрётся сам."""
+
+    deleted_at: datetime
+    purge_at: datetime
 
 
 class VersionMetaOut(Saver):

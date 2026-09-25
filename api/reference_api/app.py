@@ -18,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from reference_api.api import assets, colours, drops, health, people, platform, prints, products, references
 from reference_api.config import settings
 from reference_api.schedulers import people as people_schedule
+from reference_api.schedulers import references as trash_schedule
 from reference_api.services import platform as publishing
 
 log = logging.getLogger("reference.platform")
@@ -43,6 +44,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # неё и в тестах снимок перечитывается вручную.
     if cfg.platform_credential and cfg.platform_core_url and not cfg.without_platform:
         tasks.append(asyncio.create_task(people_schedule.keep_fresh()))
+    # Корзина чистится по сроку всегда: срок — обещание человеку, а не
+    # свойство стенда с платформой.
+    tasks.append(asyncio.create_task(trash_schedule.purge_expired()))
     yield
     for task in tasks:
         task.cancel()

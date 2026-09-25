@@ -1,12 +1,13 @@
 """Собранный принт: вход по HTTP."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from platform_client import Action, requires
+from platform_client import Action, requires, requires_function
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
 from reference_api.schemas.references import (
     CardOut,
+    TrashedOut,
     FoundReferenceOut,
     HiddenTagIn,
     TagIn,
@@ -161,9 +162,13 @@ async def search(q: str, db: AsyncSession = Depends(session)) -> list[FoundOut]:
 @router.get("", response_model=list[CardOut])
 async def latest(db: AsyncSession = Depends(session)) -> list[CardOut]:
     """Референсы, свежие по последней версии первыми."""
-    rows = await service.latest(db)
+    return await _cards(db, await service.latest(db))
+
+
+async def _cards(db: AsyncSession, rows) -> list[CardOut]:
     names = await people.names_of(db, [v.author_id for _, v in rows if v.author_id])
     models = await drops.colour_models_of(db, [c.colour_model_id for c, _ in rows if c.colour_model_id])
+    origins = await service.origins(db, [c for c, _ in rows])
     out = []
     for c, v in rows:
         cm = models.get(c.colour_model_id) if c.colour_model_id else None
@@ -171,8 +176,61 @@ async def latest(db: AsyncSession = Depends(session)) -> list[CardOut]:
             id=c.id, name=c.name, number=v.number, saved_at=v.created_at, author_id=v.author_id,
             author_name=names.get(v.author_id or ""), views=v.views or {},
             colour_code=cm.colour_code if cm else None, drops=cm.drops if cm else [],
+            forked_from_id=origins.get(c.id),
         ))
     return out
+
+
+@router.get("/trash", response_model=list[TrashedOut])
+async def trash_list(db: AsyncSession = Depends(session)) -> list[TrashedOut]:
+    """Корзина: удалённые, свежие первыми, с датой, когда сотрутся сами."""
+    rows = await service.trashed(db)
+    cards = await _cards(db, rows)
+    return [
+        TrashedOut(**card.model_dump(), deleted_at=c.deleted_at, purge_at=service.purge_date(c.deleted_at))
+        for card, (c, _) in zip(cards, rows, strict=True)
+    ]
+
+
+@router.post("/{reference_id}/copy", response_model=SavedOut, dependencies=[requires("references", Action.WRITE)])
+async def copy(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> SavedOut:
+    """Копия последней версии без открытия, с отметкой, от какого пошла."""
+    try:
+        return _saved(await service.copy(db, reference_id, _author(request)))
+    except service.NoSuchReference as missing:
+        raise HTTPException(404, str(missing)) from None
+
+
+@router.post("/{reference_id}/trash", status_code=204, dependencies=[requires("references", Action.DELETE)])
+async def to_trash(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> None:
+    """В корзину: пропадает с витрины и из поиска, 30 дней возвращается."""
+    try:
+        await service.trash(db, reference_id, _author(request))
+    except service.NoSuchReference as missing:
+        raise HTTPException(404, str(missing)) from None
+
+
+@router.post("/{reference_id}/restore", status_code=204, dependencies=[requires("references", Action.DELETE)])
+async def restore(reference_id: int, db: AsyncSession = Depends(session)) -> None:
+    """Из корзины обратно — целиком, с историей."""
+    try:
+        await service.restore(db, reference_id)
+    except service.NoSuchReference as missing:
+        raise HTTPException(404, str(missing)) from None
+
+
+@router.delete(
+    "/{reference_id}", status_code=204, dependencies=[requires_function("references", "purge-trash")]
+)
+async def erase(reference_id: int, db: AsyncSession = Depends(session)) -> None:
+    """Удалить насовсем — только из корзины и только с функцией очистки
+    корзины (решение 0014). Картинки остаются в библиотеке."""
+    try:
+        await service.erase(db, reference_id)
+    except service.NoSuchReference as missing:
+        raise HTTPException(404, str(missing)) from None
+    except service.NotInTrash as refusal:
+        raise HTTPException(409, str(refusal)) from None
 
 
 # Объявлен ПОСЛЕ /search: иначе «search» разбирался бы как номер карточки и
