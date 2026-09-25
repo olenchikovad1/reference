@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { add, EMPTY, type ImageElement, type TextElement } from './composition'
-import { onSide, sidesUsed, upgrade } from './sides'
+import { moveToSide, onSide, otherSide, sidesUsed, upgrade } from './sides'
 import { describe as describeSheet } from './sheet'
 
 function picture(id: string, side: string): ImageElement {
@@ -103,5 +103,28 @@ describe('номера элементов', () => {
     const ids = upgrade(c).elements.map((e) => e.id)
     expect(new Set(ids).size).toBe(3)
     expect(ids[0]).toBe('el-2')
+  })
+})
+
+describe('перенос на другую сторону', () => {
+  it('принт уезжает на спину с тем же размером и высотой, остальные на месте', () => {
+    const c = add(add(EMPTY, picture('a', 'front')), words('b', 'front'))
+    const moved = moveToSide(c, 'a', 'back', ['neck', 'centre'])
+    const a = moved.elements.find((e) => e.id === 'a')!
+    expect(a.placement).toEqual({ ...picture('a', 'front').placement, side: 'back' })
+    expect(moved.elements.find((e) => e.id === 'b')!.placement.side).toBe('front')
+    expect(onSide(moved, 'back').elements.map((e) => e.id)).toEqual(['a'])
+  })
+
+  it('ориентира нет у новой стороны — от горловины', () => {
+    const el = { ...picture('a', 'front'), placement: { ...picture('a', 'front').placement, anchor: 'pocket' } }
+    const moved = moveToSide(add(EMPTY, el), 'a', 'back', ['neck'])
+    expect(moved.elements[0].placement.anchor).toBe('neck')
+  })
+
+  it('перед ↔ спина, с бока не переносят', () => {
+    expect(otherSide('front')).toBe('back')
+    expect(otherSide('back')).toBe('front')
+    expect(otherSide('left')).toBeNull()
   })
 })

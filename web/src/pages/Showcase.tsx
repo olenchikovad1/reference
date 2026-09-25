@@ -114,7 +114,7 @@ export function Showcase() {
           </button>
           {cards.isPending && <p className="text-sm text-muted-foreground">Загружаю референсы…</p>}
           {shown?.map((c) => (
-            <ShowcaseCard key={c.id} card={c} onOpen={() => navigate(`/?reference=${c.id}`)} />
+            <ShowcaseCard key={c.id} card={c} onOpen={() => navigate(`/references/${c.id}`)} />
           ))}
           {cards.data?.length === 0 && (
             <p className="self-center text-sm text-muted-foreground">
@@ -132,7 +132,9 @@ export function Showcase() {
       <CreateDialog
         open={creating}
         onClose={() => setCreating(false)}
-        onPick={(colourModel, colour) => navigate(`/?colour_model=${colourModel}&colour=${encodeURIComponent(colour)}`)}
+        onPick={(colourModel, colour) =>
+          navigate(`/references/new?colour_model=${colourModel}&colour=${encodeURIComponent(colour)}`)
+        }
       />
     </main>
   )

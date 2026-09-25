@@ -73,3 +73,39 @@ export function upgrade(c: Composition): Composition {
 export function newElementId(): string {
   return `el-${crypto.randomUUID().slice(0, 8)}`
 }
+
+/** Куда переносится принт: перед ↔ спина. Бок иллюстративный, туда не
+ *  переносят — размер по нему не считается. */
+export function otherSide(side: string): string | null {
+  if (side === 'front') return 'back'
+  if (side === 'back') return 'front'
+  return null
+}
+
+/**
+ * «Перенести на спину» («на перед»): принт уезжает на другую сторону с тем же
+ * размером, высотой от ориентира и поворотом (US-0492).
+ *
+ * Сантиметры не пересчитываются: они и так на ткани (И-1), а «12 см ниже
+ * горловины» на спине значит то же, что на переде. Ориентир сохраняется, если
+ * он есть у новой стороны, иначе принт встаёт от горловины — она есть всегда.
+ * Выделение остаётся на перенесённом, чтобы вид можно было сразу переключить
+ * вслед за ним.
+ */
+export function moveToSide(c: Composition, id: string, side: string, anchors: readonly string[]): Composition {
+  return {
+    ...c,
+    elements: c.elements.map((el) =>
+      el.id !== id
+        ? el
+        : {
+            ...el,
+            placement: {
+              ...el.placement,
+              side,
+              anchor: anchors.includes(el.placement.anchor) ? el.placement.anchor : 'neck',
+            },
+          },
+    ),
+  }
+}

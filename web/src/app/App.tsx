@@ -8,9 +8,9 @@
 import { readAppearance, type Appearance } from '@platform/shell'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactElement, type ReactNode } from 'react'
-import { createBrowserRouter, Route, RouterProvider, Routes } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 'react-router-dom'
 
-import { Bench } from '../pages/Bench'
+import { WorkWindow } from '../pages/WorkWindow'
 import { Drops } from '../pages/Drops'
 import { Products } from '../pages/Products'
 import { Showcase } from '../pages/Showcase'
@@ -31,20 +31,34 @@ const PAGES: Record<string, () => ReactElement> = {
   products: () => <Products />,
 }
 
-function Guarded({ section }: { section: SectionPlace }) {
+/** Страница раздела, а поверх неё — окно (`overlay`), если оно открыто по
+ *  адресу: рабочее окно референса лежит поверх витрины, и «назад» его
+ *  закрывает. Право то же, что на раздел. */
+function Guarded({ section, overlay }: { section: SectionPlace; overlay?: ReactElement }) {
   const own = useSections(CODE)
   const page = PAGES[section.code]
-  if (WITHOUT_PLATFORM) return page ? page() : <Placeholder section={section} name={section.title} />
+  const shown = (name: string) => (
+    <>
+      {page ? page() : <Placeholder section={section} name={name} />}
+      {overlay}
+    </>
+  )
+  if (WITHOUT_PLATFORM) return shown(section.title)
   if (own.isPending) return null
   const allowed = own.data?.find((s) => s.code === section.code)
   if (!allowed) return <NotFound />
-  return page ? page() : <Placeholder section={section} name={allowed.name} />
+  return shown(allowed.name)
 }
 
 function Pages() {
   return (
     <Routes>
-      <Route path="/" element={<Bench />} />
+      {/* Временный экран примерки убран: работа идёт в окне поверх витрины. */}
+      <Route path="/" element={<Navigate to="/references" replace />} />
+      <Route
+        path="/references/:ref"
+        element={<Guarded section={SECTIONS.find((s) => s.code === 'references')!} overlay={<WorkWindow />} />}
+      />
       {SECTIONS.flatMap((s) => [
         <Route key={s.code} path={s.path} element={<Guarded section={s} />} />,
         ...s.children.map((c) => <Route key={`${s.code}/${c.code}`} path={c.path} element={<Guarded section={s} />} />),

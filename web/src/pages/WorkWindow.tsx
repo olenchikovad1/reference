@@ -1,8 +1,9 @@
-import { Modal, buttonClass } from '@platform/ui'
+import { Modal, TextInput, buttonClass } from '@platform/ui'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { useBlocker } from 'react-router-dom'
+import { useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
+import { WorkFrame } from '../candidates/WorkFrame'
 import { DEFAULT_PARAMS, type RenderParams } from '../candidates/renderer'
 import { fetchPalette, toCss, toUnit, type Colour } from '../shared/api/colours'
 import { fetchPrints, printUrl, type PrintItem } from '../shared/api/prints'
@@ -38,12 +39,10 @@ import {
 } from '../shared/api/assets'
 import type { ReferenceMatch } from '../shared/api/references'
 import {
-  listReferences,
   openReference,
   openVersion,
   saveReference,
   saveVersion,
-  type Card,
   type ReferenceFull,
   type Saved,
   type VersionBody,
@@ -51,8 +50,9 @@ import {
 import { CODE } from '../app/shell'
 import { useCan } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
-import { historyKey, versionKey } from '../shared/keys'
-import { newElementId, onSide, sidesUsed, upgrade } from '../shared/sides'
+import { windowKey } from '../shared/keys'
+import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
+import { useFrameAlpha } from '../shared/frameAlpha'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../shared/grading'
 import { forget, forgetDraft, load, loadDraft, save, type SavedState } from '../shared/saved'
@@ -63,18 +63,20 @@ import { calibrationFor, fieldFor, fieldSize, sizesWithField } from '../shared/f
 import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
 import { useHistoryState } from '../shared/useHistory'
 
-// Стенд нанесения. Кадр изделия, на него бросают картинки, их двигают и мерят
-// в сантиметрах. Складки и тень приедут следующей историей — здесь проверяется,
-// что сантиметры стыкуются с кадром и что этим можно пользоваться руками.
+// Рабочее окно референса (US-0492): открывается поверх витрины по адресу
+// /references/<номер> (или /references/new), «назад» в браузере его закрывает.
+//
+// Раскладка по месту действия, а не колонкой настроек: сверху тонкая полоса
+// (имя, «Сохранить», «Сохранить как», закрыть), справа служебная полоса (что
+// на изделии с тегами, история, проверки, выгрузка), в правом верхнем углу
+// холста — виды иконками, а настройки появляются там, где нажали: принт —
+// размер, положение, поворот, градация; надпись — текст, шрифт, цвет;
+// изделие — цвет, размер, показ. Колесо, протяжка и клавиши принадлежат окну.
+//
+// Холст, объём торса, проверки зон и градация — отдельными модулями и
+// переехали как есть из временного экрана примерки; здесь раскладка и связка.
 
 const PRODUCT = 'B-HDY-14'
-
-/** Сторона окна показа, пиксели. Приближение увеличивает полотно внутри
- *  него, а само окно не растёт — иначе страница разъезжается. */
-const BOX = 620
-
-/** Ширина плитки панели, пиксели. Одна на все группы. */
-const TILE = 300
 
 /** Масштаб миниатюры стороны к кадру. Кадр — около тысячи точек, миниатюра
  *  на экране — меньше сотни; четверть оставляет запас на плотный экран. */
@@ -85,7 +87,27 @@ const noop = () => undefined
 const SIDE_NAMES: Record<string, string> = { front: 'перед', back: 'спина', left: 'левый бок' }
 type Overlay = 'none' | 'anchors' | 'zones' | 'all'
 
-export function Bench() {
+/** Шпаргалка «?»: всё, что окно умеет без мыши. */
+const KEYS: [string, string][] = [
+  ['Tab / Shift+Tab', 'по объектам на холсте'],
+  ['← → ↑ ↓', 'сдвинуть выбранное на 1 мм, с Shift — на 1 см'],
+  ['Delete', 'убрать выбранное'],
+  ['+ / −', 'приблизить, отдалить'],
+  ['0', 'вписать изделие в окно'],
+  ['1 / 2 / 3', 'перед, спина, бок'],
+  ['A / D', 'история: раньше, позже'],
+  ['Ctrl+Z / Ctrl+Y', 'отменить, вернуть'],
+  ['Ctrl+S', 'сохранить новой версией'],
+  ['Ctrl+Shift+S', 'сохранить как новый референс'],
+  ['Esc', 'снять выбор; второй раз — закрыть окно'],
+  ['?', 'эта шпаргалка'],
+]
+
+export function WorkWindow() {
+  // Номер референса из адреса окна; new — новый (цветомодель — в ?colour_model).
+  const { ref = 'new' } = useParams()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [product, setProduct] = useState<Product | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [stateCode, setStateCode] = useState('front')
@@ -123,7 +145,24 @@ export function Bench() {
   // разные действия, и второе уходит на фабрику.
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
-  const panFrom = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
+  // Нажатие на холст: протянули — сдвиг вида, не протянули — щелчок (по
+  // изделию — его панель, мимо — всё закрыть).
+  const press = useRef<{
+    x: number
+    y: number
+    px: number
+    py: number
+    moved: boolean
+    svg: SVGSVGElement | null
+  } | null>(null)
+  // Сторона квадрата показа: всё, что оставили холсту полоса и панель.
+  const [box, setBox] = useState(620)
+  const area = useRef<HTMLDivElement | null>(null)
+  const stage = useRef<HTMLDivElement | null>(null)
+  // Выбрано изделие (не принт): панель его цвета, размера и показа.
+  const [garmentPicked, setGarmentPicked] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   // Узнанное. Пусто — окна нет вовсе: окно «совпадений нет» превращает
   // подсказку в помеху, и его перестают читать вместе с полезными.
   const [seen, setSeen] = useState<Match[]>([])
@@ -131,7 +170,6 @@ export function Bench() {
   // совпадают ФАЙЛЫ, здесь — собранные принты, и выводы разные.
   const [seenCards, setSeenCards] = useState<ReferenceMatch[]>([])
   // Сохранённые карточки. Грузятся при открытии и после каждого сохранения.
-  const [cards, setCards] = useState<Card[]>([])
   // Нет права записи на «Референсах» — кнопки сохранения нет вовсе, а не
   // есть и отказывает; сервис и сам ответит «нет такого пути» (US-0487).
   const canSave = useCan(CODE, 'references', 'write')
@@ -171,9 +209,6 @@ export function Bench() {
       .catch(() => undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composition.elements])
-  useEffect(() => {
-    void listReferences().then(setCards).catch(() => setCards([]))
-  }, [])
   // Закрытые предупреждения: «так и задумано». Ключ — правило плюс элемент.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const viewCanvas = useRef<HTMLCanvasElement | null>(null)
@@ -194,18 +229,14 @@ export function Bench() {
     // первая отрисовка надписи уходит в запасной шрифт, то есть показывает не
     // то, что уйдёт в печать, и заметить это трудно: буквы-то на месте.
     const was = load()
-    const asked = Number(new URLSearchParams(window.location.search).get('reference'))
+    const asked = Number(ref)
     if (asked) {
-      // Открыли с витрины: референс из адреса главнее прошлой работы, её
-      // черновик лежит под своим номером.
+      // Референс из адреса окна. Несохранённое с прошлого раза предлагается
+      // восстановить, а не подменяет сохранённое молча.
       void openCard(asked)
-    } else if (was?.referenceId) {
-      // Работа была референсом — открывается он на той версии, где остановились;
-      // несохранённое предлагается восстановить, а не подменяет сохранённое
-      // молча. Пришли из ячейки дропа — начинают новый: черновик референса
-      // лежит под его номером и дождётся, когда его откроют.
-      if (!colourFromDrop) void openCard(was.referenceId, was.number ?? undefined)
-    } else if (was) {
+    } else if (was && !was.referenceId) {
+      // Новый референс — возвращается только несохранённая ни разу работа;
+      // черновики референсов лежат под своими номерами и ждут их открытия.
       setStateCode(was.stateCode)
       if (!colourFromDrop) setColourCode(was.colourCode)
       setSize(was.size ?? null)
@@ -340,7 +371,9 @@ export function Bench() {
   }, [dirty])
 
   // Уход на другую страницу приложения с правками — тот же вопрос из трёх.
-  const blocker = useBlocker(dirty)
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname,
+  )
   // По состоянию, а не по самому blocker: объект новый на каждой отрисовке, и
   // зависимость от него ставила бы вопрос заново бесконечно.
   const blocked = blocker.state === 'blocked'
@@ -479,7 +512,7 @@ export function Bench() {
 
   /** Не даёт увести изделие за край окна: уехавшую часть вернуть нечем. */
   function clampPan(p: { x: number; y: number }, z: number) {
-    const limit = (BOX * (z - 1)) / 2
+    const limit = (box * (z - 1)) / 2
     return {
       x: Math.min(limit, Math.max(-limit, p.x)),
       y: Math.min(limit, Math.max(-limit, p.y)),
@@ -552,7 +585,6 @@ export function Bench() {
       setBaseline(nowKey)
       setRestored(false)
       setSeenCards(saved.matches)
-      void listReferences().then(setCards).catch(() => undefined)
       return true
     } catch (e) {
       // Работа не теряется: она на экране и в черновике, повторить — то же
@@ -598,7 +630,12 @@ export function Bench() {
       viewing,
       towards,
     )
-    if (n === null) return
+    if (n !== null) goTo(n)
+  }
+
+  /** Открыть версию номер n — при несохранённом сначала спросить. */
+  function goTo(n: number) {
+    if (!current) return
     const card = current
     askLeave(() => {
       void openVersion(card.id, n)
@@ -627,7 +664,9 @@ export function Bench() {
     const colour = w.colourCode ?? colourCode
     setColourCode(colour)
     setSize(w.size ?? null)
-    commit(c)
+    // Открытая версия — без выбранного: панель появляется по нажатию, а не
+    // потому, что при сохранении что-то было выделено.
+    commit({ ...c, selectedId: null })
     setCurrent(card)
     setViewing(number)
     setColourModelId(card.colour_model_id)
@@ -824,62 +863,225 @@ export function Bench() {
     commit((c) => add(c, el))
   }
 
-  // Клавиши версий. Функции берутся из ref: обработчик ставится один раз, а
-  // сохранять должен то, что на экране сейчас, а не при установке.
-  const versionActions = useRef({ save: saveCard, saveAs: saveCardAs, step })
-  versionActions.current = { save: saveCard, saveAs: saveCardAs, step }
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const asked = versionKey(e)
-      if (!asked) return
-      const target = e.target as HTMLElement | null
-      const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-      if ((asked === 'older' || asked === 'newer') && typing) return
-      e.preventDefault()
-      if (asked === 'save') {
-        if (canSave) void versionActions.current.save()
-      } else if (asked === 'save-as') {
-        if (canSave) void versionActions.current.saveAs()
-      } else versionActions.current.step(asked)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [canSave])
+  /** Закрыть окно — туда, откуда открыли: шагом назад по истории, чтобы
+   *  «назад» после закрытия не открывало окно снова. Открыли прямой ссылкой —
+   *  на витрину. С несохранённым уход задержит вопрос. */
+  function close() {
+    if (location.key !== 'default') navigate(-1)
+    else navigate('/references', { replace: true })
+  }
 
-  // Клавиши: мышкой удобно искать, но попасть в «12 см ниже горловины» ею
-  // нельзя, а это основной способ работы.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const asked = historyKey(e)
-      if (asked) {
+  /** «Перенести на спину» («на перед»): тот же размер и высота, вид идёт
+   *  следом за принтом — проверки сразу по зонам новой стороны. */
+  function moveSelected(to: string) {
+    if (!selected) return
+    const anchors = Object.keys(product?.states.find((s) => s.code === to)?.anchors ?? {})
+    const id = selected.id
+    commit((c) => select(moveToSide(c, id, to, anchors), id))
+    setStateCode(to)
+  }
+
+  // Клавиши окна — одной таблицей (shared/keys.ts). Обработчик ставится один
+  // раз и берёт свежее состояние из ref: иначе Ctrl+S сохранял бы то, что было
+  // на экране при подписке.
+  const keyAction = useRef<(e: KeyboardEvent) => void>(() => undefined)
+  keyAction.current = (e: KeyboardEvent) => {
+    // Открыт вопрос «сохранить?» или «восстановить?» — клавиши у него.
+    if (leaving || draftOffer) return
+    const target = e.target as HTMLElement | null
+    const typing =
+      !!target &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
+    const a = windowKey(e, typing)
+    if (!a) return
+    if (helpOpen) {
+      if (a.kind === 'escape' || a.kind === 'help') setHelpOpen(false)
+      return
+    }
+    const selectedId = composition.selectedId
+    switch (a.kind) {
+      case 'undo':
         e.preventDefault()
-        if (asked === 'redo') history.redo()
-        else history.undo()
+        history.undo()
+        return
+      case 'redo':
+        e.preventDefault()
+        history.redo()
+        return
+      case 'save':
+      case 'save-as':
+        e.preventDefault()
+        if (canSave) void (a.kind === 'save' ? saveCard() : saveCardAs())
+        return
+      case 'older':
+      case 'newer':
+        e.preventDefault()
+        step(a.kind)
+        return
+      case 'help':
+        e.preventDefault()
+        setHelpOpen(true)
+        return
+      case 'escape':
+        e.preventDefault()
+        // Первый Esc снимает выбор (или уходит из поля), второй закрывает окно.
+        if (typing) {
+          target?.blur()
+          area.current?.focus()
+        } else if (libraryOpen) setLibraryOpen(false)
+        else if (selectedId || garmentPicked) {
+          setComposition((c) => select(c, null))
+          setGarmentPicked(false)
+        } else close()
+        return
+      case 'view': {
+        const s = product?.states[a.index]
+        if (!s) return
+        e.preventDefault()
+        setStateCode(s.code)
         return
       }
-      if (!composition.selectedId) return
-      const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
-      const step = e.shiftKey ? 1 : 0.1
-      const by: Record<string, [number, number]> = {
-        ArrowLeft: [-step, 0],
-        ArrowRight: [step, 0],
-        ArrowUp: [0, -step],
-        ArrowDown: [0, step],
-      }
-      if (e.key in by) {
+      case 'zoom':
         e.preventDefault()
-        const [dx, dy] = by[e.key]
-        commit((c) => nudge(c, c.selectedId as string, dx, dy))
-      }
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+        zoomTo(a.by === 'fit' ? 1 : zoom * (a.by === 'in' ? 1.25 : 1 / 1.25))
+        return
+      case 'nudge':
+        if (!selectedId) return
         e.preventDefault()
-        commit((c) => remove(c, c.selectedId as string))
+        commit((c) => nudge(c, selectedId, a.dxCm, a.dyCm))
+        return
+      case 'remove':
+        if (!selectedId) return
+        e.preventDefault()
+        commit((c) => remove(c, selectedId))
+        return
+      case 'next': {
+        // Tab ходит по объектам, пока фокус на холсте; с последнего — дальше
+        // по окну, как обычно, иначе из холста клавиатурой не выйти.
+        if (document.activeElement !== area.current) return
+        const ids = visible.elements.map((el) => el.id)
+        const at = ids.indexOf(visible.selectedId ?? '')
+        const next = at < 0 ? (a.back ? ids.length - 1 : 0) : at + (a.back ? -1 : 1)
+        if (next < 0 || next >= ids.length) return
+        e.preventDefault()
+        setComposition((c) => select(c, ids[next]))
+        return
       }
     }
+  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keyAction.current(e)
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [composition.selectedId, history])
+  }, [])
+
+  // Колесо над изделием — приближение к точке под курсором. Подписка своя, не
+  // через React: его обработчик колеса пассивный, и отменить прокрутку из
+  // него нельзя. Над панелями колесо листает панели.
+  const wheelZoom = useRef<(k: number, around: { x: number; y: number }) => void>(() => undefined)
+  wheelZoom.current = (k, around) => zoomTo(zoom * k, around)
+  const ready = !!product && !!state
+  useEffect(() => {
+    const el = area.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      const onStage = (e.target as Element).closest('[data-stage]')
+      if (!onStage) return
+      e.preventDefault()
+      const r = onStage.getBoundingClientRect()
+      wheelZoom.current(e.deltaY < 0 ? 1.15 : 1 / 1.15, {
+        x: e.clientX - r.left - r.width / 2,
+        y: e.clientY - r.top - r.height / 2,
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [ready])
+
+  // Квадрат показа — по месту, которое осталось холсту.
+  useEffect(() => {
+    const el = stage.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      setBox(Math.max(240, Math.floor(Math.min(width, height) - 24)))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ready])
+
+  // Холст получает фокус при открытии: клавиши работают сразу, без щелчка.
+  useEffect(() => {
+    if (ready) area.current?.focus({ preventScroll: true })
+  }, [ready])
+
+  // Выбрали принт — панель изделия уступает ему место.
+  useEffect(() => {
+    if (composition.selectedId) setGarmentPicked(false)
+  }, [composition.selectedId])
+
+  // Цвет изделия виден на холсте: база шейдера следует за кодом цвета, в том
+  // числе пришедшим из ячейки дропа или из открытой версии.
+  useEffect(() => {
+    const c = colours.find((x) => x.code === colourCode)
+    if (c) setParams((p) => ({ ...p, base: toUnit(c) }))
+  }, [colours, colourCode])
+
+  // Сохранили новый — адрес окна становится адресом референса: ссылку можно
+  // отдать, а «назад» по-прежнему ведёт на витрину.
+  useEffect(() => {
+    if (current && ref !== String(current.id)) navigate(`/references/${current.id}`, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id])
+
+  // Другой референс по ссылке изнутри окна (поиск, узнанное) — открыть его.
+  useEffect(() => {
+    const id = Number(ref)
+    if (id && current && id !== current.id) void openCard(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ref])
+
+  const onGarment = useFrameAlpha(product && state ? frameUrl(product.code, state.code) : null)
+
+  function onAreaDown(e: React.PointerEvent<HTMLDivElement>) {
+    const t = e.target as Element
+    const onStage = !!t.closest('[data-stage]')
+    if (onStage) area.current?.focus({ preventScroll: true })
+    // Тянем ФОН или средней кнопкой — двигаем вид. Тянем принт — двигаем
+    // принт: различает то, за что взялись.
+    const background = onStage && t.tagName.toLowerCase() === 'svg'
+    if (!(background || (onStage && e.button === 1))) return
+    press.current = {
+      x: pan.x,
+      y: pan.y,
+      px: e.clientX,
+      py: e.clientY,
+      moved: false,
+      svg: background ? (t as SVGSVGElement) : null,
+    }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  function onAreaMove(e: React.PointerEvent<HTMLDivElement>) {
+    const p = press.current
+    if (!p) return
+    const dx = e.clientX - p.px
+    const dy = e.clientY - p.py
+    if (!p.moved && Math.hypot(dx, dy) < 4) return
+    p.moved = true
+    if (zoom > 1) setPan(clampPan({ x: p.x + dx, y: p.y + dy }, zoom))
+  }
+
+  function onAreaUp(e: React.PointerEvent<HTMLDivElement>) {
+    const p = press.current
+    press.current = null
+    if (!p || p.moved || !p.svg) return
+    // Щелчок без протяжки: по изделию — его панель, мимо — всё закрыто.
+    const m = p.svg.getScreenCTM()
+    if (!m) return
+    const at = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse())
+    setGarmentPicked(onGarment(at.x, at.y))
+  }
 
   /** По иллюстративному ракурсу размещать нельзя: силуэт на нём сокращён,
    *  и перевод сантиметров в пиксели по нему соврёт — принт уйдёт на фабрику
@@ -987,360 +1189,653 @@ export function Bench() {
     [state, stateCode],
   )
 
-  if (error) return <main style={S.page}>Изделие не загрузилось: {error}</main>
-  if (!product || !state) return <main style={S.page}>Загружаю изделие…</main>
+  const closeOnly = (
+    <>
+      <span className="flex-1" />
+      <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={close} aria-label="закрыть окно">
+        ×
+      </button>
+    </>
+  )
+  if (error)
+    return (
+      <WorkFrame label="рабочее окно" bar={closeOnly}>
+        <p className="p-6">Изделие не загрузилось: {error}. Закройте окно и откройте референс ещё раз.</p>
+      </WorkFrame>
+    )
+  if (!product || !state)
+    return (
+      <WorkFrame label="рабочее окно" bar={closeOnly}>
+        <p className="p-6 text-muted-foreground">Загружаю изделие…</p>
+      </WorkFrame>
+    )
 
   const cal = product.calibration
+  const title = current ? `№${current.id} · ${current.name}` : `${product.display_name} · новый референс`
+  const target = selected ? otherSide(selected.placement.side ?? 'front') : null
+  const panel: 'element' | 'garment' | null = selected ? 'element' : garmentPicked ? 'garment' : null
+  const small = (tone: 'neutral' | 'accent' | 'danger' = 'neutral') =>
+    buttonClass({ tone, variant: tone === 'accent' ? 'solid' : 'outline', small: true })
+  const on = (active: boolean) => buttonClass({ tone: active ? 'accent' : 'neutral', variant: active ? 'soft' : 'outline', small: true })
 
-  return (
-    <main style={S.page}>
-      <header style={S.head}>
-        <h1 style={S.h1}>{product.display_name}</h1>
-        <span style={S.code}>{product.code}</span>
-        <span style={S.dim}>
-          {cal.px_per_cm} px/см{cal.provisional && ' · предварительно'}
-          {restored && ' · восстановлено с прошлого раза'}
+  const bar = (
+    <>
+      <h1 className="truncate text-sm font-semibold" title={title}>
+        {title}
+      </h1>
+      <span className="truncate text-xs text-muted-foreground">
+        {current ? `версия ${viewing} из ${current.versions.length}` : 'ещё не сохранён'}
+        {current?.forked_from &&
+          ` · пошёл от №${current.forked_from.reference_id}, версия ${current.forked_from.number}`}
+        {restored && ' · восстановлено с прошлого раза'}
+      </span>
+      {dirty && (
+        <span role="status" className="shrink-0 text-xs text-warning">
+          ● не сохранено
         </span>
-        <span style={S.dim}>
-          {current ? `референс №${current.id} · версия ${viewing} из ${current.versions.length}` : 'новый референс, ещё не сохранён'}
-          {current?.forked_from &&
-            ` · пошёл от №${current.forked_from.reference_id}, версия ${current.forked_from.number}`}
-        </span>
-        {dirty && (
-          <span role="status" style={{ color: '#b45309', fontSize: 13 }}>
-            ● не сохранено
-          </span>
-        )}
-      </header>
+      )}
+      <span className="flex-1" />
+      {canSave && (
+        <>
+          <button className={small('accent')} disabled={saving} onClick={() => void saveCard()} title="Ctrl+S — новая версия">
+            {saving ? 'сохраняю…' : 'Сохранить'}
+          </button>
+          <button
+            className={small()}
+            disabled={saving}
+            onClick={() => void saveCardAs()}
+            title="Ctrl+Shift+S — новый референс от того, что на экране"
+          >
+            Сохранить как
+          </button>
+        </>
+      )}
+      <button className={small()} onClick={() => setHelpOpen(true)} title="Клавиши окна — ?" aria-label="шпаргалка по клавишам">
+        ?
+      </button>
+      <button className={small()} onClick={close} title="Закрыть — Esc, когда ничего не выбрано" aria-label="закрыть окно">
+        ×
+      </button>
+    </>
+  )
 
-      <div style={S.body}>
-        <div>
-          <div
-            style={S.canvasBox}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => void onDrop(e)}
-            onWheel={(e) => {
-              e.preventDefault()
-              const box = e.currentTarget.getBoundingClientRect()
-              zoomTo(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), {
-                x: e.clientX - box.left - box.width / 2,
-                y: e.clientY - box.top - box.height / 2,
+  const placement = selected && (
+    <Section title="Размещение">
+      <Num
+        label="от горловины вниз"
+        value={selected.placement.dyCm}
+        onChange={(v) => commit((c) => placeSized(c, selected.id, { dyCm: v }))}
+      />
+      <Num
+        label="от центра вбок"
+        value={selected.placement.dxCm}
+        onChange={(v) => commit((c) => placeSized(c, selected.id, { dxCm: v }))}
+      />
+      <Num
+        label="ширина"
+        value={selected.placement.widthCm}
+        onChange={(v) => commit((c) => placeSized(c, selected.id, { widthCm: Math.max(0.5, v) }))}
+      />
+      {size !== null && grid && size !== grid.base && (() => {
+        const base = composition.elements.find((e) => e.id === selected.id)
+        if (!base) return null
+        const sc = scaleAt(base.placement, grid, size)
+        return (
+          <>
+            {/* Коэффициент ТЕКУЩЕГО размера к базе. Вписанный — это
+                исключение: на этом размере принт наносят не по сетке. */}
+            <Num
+              label={`коэффициент на ${size}`}
+              value={sc.k}
+              unit=""
+              step={0.01}
+              digits={3}
+              onChange={(v) => commit((c) => place(c, base.id, setScale(base.placement, size, Math.max(0.05, v))))}
+            />
+            <p className={sc.manual ? 'text-xs text-warning' : 'text-xs text-muted-foreground'}>
+              {sc.manual ? `вручную · по сетке ×${sc.byGrid.toFixed(3)} ` : `по сетке, база ${grid.base}`}
+              {sc.manual && (
+                <button
+                  className="ml-1 text-muted-foreground"
+                  title="вернуть к сетке"
+                  onClick={() => commit((c) => place(c, base.id, resetAtSize(base.placement, size)))}
+                >
+                  ↺
+                </button>
+              )}
+            </p>
+          </>
+        )
+      })()}
+      <Num
+        label="поворот, °"
+        value={selected.placement.rotation}
+        unit=""
+        onChange={(v) => commit((c) => place(c, selected.id, { rotation: v }))}
+      />
+      <p className="text-xs text-muted-foreground">высота {formatCm(heightCm(selected))} — следует за пропорцией</p>
+      <p className="text-xs text-muted-foreground">стрелки двигают на 1 мм, с Shift — на 1 см</p>
+    </Section>
+  )
+
+  const elementPanel = selected && (
+    <>
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1 truncate" title={selected.name}>
+          {selected.kind === 'text' ? 'Надпись' : selected.name}
+        </strong>
+        <button className={small()} onClick={() => setComposition((c) => select(c, null))} aria-label="снять выбор">
+          ×
+        </button>
+      </div>
+      {selected.kind === 'image' && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {!selected.hasAlpha && <span style={S.badge}>фон не вырезан</span>}
+          {tagsOf[digestOf(selected.src)]?.name && <NameChip named={tagsOf[digestOf(selected.src)]!.name!} />}
+          {(tagsOf[digestOf(selected.src)]?.tags ?? []).length > 0 && <TagChips tags={tagsOf[digestOf(selected.src)]!.tags} />}
+        </div>
+      )}
+      {selected.kind === 'text' && (
+        <Section title="Текст, шрифт, цвет">
+          <TextInput
+            value={selected.text}
+            aria-label="текст надписи"
+            onChange={(e) => {
+              const text = e.target.value
+              commit((c) => {
+                const next = retype(c, selected.id, text)
+                return restyle(next, selected.id, { textAspect: aspectOf({ ...selected, text }) })
               })
             }}
-            onPointerDownCapture={(e) => {
-              // Тянем ФОН или средней кнопкой — двигаем вид. Тянем элемент —
-              // двигаем принт. Одно движение мышью, два разных смысла, и
-              // различает их то, за что взялись.
-              const background = (e.target as Element).tagName.toLowerCase() === 'svg'
-              if (zoom === 1 || !(background || e.button === 1)) return
-              e.stopPropagation()
-              panFrom.current = { x: pan.x, y: pan.y, px: e.clientX, py: e.clientY }
-              e.currentTarget.setPointerCapture(e.pointerId)
-            }}
-            onPointerMove={(e) => {
-              const from = panFrom.current
-              if (!from) return
-              setPan(clampPan({ x: from.x + (e.clientX - from.px), y: from.y + (e.clientY - from.py) }, zoom))
-            }}
-            onPointerUp={() => (panFrom.current = null)}
-            onPointerCancel={() => (panFrom.current = null)}
-          >
-            <div
-              style={{
-                width: BOX * zoom,
-                height: BOX * zoom,
-                position: 'relative',
-                transform: `translate(${pan.x - (BOX * (zoom - 1)) / 2}px, ${pan.y - (BOX * (zoom - 1)) / 2}px)`,
-                cursor: zoom > 1 ? 'grab' : 'default',
-              }}
-            >
-            <GarmentCanvas
-              state={state}
-              frameSrc={frameUrl(product.code, state.code)}
-              calibration={calibration}
-              composition={sized}
-              side={stateCode}
-              torso={torso}
-              anchorsBySide={anchorsBySide}
-              params={params}
-              renderScale={renderScale}
-              onFps={setFps}
-              showZones={overlay === 'zones' || overlay === 'all'}
-              field={fieldOutline}
-              fieldLabel={size ? `поле ${size}` : null}
-              hoodDownScale={hoodDownScale}
-              showAnchors={overlay === 'anchors' || overlay === 'all'}
-              onSelect={(id) => setComposition((c) => select(c, id))}
-              onMove={(id, dxCm, dyCm) => setComposition((c) => placeSized(c, id, { dxCm, dyCm }))}
-              onResize={(id, widthCm) => setComposition((c) => placeSized(c, id, { widthCm }))}
-              onRotate={(id, rotation) => setComposition((c) => place(c, id, { rotation }))}
-              onCommit={() => commit()}
-              onCanvas={(el) => (viewCanvas.current = el)}
-              images={images.current}
-              key={imagesVersion}
-            />
-            </div>
-          </div>
-          {visible.elements.length === 0 && (
-            <p style={S.dim}>
-              {state.kind === 'illustrative'
-                ? 'Это иллюстративный ракурс: он показывает, но размещать по нему нельзя — силуэт сокращён, и размер в сантиметрах по нему соврёт.'
-                : 'Перетащите сюда картинки — можно несколько разом.'}
-            </p>
-          )}
-          {Object.keys(elsewhere).length > 0 && (
-            <p style={S.dim}>
-              На других сторонах:{' '}
-              {Object.entries(elsewhere)
-                .map(([code, n]) => `${SIDE_NAMES[code] ?? code} — ${n}`)
-                .join(', ')}
-            </p>
-          )}
-          {dropHint && <p style={S.warn}>{dropHint}</p>}
-          {seen.length + seenCards.length > 0 && (
-            <Recognised
-              rows={[...cardRows(seenCards), ...fileRows(seen)]}
-              onClose={() => {
-                setSeen([])
-                setSeenCards([])
-              }}
-            />
-          )}
-        </div>
-
-        <aside style={S.panel}>
-          <Group title="Что нанести">
-            {/* Первой группой, а не внизу списка элементов: ненайденная
-                возможность равна отсутствующей, и владелец её не нашёл. */}
-            <button onClick={addLabel} style={S.btn}>
-              + надпись
-            </button>
-            <span style={S.dim}>картинки — перетаскиванием в окно слева</span>
-          </Group>
-
-          <Group title="Состояние">
-            {/* Миниатюрами с принтом, а не словами: что лежит на спине, видно
-                до нажатия, и принт, заходящий со спины на бок, виден на боку. */}
-            <div style={S.thumbs}>
-              {product.states.map((s) => (
-                <button
-                  key={s.code}
-                  onClick={() => setStateCode(s.code)}
-                  style={s.code === state.code ? S.thumbOn : S.thumb}
-                  aria-pressed={s.code === state.code}
-                  title={s.kind === 'illustrative' ? `${s.display_name} — только показ, размещать по нему нельзя` : s.display_name}
-                >
-                  <GarmentCanvas
-                    preview
-                    state={s}
-                    frameSrc={frameUrl(product.code, s.code)}
-                    calibration={calibration}
-                    composition={thumbWork}
-                    side={s.code}
-                    torso={torso}
-                    anchorsBySide={anchorsBySide}
-                    params={params}
-                    renderScale={THUMB_SCALE}
-                    showZones={false}
-                    showAnchors={false}
-                    onSelect={noop}
-                    onMove={noop}
-                    onResize={noop}
-                    onRotate={noop}
-                    images={images.current}
-                    onCanvas={(el) => (thumbCanvases.current[s.code] = el)}
-                    key={`${s.code}-${imagesVersion}`}
-                  />
-                  <span style={S.thumbCaption}>
-                    {s.display_name}
-                    {s.kind === 'illustrative' && <em style={S.tag}> · только показ</em>}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </Group>
-
-          <Group title="Размер">
-            <div style={S.row}>
-              {product.size_set.sizes.map((s) => {
-                const known = sizesWithField(product.print_fields ?? null, stateCode).includes(s)
-                return (
-                  <button
-                    key={s}
-                    onClick={() => setSize(s)}
-                    style={{
-                      ...(s === size ? S.btnOn : S.btn),
-                      // Размер без поля показан бледным, а не спрятан: спрятанный
-                      // размер выглядит как несуществующий, а он существует —
-                      // просто технолог поля для него не дал.
-                      opacity: known ? 1 : 0.45,
-                    }}
-                    title={known ? '' : 'поля для этого размера нет — спросить технолога'}
-                  >
-                    {s}
-                  </button>
-                )
-              })}
-            </div>
-            <p style={S.dim}>
-              {size === null
-                ? 'Размер не выбран: поле считается по зоне кадра, а она нарисована для одного размера.'
-                : field
-                  ? `Поле ${product.print_fields?.by_size?.[String(size)]?.[stateCode]?.join(' × ')} см` +
-                    (product.print_fields?.provisional ? ' · предварительно, от технолога ещё не подтверждено' : '')
-                  : 'Для этого размера поля нет — считаем по зоне кадра. Число придёт от технолога.'}
-            </p>
-            <p style={S.dim}>
-              {/* Отрисованный размер и выбранный — разные вещи. Кадр один, и
-                  растягивать его под размер нельзя: врать будет всё. */}
-              Отрисован{' '}
-              {product.rendered_size
-                ? `${product.rendered_size}`
-                : `предположительно ${product.rendered_size_assumed} — в именах кадров размера нет`}
-            </p>
-          </Group>
-
-          <Group title="Цвет изделия">
-            <div style={S.swatches}>
-              {colours.map((c) => (
-                <button
-                  key={c.code}
-                  title={`${c.name} · ${c.code}`}
-                  onClick={() => {
-                    setColourCode(c.code)
-                    setParams((p) => ({ ...p, base: toUnit(c) }))
-                  }}
-                  style={{
-                    ...S.swatch,
-                    background: toCss(c),
-                    outline: c.code === colourCode ? '2px solid #111' : '1px solid #d1d5db',
-                  }}
-                />
-              ))}
-            </div>
-            <p style={S.dim}>
-              {colours.find((c) => c.code === colourCode)?.name ?? '—'}
-              {' · на фабрику уходит код, а не оттенок с экрана'}
-            </p>
-            <Slider
-              label="гамма базы"
-              value={params.baseGamma}
-              min={0.3}
-              max={1.5}
-              step={0.05}
-              digits={2}
-              onChange={(v) => setParams((p) => ({ ...p, baseGamma: v }))}
-            />
-            <Slider
-              label="блики"
-              value={params.specAmount}
-              min={0}
-              max={1}
-              step={0.05}
-              digits={2}
-              onChange={(v) => setParams((p) => ({ ...p, specAmount: v }))}
-            />
-          </Group>
-
-          <Group title="Эффекты">
-            <button
-              onClick={() => setParams((p) => ({ ...p, effects: !p.effects }))}
-              style={params.effects ? S.btnOn : S.btn}
-            >
-              {params.effects ? 'с эффектами' : 'без эффектов'}
-            </button>
-            <button
-              onClick={() => setParams((p) => ({ ...p, through: !p.through }))}
-              style={params.through ? S.btnOn : S.btn}
-              title="Часть принта, которую закрывает капюшон. Обычно скрыта — так, как это будет на изделии. Включите, чтобы увидеть бледно, где она лежит под капюшоном"
-            >
-              {/* Подпись называет ЧТО видно, а не режим отрисовки: «перекрытое
-                  насквозь» владелец не понял, и это было правильно. */}
-              {params.through ? 'под капюшоном: видно бледно' : 'под капюшоном: скрыто'}
-            </button>
-            <Slider
-              label="смещение"
-              value={params.displace}
-              min={0}
-              max={1}
-              step={0.01}
-              digits={2}
-              onChange={(v) => setParams((p) => ({ ...p, displace: v }))}
-            />
-            <Slider
-              label="затенение"
-              value={params.shade}
-              min={0}
-              max={1}
-              step={0.05}
-              digits={2}
-              onChange={(v) => setParams((p) => ({ ...p, shade: v }))}
-            />
-            <Slider
-              label="гамма тени"
-              value={params.shadeGamma}
-              min={0.4}
-              max={2.5}
-              step={0.05}
-              digits={2}
-              onChange={(v) => setParams((p) => ({ ...p, shadeGamma: v }))}
-            />
-            <div style={S.row}>
-              {[1, 2, 3].map((s) => (
-                <button key={s} onClick={() => zoomTo(s)} style={s === zoom ? S.btnOn : S.btn}>
-                  {s}×
-                </button>
-              ))}
-              <button onClick={() => zoomTo(1)} style={S.btn}>
-                по размеру
-              </button>
-              <button onClick={() => download(params)} style={S.btn}>
-                выгрузить
-              </button>
-              <label style={S.btn}>
-                вернуть
-                <input
-                  type="file"
-                  accept="application/json"
-                  style={{ display: 'none' }}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) void upload(f).then(setParams).catch(() => undefined)
-                    e.target.value = ''
-                  }}
-                />
-              </label>
-            </div>
-            <p style={S.dim}>
-              отрисовка {Math.round(state.frame.width * renderScale)} px
-              {fps !== null && ` · ${fps} кадр/с`}
-            </p>
-          </Group>
-
-          <Group title="Что видно">
-            {(['all', 'anchors', 'zones', 'none'] as Overlay[]).map((o) => (
-              <button key={o} onClick={() => setOverlay(o)} style={o === overlay ? S.btnOn : S.btn}>
-                {{ all: 'всё', anchors: 'ориентиры', zones: 'зоны', none: 'ничего' }[o]}
+          />
+          <div className="flex flex-wrap gap-1">
+            {FONTS.map((f) => (
+              <button
+                key={f.family}
+                title={`${f.role} · ${f.license}`}
+                onClick={() =>
+                  commit((c) =>
+                    restyle(c, selected.id, {
+                      fontFamily: f.family,
+                      textAspect: aspectOf({ ...selected, fontFamily: f.family }),
+                    }),
+                  )
+                }
+                className={on(f.family === selected.fontFamily)}
+                style={{ fontFamily: `"${f.family}", sans-serif` }}
+              >
+                {f.family}
               </button>
             ))}
-          </Group>
+          </div>
+          <div style={S.swatches}>
+            {colours.map((c) => (
+              <button
+                key={c.code}
+                title={`${c.name} · ${c.code}`}
+                aria-label={`цвет надписи ${c.group}`}
+                onClick={() => commit((comp) => restyle(comp, selected.id, { colourCode: c.code, rgb: c.rgb }))}
+                style={{
+                  ...S.swatch,
+                  background: toCss(c),
+                  outline: c.code === selected.colourCode ? '2px solid currentColor' : undefined,
+                }}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">шрифты только загруженные в систему, лицензия названа у каждого</p>
+        </Section>
+      )}
+      {placement}
+      {target && (
+        <button className={small()} onClick={() => moveSelected(target)} title="Тот же размер и высота на другой стороне; Ctrl+Z вернёт">
+          перенести на {target === 'back' ? 'спину' : 'перед'}
+        </button>
+      )}
+      {grid && (
+        <Section title="Градация">
+          {/* Таблица по всем размерам сразу: технолог сверяет её с размерной
+              сеткой, а не перебирает размеры по одному. */}
+          <table className="w-full text-xs">
+            <tbody>
+              {product.size_set.sizes.map((s) => {
+                const base = composition.elements.find((e) => e.id === selected.id)
+                if (!base) return null
+                const sc = scaleAt(base.placement, grid, s)
+                return (
+                  <tr key={s} className={s === size ? 'bg-primary-soft' : undefined}>
+                    <td>{s}</td>
+                    <td className={sc.manual ? 'text-warning' : 'text-muted-foreground'}>×{sc.k.toFixed(3)}</td>
+                    <td>{(base.placement.widthCm * sc.k).toFixed(1)} см</td>
+                    <td>
+                      {/* Исключение видно ВМЕСТЕ с тем, что было бы по сетке:
+                          иначе технолог, сверяя с сеткой, «исправит» его обратно. */}
+                      {sc.manual && (
+                        <button
+                          className="text-muted-foreground"
+                          title={`вручную · по сетке ×${sc.byGrid.toFixed(3)} — вернуть к сетке`}
+                          onClick={() => commit((c) => place(c, base.id, resetAtSize(base.placement, s)))}
+                        >
+                          ↺
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+          <p className="text-xs text-muted-foreground">
+            база — {grid.base}
+            {grid.provisional ? ' · сетка предварительная: ' + grid.method : ''}
+          </p>
+        </Section>
+      )}
+      <div className="mt-3">
+        <button className={small('danger')} onClick={() => commit((c) => remove(c, selected.id))} title="Delete">
+          убрать с изделия
+        </button>
+      </div>
+    </>
+  )
 
-          <Group title={`Проверки (${open.length})`}>
-            {open.length === 0 && composition.elements.length > 0 && (
-              <p style={S.dim}>находок нет</p>
+  const garmentPanel = (
+    <>
+      <div className="mb-2 flex items-center gap-2">
+        <strong className="flex-1">Изделие</strong>
+        <button className={small()} onClick={() => setGarmentPicked(false)} aria-label="закрыть настройки изделия">
+          ×
+        </button>
+      </div>
+      <Section title="Цвет">
+        <div style={S.swatches}>
+          {colours.map((c) => (
+            <button
+              key={c.code}
+              title={`${c.name} · ${c.code}`}
+              aria-label={`цвет изделия ${c.group}`}
+              onClick={() => setColourCode(c.code)}
+              style={{
+                ...S.swatch,
+                background: toCss(c),
+                outline: c.code === colourCode ? '2px solid currentColor' : undefined,
+              }}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {colours.find((c) => c.code === colourCode)?.group ?? colourCode} · на фабрику уходит код, а не оттенок с экрана
+        </p>
+      </Section>
+      <Section title="Размер">
+        <div className="flex flex-wrap gap-1">
+          {product.size_set.sizes.map((s) => {
+            const known = sizesWithField(product.print_fields ?? null, stateCode).includes(s)
+            return (
+              <button
+                key={s}
+                onClick={() => setSize(s)}
+                className={on(s === size)}
+                // Размер без поля показан бледным, а не спрятан: спрятанный
+                // выглядит несуществующим, а технолог просто не дал для него поля.
+                style={{ opacity: known ? 1 : 0.45 }}
+                title={known ? '' : 'поля для этого размера нет — спросить технолога'}
+              >
+                {s}
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {size === null
+            ? 'Размер не выбран: поле считается по зоне кадра, а она нарисована для одного размера.'
+            : field
+              ? `Поле ${product.print_fields?.by_size?.[String(size)]?.[stateCode]?.join(' × ')} см` +
+                (product.print_fields?.provisional ? ' · предварительно, от технолога ещё не подтверждено' : '')
+              : 'Для этого размера поля нет — считаем по зоне кадра. Число придёт от технолога.'}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {/* Отрисованный размер и выбранный — разные вещи: кадр один, и
+              растягивать его под размер нельзя. */}
+          Отрисован{' '}
+          {product.rendered_size
+            ? `${product.rendered_size}`
+            : `предположительно ${product.rendered_size_assumed} — в именах кадров размера нет`}
+        </p>
+      </Section>
+      <Section title="Показ">
+        <div className="flex flex-wrap gap-1">
+          <button onClick={() => setParams((p) => ({ ...p, effects: !p.effects }))} className={on(params.effects)}>
+            {params.effects ? 'с эффектами' : 'без эффектов'}
+          </button>
+          <button
+            onClick={() => setParams((p) => ({ ...p, through: !p.through }))}
+            className={on(params.through)}
+            title="Часть принта, которую закрывает капюшон. Обычно скрыта — как на изделии. Включите, чтобы увидеть бледно, где она лежит"
+          >
+            {params.through ? 'под капюшоном: видно бледно' : 'под капюшоном: скрыто'}
+          </button>
+        </div>
+        <Slider label="гамма базы" hint="насколько темнеет ткань в складках: меньше — складки глубже" value={params.baseGamma} min={0.3} max={1.5} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, baseGamma: v }))} />
+        <Slider label="блики" hint="сколько света ткань отражает на выпуклостях: 0 — совсем матовая" value={params.specAmount} min={0} max={1} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, specAmount: v }))} />
+        <Slider label="смещение" hint="насколько принт изгибается по складкам: 0 — лежит плоско, как наклейка" value={params.displace} min={0} max={1} step={0.01} digits={2} onChange={(v) => setParams((p) => ({ ...p, displace: v }))} />
+        <Slider label="затенение" hint="насколько тени складок ложатся на сам принт: 0 — принт ровный, без теней" value={params.shade} min={0} max={1} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, shade: v }))} />
+        <Slider label="гамма тени" hint="где кончается тень: больше — тени короче и только в глубоких складках" value={params.shadeGamma} min={0.4} max={2.5} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, shadeGamma: v }))} />
+        <div className="flex flex-wrap gap-1">
+          {(['all', 'anchors', 'zones', 'none'] as Overlay[]).map((o) => (
+            <button key={o} onClick={() => setOverlay(o)} className={on(o === overlay)}>
+              {{ all: 'всё', anchors: 'ориентиры', zones: 'зоны', none: 'ничего' }[o]}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          <button onClick={() => download(params)} className={small()} title="Подбор показа — файлом, чтобы вернуть его на другом компьютере">
+            выгрузить подбор
+          </button>
+          <label className={small()}>
+            вернуть подбор
+            <input
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) void upload(f).then(setParams).catch(() => undefined)
+                e.target.value = ''
+              }}
+            />
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          отрисовка {Math.round(state.frame.width * renderScale)} px{fps !== null && ` · ${fps} кадр/с`}
+        </p>
+      </Section>
+    </>
+  )
+
+  return (
+    <>
+      <WorkFrame label={`рабочее окно: ${title}`} bar={bar}>
+        <div
+          ref={area}
+          tabIndex={0}
+          aria-label="холст изделия: Tab — по объектам, стрелки — сдвиг, ? — все клавиши"
+          className="relative min-w-0 flex-1 overflow-hidden bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          style={{ touchAction: 'none' }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => void onDrop(e)}
+          onPointerDownCapture={onAreaDown}
+          onPointerMove={onAreaMove}
+          onPointerUp={onAreaUp}
+          onPointerCancel={() => (press.current = null)}
+        >
+          <div
+            data-stage
+            ref={stage}
+            className="absolute inset-y-0 left-0 flex items-center justify-center"
+            // Панель настроек открыта — изделие отодвигается от неё, а не прячется под ней.
+            style={{ right: panel ? 344 : 0 }}
+          >
+            <div style={{ width: box, height: box, position: 'relative' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: box * zoom,
+                  height: box * zoom,
+                  transform: `translate(${pan.x - (box * (zoom - 1)) / 2}px, ${pan.y - (box * (zoom - 1)) / 2}px)`,
+                  cursor: zoom > 1 ? 'grab' : 'default',
+                }}
+              >
+                <GarmentCanvas
+                  state={state}
+                  frameSrc={frameUrl(product.code, state.code)}
+                  calibration={calibration}
+                  composition={sized}
+                  side={stateCode}
+                  torso={torso}
+                  anchorsBySide={anchorsBySide}
+                  params={params}
+                  renderScale={renderScale}
+                  onFps={setFps}
+                  showZones={overlay === 'zones' || overlay === 'all'}
+                  field={fieldOutline}
+                  fieldLabel={size ? `поле ${size}` : null}
+                  hoodDownScale={hoodDownScale}
+                  showAnchors={overlay === 'anchors' || overlay === 'all'}
+                  onSelect={(id) => setComposition((c) => select(c, id))}
+                  onMove={(id, dxCm, dyCm) => setComposition((c) => placeSized(c, id, { dxCm, dyCm }))}
+                  onResize={(id, widthCm) => setComposition((c) => placeSized(c, id, { widthCm }))}
+                  onRotate={(id, rotation) => setComposition((c) => place(c, id, { rotation }))}
+                  onCommit={() => commit()}
+                  onCanvas={(el) => (viewCanvas.current = el)}
+                  images={images.current}
+                  key={imagesVersion}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Что нанести — первым, слева сверху: ненайденная возможность равна отсутствующей. */}
+          <div className="absolute left-3 top-3 flex gap-2">
+            <button className={small()} onClick={addLabel}>
+              + надпись
+            </button>
+            <button className={on(libraryOpen)} aria-expanded={libraryOpen} onClick={() => setLibraryOpen((v) => !v)}>
+              + принт
+            </button>
+          </div>
+          {libraryOpen && (
+            <div className="pf-card absolute bottom-3 left-3 top-14 w-72 overflow-y-auto border border-line p-3 text-sm">
+              <p className="mb-2 text-xs text-muted-foreground">картинку можно и просто перетащить с диска на изделие</p>
+              <Section title="Поиск по смыслу">
+                <div className="flex gap-1">
+                  <TextInput
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void runSearch()
+                    }}
+                    placeholder="снег, вертолёт, мишка…"
+                    aria-label="слово для поиска по картинкам"
+                  />
+                  <button onClick={() => void runSearch()} disabled={searching || !query.trim()} className={small()}>
+                    {searching ? 'ищу…' : 'найти'}
+                  </button>
+                </div>
+                {searchError && (
+                  <p className="text-xs text-muted-foreground">
+                    {searchError} — нажмите «найти» ещё раз; если повторится, стенд сервиса не поднят
+                  </p>
+                )}
+                {found?.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    ничего не нашлось — назовите предмет, а не настроение: «мяч», а не «весело»
+                  </p>
+                )}
+                {found?.map((f) => (
+                  <div key={f.digest} className="flex items-center gap-2" title={`похожесть ${f.similarity}`}>
+                    <img src={assetUrl(f.digest, 'thumb')} alt="" width={32} height={32} className="object-contain" />
+                    <span className="flex-1 truncate text-xs">{f.name}</span>
+                    <span className="text-xs text-muted-foreground">вес {f.weight.toFixed(1)}</span>
+                    {f.references.map((r) => (
+                      <button key={r.id} onClick={() => navigate(`/references/${r.id}`)} className={small()} title={r.name}>
+                        №{r.id}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </Section>
+              <Section title="Набор принтов">
+                <div className="flex flex-col gap-1">
+                  {prints
+                    .slice()
+                    .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'probe' ? -1 : 1))
+                    .map((item) => (
+                      <button
+                        key={item.path}
+                        onClick={() => void addFromSet(item)}
+                        title={[item.subject ?? item.name, item.answers].filter(Boolean).join(' — ')}
+                        className="flex items-center gap-2 rounded border border-line px-2 py-1 text-left text-xs hover:bg-hover"
+                      >
+                        <span className="flex-1 truncate">{item.subject ?? item.name}</span>
+                        {item.kind === 'probe' && <span className="text-muted-foreground">эталон</span>}
+                        {item.width_cm && <span className="text-muted-foreground">{item.width_cm} см</span>}
+                      </button>
+                    ))}
+                </div>
+              </Section>
+            </div>
+          )}
+
+          {/* Виды — иконками изделия с принтом: что лежит на спине, видно до нажатия. */}
+          <div className="absolute right-3 top-3 flex gap-2" aria-label="виды изделия">
+            {product.states.map((s, i) => (
+              <button
+                key={s.code}
+                onClick={() => setStateCode(s.code)}
+                aria-pressed={s.code === state.code}
+                title={`${s.display_name}${s.kind === 'illustrative' ? ' — только показ, размещать по нему нельзя' : ''} · клавиша ${i + 1}`}
+                className={`pf-card relative w-16 overflow-hidden border p-0.5 ${s.code === state.code ? 'border-primary ring-2 ring-primary' : 'border-line'}`}
+              >
+                <GarmentCanvas
+                  preview
+                  state={s}
+                  frameSrc={frameUrl(product.code, s.code)}
+                  calibration={calibration}
+                  composition={thumbWork}
+                  side={s.code}
+                  torso={torso}
+                  anchorsBySide={anchorsBySide}
+                  params={params}
+                  renderScale={THUMB_SCALE}
+                  showZones={false}
+                  showAnchors={false}
+                  onSelect={noop}
+                  onMove={noop}
+                  onResize={noop}
+                  onRotate={noop}
+                  images={images.current}
+                  onCanvas={(el) => (thumbCanvases.current[s.code] = el)}
+                  key={`${s.code}-${imagesVersion}`}
+                />
+                <span className="absolute left-1 top-0 text-[10px] text-muted-foreground">{i + 1}</span>
+              </button>
+            ))}
+          </div>
+
+          {panel && (
+            <div
+              className="pf-card absolute bottom-3 right-3 top-[92px] w-80 overflow-y-auto border border-line p-3 text-sm"
+              aria-label={panel === 'element' ? 'настройки выбранного' : 'настройки изделия'}
+            >
+              {panel === 'element' ? elementPanel : garmentPanel}
+            </div>
+          )}
+
+          <div className="absolute bottom-3 flex max-w-lg flex-col gap-2" style={{ left: libraryOpen ? 312 : 12 }}>
+            {visible.elements.length === 0 && (
+              <p className="pf-card px-3 py-2 text-xs text-muted-foreground">
+                {state.kind === 'illustrative'
+                  ? 'Это иллюстративный ракурс: он показывает, но размещать по нему нельзя — силуэт сокращён, и размер в сантиметрах по нему соврёт.'
+                  : 'Перетащите сюда картинки — можно несколько разом. Нажмите на изделие — его цвет и размер.'}
+              </p>
             )}
-            <div style={S.list}>
+            {dropHint && (
+              <p role="status" className="pf-card flex gap-2 px-3 py-2 text-xs text-warning">
+                <span className="flex-1">{dropHint}</span>
+                <button onClick={() => setDropHint(null)} aria-label="скрыть подсказку">
+                  ×
+                </button>
+              </p>
+            )}
+            {seen.length + seenCards.length > 0 && (
+              <Recognised
+                rows={[...cardRows(seenCards), ...fileRows(seen)]}
+                onClose={() => {
+                  setSeen([])
+                  setSeenCards([])
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        <aside className="w-72 shrink-0 overflow-y-auto border-l border-line p-3 text-sm" aria-label="теги и история">
+          <Section title={`На изделии · ${SIDE_NAMES[stateCode] ?? stateCode}`}>
+            {visible.elements.length === 0 && <p className="text-xs text-muted-foreground">на этой стороне пусто</p>}
+            <div className="flex flex-col gap-1">
+              {visible.elements.map((el) => (
+                <button
+                  key={el.id}
+                  onClick={() => setComposition((c) => select(c, el.id))}
+                  aria-pressed={el.id === visible.selectedId}
+                  className={`flex flex-wrap items-center gap-1 rounded border px-2 py-1 text-left text-xs ${el.id === visible.selectedId ? 'border-primary bg-primary-soft' : 'border-line hover:bg-hover'}`}
+                >
+                  <span className="min-w-0 flex-1 truncate" title={el.name}>
+                    {el.kind === 'text' ? `«${el.text}»` : el.name}
+                  </span>
+                  {/* Шрифт виден у каждой надписи: чтобы сравнить две, не надо тыкать в каждую. */}
+                  {el.kind === 'text' && (
+                    <span style={{ ...S.badge, fontFamily: `"${el.fontFamily}", sans-serif` }}>{el.fontFamily}</span>
+                  )}
+                  {el.kind === 'image' && !el.hasAlpha && <span style={S.badge}>фон не вырезан</span>}
+                  {el.kind === 'image' && tagsOf[digestOf(el.src)]?.name && <NameChip named={tagsOf[digestOf(el.src)]!.name!} />}
+                  {el.kind === 'image' && (tagsOf[digestOf(el.src)]?.tags ?? []).length > 0 && (
+                    <TagChips tags={tagsOf[digestOf(el.src)]!.tags} />
+                  )}
+                </button>
+              ))}
+            </div>
+            {Object.keys(elsewhere).length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                на других сторонах:{' '}
+                {Object.entries(elsewhere)
+                  .map(([code, n]) => `${SIDE_NAMES[code] ?? code} — ${n}`)
+                  .join(', ')}
+              </p>
+            )}
+          </Section>
+
+          {current && viewing !== null && (
+            <Section title={`История · ${current.versions.length}`}>
+              <div className="flex flex-col gap-0.5">
+                {[...current.versions].reverse().map((v) => (
+                  <button
+                    key={v.number}
+                    onClick={() => v.number !== viewing && goTo(v.number)}
+                    aria-current={v.number === viewing}
+                    className={`rounded px-2 py-1 text-left text-xs ${v.number === viewing ? 'bg-primary-soft' : 'hover:bg-hover'}`}
+                  >
+                    версия {v.number} · {v.author_name ?? (v.author_id ? 'имя ещё не пришло' : 'без входа')} ·{' '}
+                    {new Date(v.saved_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </button>
+                ))}
+              </div>
+              {viewing !== current.number && (
+                <p className="text-xs text-warning">не последняя: сохранение ляжет новой версией поверх последней</p>
+              )}
+              <p className="text-xs text-muted-foreground">A и D — листать</p>
+            </Section>
+          )}
+
+          <Section title={`Проверки · ${open.length}`}>
+            {open.length === 0 && composition.elements.length > 0 && (
+              <p className="text-xs text-muted-foreground">находок нет</p>
+            )}
+            <div className="flex flex-col gap-1">
               {open.map((f) => (
                 <div
                   key={keyOf(f)}
-                  style={f.weight === 'blocking' ? S.findingBlocking : S.findingWarning}
+                  className={`flex items-start gap-1 rounded border-l-4 px-2 py-1 text-xs ${f.weight === 'blocking' ? 'border-destructive bg-destructive-soft' : 'border-warning bg-tone-amber-soft'}`}
                 >
-                  <span style={S.findingText}>{f.message}</span>
+                  <span className="flex-1">{f.message}</span>
                   {f.weight === 'warning' && (
                     <button
                       title="Так и задумано. Кто закрыл — появится вместе со входом платформы"
                       onClick={() => setDismissed((d) => new Set([...d, keyOf(f)]))}
-                      style={S.x}
+                      className="text-muted-foreground"
                     >
                       ✓
                     </button>
@@ -1349,426 +1844,57 @@ export function Bench() {
               ))}
             </div>
             {dismissed.size > 0 && (
-              <p style={S.dim}>
-                закрыто «так и задумано»: {dismissed.size} · имя закрывшего появится
-                вместе со входом платформы
-              </p>
+              <p className="text-xs text-muted-foreground">закрыто «так и задумано»: {dismissed.size}</p>
             )}
-          </Group>
+          </Section>
 
-          <Group title="На фабрику">
-            <button
-              onClick={downloadSheet}
-              disabled={composition.elements.length === 0 || blocking(open).length > 0}
-              style={S.btn}
-              title={
-                blocking(open).length > 0
-                  ? 'Сначала исправьте блокирующие находки: такой принт не пропечатается'
-                  : undefined
-              }
-            >
-              выгрузить печатный лист
-            </button>
+          <Section title="Выгрузка">
+            <div className="flex flex-wrap gap-1">
+              <button
+                onClick={downloadSheet}
+                disabled={composition.elements.length === 0 || blocking(open).length > 0}
+                className={small()}
+                title={
+                  blocking(open).length > 0
+                    ? 'Сначала исправьте блокирующие находки: такой принт не пропечатается'
+                    : 'Плоский лист в сантиметрах, мимо складок и света — он идёт на фабрику'
+                }
+              >
+                печатный лист
+              </button>
+              <button onClick={downloadSnapshot} className={small()} title="Изделие как его увидит человек — со складками, тенью и цветом">
+                картинкой
+              </button>
+            </div>
             {composition.elements.length > 0 && (
-              <p style={S.dim}>
+              <p className="text-xs text-muted-foreground">
                 {/* Габарит ЭТОЙ стороны на ВЫБРАННОМ размере: лист выгружается
-                    по сторонам и по размеру, и число обеих сторон вместе на
-                    базе не совпадало ни с одним файлом, который уйдёт. */}
+                    по сторонам и по размеру. */}
                 {SIDE_NAMES[stateCode] ?? stateCode}
                 {size ? `, ${size}` : ''}: {describeSheet(visible).widthCm.toFixed(1)} ×{' '}
-                {describeSheet(visible).heightCm.toFixed(1)} см, элементов{' '}
-                {describeSheet(visible).items.length}
-                {cal.provisional && ' · калибровка предварительная, числа уточнятся'}
+                {describeSheet(visible).heightCm.toFixed(1)} см, элементов {describeSheet(visible).items.length}
+                {cal.provisional && ' · калибровка предварительная'}
               </p>
             )}
-            <p style={S.dim}>
-              лист собирается мимо смещения и света: складок в нём не бывает по
-              устройству
-            </p>
-          </Group>
-
-          <Group title="Показать людям">
-            <button onClick={downloadSnapshot} style={S.btn}>
-              сохранить картинкой
-            </button>
-            <p style={S.dim}>
-              изделие как его увидит человек — со складками, тенью и цветом. Не
-              печатный лист: тот плоский и идёт на фабрику
-            </p>
-          </Group>
-
-          <Group title="Правка">
-            {canSave && (
-              <>
-                <button onClick={() => void saveCard()} disabled={saving} style={S.btn} title="Ctrl+S">
-                  {current ? 'сохранить версию' : 'сохранить принт'}
-                </button>
-                <button onClick={() => void saveCardAs()} disabled={saving} style={S.btn} title="Ctrl+Shift+S">
-                  сохранить как новый
-                </button>
-              </>
-            )}
-            <button
-              onClick={() =>
-                askLeave(() => {
-                  forget()
-                  commit(EMPTY)
-                  setCurrent(null)
-                  setViewing(null)
-                  setBaseline(null)
-                  setRestored(false)
-                })
-              }
-              style={S.btn}
-            >
-              начать новый
-            </button>
-            <button onClick={history.undo} disabled={!history.canUndo} style={S.btn}>
-              отменить
-            </button>
-            <button onClick={history.redo} disabled={!history.canRedo} style={S.btn}>
-              вернуть
-            </button>
-            <p style={S.dim}>
-              Ctrl+Z и Ctrl+Shift+Z. Ползунки подбора не откатываются. Ctrl+S — версия, Ctrl+Shift+S — новый референс
-            </p>
-          </Group>
-
-          {current && viewing !== null && (
-            <Group title={`История (${current.versions.length})`}>
-              <button onClick={() => step('older')} disabled={viewing === current.versions[0]?.number} style={S.btn} title="A">
-                ← раньше
-              </button>
-              <button
-                onClick={() => step('newer')}
-                disabled={viewing === current.versions[current.versions.length - 1]?.number}
-                style={S.btn}
-                title="D"
-              >
-                позже →
-              </button>
-              {(() => {
-                const v = current.versions.find((x) => x.number === viewing)
-                return v ? (
-                  <p style={S.dim}>
-                    версия {v.number}: {v.author_name ?? (v.author_id ? 'имя ещё не пришло' : 'без входа')},{' '}
-                    {new Date(v.saved_at).toLocaleString('ru-RU')}
-                    {viewing !== current.number && ' · не последняя: сохранение ляжет новой версией поверх последней'}
-                  </p>
-                ) : null
-              })()}
-              <p style={S.dim}>A и D — листать</p>
-            </Group>
-          )}
-
-          <Group title={`Сохранённое (${cards.length})`}>
-            {cards.length === 0 && <p style={S.dim}>пока ничего — «сохранить принт» кладёт сюда</p>}
-            <div style={S.list}>
-              {cards.slice(0, 12).map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => askLeave(() => void openCard(c.id))}
-                  title={`${c.name} · версия ${c.number} · ${new Date(c.saved_at).toLocaleString('ru-RU')}`}
-                  style={S.setArtwork}
-                >
-                  <span style={S.itemName}>
-                    №{c.id} · {c.name}
-                  </span>
-                  <span style={S.tag}>
-                    в.{c.number} ·{' '}
-                    {new Date(c.saved_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </Group>
-
-          <Group title="Поиск по смыслу">
-            <div style={{ display: 'flex', gap: 6, width: '100%' }}>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void runSearch()
-                }}
-                placeholder="снег, вертолёт, мишка…"
-                aria-label="слово для поиска по картинкам"
-                style={{ ...S.input, flex: 1, width: 'auto' }}
-              />
-              <button onClick={() => void runSearch()} disabled={searching || !query.trim()} style={S.btn}>
-                {searching ? 'ищу…' : 'найти'}
-              </button>
-            </div>
-            {searchError && (
-              <p style={S.dim}>
-                {searchError} — нажмите «найти» ещё раз; если повторится, стенд сервиса не поднят
-              </p>
-            )}
-            {found === null && !searchError && (
-              <p style={S.dim}>любое слово в любой форме, не обязательно тег; ищет по картинкам библиотеки</p>
-            )}
-            {found?.length === 0 && (
-              <p style={S.dim}>
-                ничего не нашлось — попробуйте назвать предмет, а не настроение: «мяч», а не «весело»
-              </p>
-            )}
-            {found && found.length > 0 && (
-              <div style={S.list}>
-                {found.map((f) => (
-                  <div key={f.digest} style={S.setArtwork} title={`похожесть ${f.similarity}`}>
-                    <img src={assetUrl(f.digest, 'thumb')} alt="" width={32} height={32} style={{ objectFit: 'contain' }} />
-                    <span style={S.itemName}>{f.name}</span>
-                    <span style={S.tag}>вес {f.weight.toFixed(1)}</span>
-                    {f.references.map((r) => {
-                      const card = cards.find((c) => c.id === r.id)
-                      return card ? (
-                        <button key={r.id} onClick={() => askLeave(() => void openCard(card.id))} style={S.btn} title={r.name}>
-                          №{r.id}
-                        </button>
-                      ) : (
-                        <span key={r.id} style={S.tag} title={r.name}>
-                          №{r.id}
-                        </span>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
-            )}
-          </Group>
-
-          <Group title="Набор принтов">
-            <div style={S.list}>
-              {prints
-                .slice()
-                .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'probe' ? -1 : 1))
-                .map((item) => (
-                  <button
-                    key={item.path}
-                    onClick={() => void addFromSet(item)}
-                    title={[item.subject ?? item.name, item.answers].filter(Boolean).join(' — ')}
-                    style={item.kind === 'probe' ? S.setProbe : S.setArtwork}
-                  >
-                    <span style={S.itemName}>{item.subject ?? item.name}</span>
-                    {item.width_cm && <span style={S.tag}>{item.width_cm} см</span>}
-                  </button>
-                ))}
-            </div>
-            <p style={S.dim}>
-              эталоны подписаны вопросом, на который отвечают; настоящие принты
-              добавляются тем же способом
-            </p>
-          </Group>
-
-          <Group title={`Элементы (${visible.elements.length})`}>
-            {visible.elements.length === 0 && <p style={S.dim}>пусто</p>}
-            <div style={S.list}>
-              {visible.elements.map((el) => (
-                <div
-                  key={el.id}
-                  onClick={() => setComposition((c) => select(c, el.id))}
-                  style={el.id === visible.selectedId ? S.itemOn : S.item}
-                >
-                  <span style={S.itemName} title={el.name}>
-                    {el.name}
-                  </span>
-                  {/* Шрифт виден у КАЖДОЙ надписи, а не только у выделенной:
-                      иначе, чтобы сравнить две, приходится тыкать в каждую. */}
-                  {el.kind === 'text' && (
-                    <span style={{ ...S.badge, fontFamily: `"${el.fontFamily}", sans-serif` }}>
-                      {el.fontFamily}
-                    </span>
-                  )}
-                  {el.kind === 'image' && !el.hasAlpha && (
-                    <span style={S.badge}>фон не вырезан</span>
-                  )}
-                  {el.kind === 'image' && tagsOf[digestOf(el.src)]?.name && (
-                    <NameChip named={tagsOf[digestOf(el.src)]!.name!} />
-                  )}
-                  {el.kind === 'image' && (tagsOf[digestOf(el.src)]?.tags ?? []).length > 0 && (
-                    <TagChips tags={tagsOf[digestOf(el.src)]!.tags} />
-                  )}
-                  <button
-                    style={S.x}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      commit((c) => remove(c, el.id))
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </Group>
-
-          {selected?.kind === 'text' && (
-            <Group title="Надпись">
-              <input
-                value={selected.text}
-                onChange={(e) => {
-                  const text = e.target.value
-                  commit((c) => {
-                    const next = retype(c, selected.id, text)
-                    return restyle(next, selected.id, {
-                      textAspect: aspectOf({ ...selected, text }),
-                    })
-                  })
-                }}
-                style={S.textInput}
-              />
-              <div style={S.row}>
-                {FONTS.map((f) => (
-                  <button
-                    key={f.family}
-                    title={`${f.role} · ${f.license}`}
-                    onClick={() =>
-                      commit((c) =>
-                        restyle(c, selected.id, {
-                          fontFamily: f.family,
-                          textAspect: aspectOf({ ...selected, fontFamily: f.family }),
-                        }),
-                      )
-                    }
-                    style={{
-                      ...(f.family === selected.fontFamily ? S.btnOn : S.btn),
-                      fontFamily: `"${f.family}", sans-serif`,
-                    }}
-                  >
-                    {f.family}
-                  </button>
-                ))}
-              </div>
-              <div style={S.swatches}>
-                {colours.map((c) => (
-                  <button
-                    key={c.code}
-                    title={`${c.name} · ${c.code}`}
-                    onClick={() =>
-                      commit((comp) =>
-                        restyle(comp, selected.id, { colourCode: c.code, rgb: c.rgb }),
-                      )
-                    }
-                    style={{
-                      ...S.swatch,
-                      background: toCss(c),
-                      outline: c.code === selected.colourCode ? '2px solid #111' : '1px solid #d1d5db',
-                    }}
-                  />
-                ))}
-              </div>
-              <p style={S.dim}>
-                шрифты только загруженные в систему, лицензия названа у каждого
-              </p>
-            </Group>
-          )}
-
-          {selected && (
-            <Group title="Размещение">
-              <Num
-                label="от горловины вниз"
-                value={selected.placement.dyCm}
-                onChange={(v) => commit((c) => placeSized(c, selected.id, { dyCm: v }))}
-              />
-              <Num
-                label="от центра вбок"
-                value={selected.placement.dxCm}
-                onChange={(v) => commit((c) => placeSized(c, selected.id, { dxCm: v }))}
-              />
-              <Num
-                label="ширина"
-                value={selected.placement.widthCm}
-                onChange={(v) => commit((c) => placeSized(c, selected.id, { widthCm: Math.max(0.5, v) }))}
-              />
-              {size !== null && grid && size !== grid.base && (() => {
-                const base = composition.elements.find((e) => e.id === selected.id)
-                if (!base) return null
-                const sc = scaleAt(base.placement, grid, size)
-                return (
-                  <>
-                    {/* Коэффициент ТЕКУЩЕГО размера к базе. Вписанный — это
-                        исключение: на этом размере принт наносят не по сетке. */}
-                    <Num
-                      label={`коэффициент на ${size}`}
-                      value={sc.k}
-                      unit=""
-                      step={0.01}
-                      digits={3}
-                      onChange={(v) => commit((c) => place(c, base.id, setScale(base.placement, size, Math.max(0.05, v))))}
-                    />
-                    <p style={sc.manual ? S.manual : S.dim}>
-                      {sc.manual ? `вручную · по сетке ×${sc.byGrid.toFixed(3)} ` : `по сетке, база ${grid.base}`}
-                      {sc.manual && (
-                        <button
-                          style={S.x}
-                          title="вернуть к сетке"
-                          onClick={() => commit((c) => place(c, base.id, resetAtSize(base.placement, size)))}
-                        >
-                          ↺
-                        </button>
-                      )}
-                    </p>
-                  </>
-                )
-              })()}
-              <Num
-                label="поворот, °"
-                value={selected.placement.rotation}
-                unit=""
-                onChange={(v) => commit((c) => place(c, selected.id, { rotation: v }))}
-              />
-              <p style={S.dim}>высота {formatCm(heightCm(selected))} — следует за пропорцией</p>
-              <p style={S.dim}>стрелки двигают на 1 мм, с Shift — на 1 см</p>
-            </Group>
-          )}
-
-          {selected && grid && (
-            <Group title="Градация">
-              {/* Таблица по всем размерам сразу: технолог сверяет её с
-                  размерной сеткой, а не перебирает размеры по одному. */}
-              <table style={S.gradeTable}>
-                <tbody>
-                  {product.size_set.sizes.map((s) => {
-                    const base = composition.elements.find((e) => e.id === selected.id)
-                    if (!base) return null
-                    const sc = scaleAt(base.placement, grid, s)
-                    return (
-                      <tr key={s} style={s === size ? S.gradeRowOn : undefined}>
-                        <td>{s}</td>
-                        <td style={sc.manual ? S.manual : S.dim}>×{sc.k.toFixed(3)}</td>
-                        <td>{(base.placement.widthCm * sc.k).toFixed(1)} см</td>
-                        <td>
-                          {/* Исключение видно ВМЕСТЕ с тем, что было бы по сетке:
-                              иначе технолог, сверяя с сеткой, «исправит» его
-                              обратно, не зная, что это нарочно. */}
-                          {sc.manual && (
-                            <>
-                              <span style={S.manual}>вручную · по сетке ×{sc.byGrid.toFixed(3)}</span>{' '}
-                              <button
-                                style={S.x}
-                                title="вернуть этот размер к сетке"
-                                onClick={() =>
-                                  commit((c) => place(c, base.id, resetAtSize(base.placement, s)))
-                                }
-                              >
-                                ↺
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <p style={S.dim}>
-                база — {grid.base}
-                {grid.provisional ? ' · сетка предварительная: ' + grid.method : ''}
-              </p>
-            </Group>
-          )}
+          </Section>
         </aside>
-      </div>
+      </WorkFrame>
+
+      <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Клавиши окна">
+        <table className="w-full text-sm">
+          <tbody>
+            {KEYS.map(([keys, what]) => (
+              <tr key={keys}>
+                <td className="whitespace-nowrap py-0.5 pr-4 font-mono text-xs">{keys}</td>
+                <td className="py-0.5">{what}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Клавиши работают в любой раскладке; в полях ввода буквы и цифры печатаются.
+        </p>
+      </Modal>
 
       {/* Правки не теряются молча: листание истории, другой референс, новый
           и уход со страницы спрашивают. Ответ по умолчанию — остаться. */}
@@ -1853,7 +1979,7 @@ export function Bench() {
         {draftOffer &&
           `У референса №${draftOffer.card.id} остались правки поверх версии ${draftOffer.at}, которые не сохранили до закрытия.`}
       </Modal>
-    </main>
+    </>
   )
 }
 
@@ -1884,8 +2010,11 @@ async function upload(file: File): Promise<RenderParams> {
   }
 }
 
+/** Ползунок показа. `hint` — что параметр делает на изделии словами, а не
+ *  имя из шейдера: «гамма базы» без пояснения не говорит никому ничего. */
 function Slider({
   label,
+  hint,
   value,
   min,
   max,
@@ -1894,6 +2023,7 @@ function Slider({
   onChange,
 }: {
   label: string
+  hint?: string
   value: number
   min: number
   max: number
@@ -1902,19 +2032,22 @@ function Slider({
   onChange: (v: number) => void
 }) {
   return (
-    <label style={S.slider}>
-      <span style={S.numLabel}>{label}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        style={{ flex: 1 }}
-      />
-      <span style={S.sliderValue}>{value.toFixed(digits)}</span>
-    </label>
+    <div>
+      <label style={S.slider}>
+        <span style={S.numLabel}>{label}</span>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          style={{ flex: 1 }}
+        />
+        <span style={S.sliderValue}>{value.toFixed(digits)}</span>
+      </label>
+      {hint && <p className="text-[11px] leading-tight text-muted-foreground">{hint}</p>}
+    </div>
   )
 }
 
@@ -1948,11 +2081,12 @@ function Num({
   )
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+/** Раздел панели или служебной полосы. */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section style={S.group}>
-      <h2 style={S.h2}>{title}</h2>
-      <div style={S.row}>{children}</div>
+    <section className="mb-3">
+      <h2 className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">{title}</h2>
+      <div className="flex flex-col gap-1.5">{children}</div>
     </section>
   )
 }
@@ -2101,44 +2235,6 @@ function NameChip({ named }: { named: Named }) {
 }
 
 const S: Record<string, React.CSSProperties> = {
-  page: { fontFamily: 'system-ui, sans-serif', padding: 16, color: '#111' },
-  head: { display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10 },
-  h1: { fontSize: 18, margin: 0 },
-  code: { color: '#666', fontSize: 13 },
-  body: { display: 'flex', gap: 18, alignItems: 'flex-start' },
-  canvasBox: {
-    width: BOX,
-    height: BOX,
-    background: '#f3f4f6',
-    borderRadius: 8,
-    // Обрезает приближённое полотно: без этого увеличенное изделие
-    // расталкивает панель и ломает раскладку страницы.
-    overflow: 'hidden',
-    touchAction: 'none',
-  },
-  panel: {
-    // Плитка, а не колонка. Работа идёт короткими кругами «подвинул —
-    // посмотрел — поправил», и прокрутка в каждом круге становится основным
-    // занятием, пока справа пустует половина экрана.
-    //
-    // Сетка, а не колонки CSS: колонки рвут группу пополам, и половина
-    // настроек уезжает в соседний столбец — это хуже длинной колонки, потому
-    // что искать приходится в двух местах вместо одного.
-    display: 'grid',
-    // Ширина плитки одна на всех. 300 — самый широкий ряд управления,
-    // образцы шрифтов, помещается без переноса каждого образца на свою строку,
-    // а три плитки встают рядом с окном изделия на экране от 1600. Резиновая
-    // ширина растягивала плитку за длинным именем, и соседние оказывались
-    // разными — это и был баг.
-    gridTemplateColumns: `repeat(auto-fill, ${TILE}px)`,
-    alignItems: 'start',
-    gap: 14,
-    flex: 1,
-    minWidth: 280,
-    // Порядок групп не зависит от ширины: сетка заполняется по строкам, и
-    // переставленные местами настройки заставляли бы искать заново при каждом
-    // изменении окна.
-  },
   group: { marginBottom: 14, minWidth: 0 },
   h2: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6, color: '#666', margin: '0 0 6px' },
   row: { display: 'flex', flexWrap: 'wrap', gap: 6 },
