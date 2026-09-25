@@ -1,0 +1,22 @@
+# Надстройка: «Референс» за шлюзом стенда платформы (план 072, US-0483).
+#
+# Отдельным файлом, а не в compose.yaml: сеть платформы внешняя, и без
+# поднятого стенда платформы основной стенд с ней не стартовал бы вовсе, а он
+# обязан подниматься и сам по себе (решение 0006). С платформой:
+#
+#   docker compose -f infra/compose.yaml -f infra/compose.platform.yaml up -d
+#
+# Фронтенд входит в сеть платформы под именем reference-web — это имя и есть
+# адрес приложения в реестре платформы (http://reference-web:5173). Не через
+# хозяйскую машину: адрес внутри сети не зависит от проброса портов.
+services:
+  web:
+    networks:
+      default: {}
+      platform:
+        aliases: [reference-web]
+
+networks:
+  platform:
+    external: true
+    name: platform_default

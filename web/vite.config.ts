@@ -17,6 +17,10 @@ export default defineConfig({
     // доходят — браузер молча отдаёт старый модуль, а правка выглядит
     // непримененной. Проверено 23.09.2026.
     watch: { usePolling: true, interval: 300 },
+    // Шлюз платформы шлёт Host приложения из реестра — reference-web
+    // (infra/compose.platform.yaml). Vite 6 незнакомому хосту отвечает 403
+    // «Blocked request», и за шлюзом экран был бы пустым. Проверено 25.09.2026.
+    allowedHosts: ['reference-web'],
     // Запросы к сервису идут по тому же префиксу, что и в платформе за шлюзом.
     proxy: {
       '/reference/api': {
