@@ -170,3 +170,23 @@ class LibraryAudience(Base):
         CheckConstraint("kind in ('image', 'text')", name="ck_library_audiences_kind"),
         CheckConstraint("audience in ('boys', 'girls', 'all')", name="ck_library_audiences_audience"),
     )
+
+
+class AssetDefect(Base):
+    """Картинка помечена браком (US-0499): «Санта на унитазе — зашквар».
+
+    Картинка остаётся в библиотеке — забыть её нельзя: через полгода её
+    загрузят снова, и узнать, что её уже браковали и почему, можно только
+    так. В выдаче и в дропах её не видно, в референс она не кладётся.
+    """
+
+    __tablename__ = "asset_defects"
+
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    marked_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    marked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (CheckConstraint("trim(reason) <> ''", name="ck_asset_defects_reason"),)

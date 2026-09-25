@@ -58,6 +58,8 @@ class RecognisedOut(BaseModel):
     tags: list[TagOut] = []
     #: Что за изделие на картинке. Нет — никто не знает; догадки не бывает.
     name: NameOut | None = None
+    #: Забракована — эта картинка или та же в другом файле (US-0499).
+    defect: "DefectOut | None" = None
 
 
 class FoundCardOut(BaseModel):
@@ -93,6 +95,20 @@ class LinksIn(BaseModel):
     remove: bool = False
 
 
+class DefectOut(BaseModel):
+    """Брак картинки: почему, кто и когда."""
+
+    digest: str
+    reason: str
+    marked_by: str | None = None
+    marked_by_name: str | None = None
+    marked_at: datetime
+
+
+class ReasonIn(BaseModel):
+    reason: str
+
+
 class LibraryItemOut(BaseModel):
     """Картинка библиотеки на странице «Принты»."""
 
@@ -105,6 +121,7 @@ class LibraryItemOut(BaseModel):
     drops: list[DropLinkOut] = []
     audiences: list[AudienceLinkOut] = []
     categories: list[str] = []
+    defect: DefectOut | None = None
 
 
 class FoundOut(BaseModel):

@@ -337,3 +337,25 @@ async def origins(db: AsyncSession, version_ids: list[int]) -> dict[int, int]:
         select(ReferenceVersion.id, ReferenceVersion.reference_id).where(ReferenceVersion.id.in_(version_ids))
     )
     return {v: r for v, r in rows}
+
+
+async def files_of(db: AsyncSession, card_id: int) -> set[str]:
+    """Листы и снимки сторон всех версий референса."""
+    out: set[str] = set()
+    for v in await versions(db, card_id):
+        out.add(v.sheet_digest)
+        out.update((v.views or {}).values())
+    return out
+
+
+async def files_in_use(db: AsyncSession, digests: set[str]) -> set[str]:
+    """Какие из файлов стоят хоть в одной версии как лист, снимок или картинка."""
+    if not digests:
+        return set()
+    rows = await db.execute(select(ReferenceVersion.sheet_digest, ReferenceVersion.views, ReferenceVersion.image_digests))
+    used: set[str] = set()
+    for sheet, views, images in rows:
+        used.add(sheet)
+        used.update((views or {}).values())
+        used.update(images or [])
+    return used & digests

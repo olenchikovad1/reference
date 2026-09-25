@@ -30,6 +30,7 @@ import { measureAspect } from '../shared/text'
 import type { FileTags, Match, Named, Tag } from '../shared/api/assets'
 import {
   assetUrl,
+  defectText,
   digestOf,
   fetchTags,
   recogniseAssets,
@@ -1256,6 +1257,14 @@ export function WorkWindow() {
         // а окно появится, когда модель досчитает.
         void recogniseAssets(stored.map((a) => a.digest))
           .then((rows) => {
+            // Забракованная на изделие не ложится (US-0499): её снимаем сразу,
+            // как узнали, и говорим почему — тем же файлом или пересохранённой.
+            const bad = rows.filter((r) => r.defect)
+            if (bad.length) {
+              const srcs = new Set(bad.map((r) => assetUrl(r.digest, 'preview')))
+              commit((c) => c.elements.filter((el) => el.kind === 'image' && srcs.has(el.src)).reduce((acc, el) => remove(acc, el.id), c))
+              setDropHint(bad.map((r) => `Не положено — ${defectText(r.defect!)}`).join(' '))
+            }
             setSeen([...repeats, ...rows.flatMap((r) => r.matches)])
             setTagsOf((m) => ({
               ...m,

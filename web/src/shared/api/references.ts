@@ -114,6 +114,16 @@ export async function copyReference(id: number): Promise<Saved> {
 }
 export const trashReference = (id: number) => act('POST', `references/${id}/trash`)
 export const restoreReference = (id: number) => act('POST', `references/${id}/restore`)
+/** «Удалить насовсем сразу» (US-0499) — мимо корзины, с причиной. */
+export async function eraseForever(id: number, reason: string): Promise<void> {
+  const r = await fetch(`${BASE}references/${id}/erase-forever`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
+  if (!r.ok) throw new Error(r.status === 422 ? 'нужна причина' : `не удалилось: ${r.status}`)
+}
+
 /** Стереть насовсем — только из корзины и только с функцией её очистки. */
 export const eraseReference = (id: number) => act('DELETE', `references/${id}`)
 export async function listTrash(): Promise<Trashed[]> {

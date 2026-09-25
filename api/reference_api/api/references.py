@@ -5,6 +5,7 @@ from platform_client import Action, requires, requires_function
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
+from reference_api.schemas.library import ReasonIn
 from reference_api.schemas.references import (
     CardOut,
     TrashedOut,
@@ -72,6 +73,8 @@ async def create(body: SaveIn, request: Request, db: AsyncSession = Depends(sess
         )
     except service.NoSuchReference as missing:
         raise HTTPException(status_code=422, detail=str(missing)) from None
+    except service.DefectInWork as refusal:
+        raise HTTPException(status_code=422, detail=str(refusal)) from None
     return _saved(saved)
 
 
@@ -89,6 +92,8 @@ async def add_version(
         )
     except service.NoSuchReference as missing:
         raise HTTPException(status_code=404, detail=str(missing)) from None
+    except service.DefectInWork as refusal:
+        raise HTTPException(status_code=422, detail=str(refusal)) from None
     return _saved(saved)
 
 
@@ -218,6 +223,20 @@ async def restore(reference_id: int, db: AsyncSession = Depends(session)) -> Non
     """Из корзины обратно — целиком, с историей."""
     try:
         await service.restore(db, reference_id)
+    except service.NoSuchReference as missing:
+        raise HTTPException(404, str(missing)) from None
+
+
+@router.post(
+    "/{reference_id}/erase-forever", status_code=204, dependencies=[requires_function("references", "delete-forever")]
+)
+async def erase_forever(reference_id: int, body: ReasonIn, request: Request, db: AsyncSession = Depends(session)) -> None:
+    """«Удалить насовсем сразу» (US-0499): зашквар, замеченный и после
+    согласования, — мимо корзины, отдельным правом и с причиной."""
+    try:
+        await service.erase_forever(db, reference_id, body.reason, _author(request))
+    except service.NoReason as refusal:
+        raise HTTPException(422, str(refusal)) from None
     except service.NoSuchReference as missing:
         raise HTTPException(404, str(missing)) from None
 

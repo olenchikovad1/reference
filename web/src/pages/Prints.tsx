@@ -11,10 +11,15 @@ import { useNavigate } from 'react-router-dom'
 
 import { AssignBar, DropFilterBar } from '../candidates/DropFilter'
 import { passes, useDropFilter } from '../shared/filters'
+import { CODE } from '../app/shell'
+import { useCan } from '../shared/api/platform'
 import {
   assetUrl,
+  defectText,
   fetchLibrary,
   linkImages,
+  markDefect,
+  unmarkDefect,
   recogniseAssets,
   searchAssets,
   uploadAssets,
@@ -25,7 +30,22 @@ import {
 const SOURCES: Record<string, string> = { catalog: 'из каталога', inherited: 'как у той же картинки' }
 
 export function Prints() {
-  const library = useQuery({ queryKey: ['library'], queryFn: fetchLibrary })
+  // Фильтр «брак»: забракованное не видно нигде, кроме него (US-0499).
+  const [defects, setDefects] = useState(false)
+  const library = useQuery({ queryKey: ['library', defects], queryFn: () => fetchLibrary(defects) })
+  const canDefect = useCan(CODE, 'prints', 'mark-defect')
+  const [marking, setMarking] = useState<string | null>(null)
+  const [markReason, setMarkReason] = useState('')
+
+  function mark(digest: string) {
+    markDefect(digest, markReason.trim())
+      .then(() => {
+        setMarking(null)
+        setMarkReason('')
+        return queries.invalidateQueries({ queryKey: ['library'] })
+      })
+      .catch((e: Error) => setError(`${e.message} — повторите.`))
+  }
   const queries = useQueryClient()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -44,7 +64,11 @@ export function Prints() {
     try {
       const stored = await uploadAssets(images)
       setBusy('Смотрю, что на картинках…')
-      await recogniseAssets(stored.map((a) => a.digest))
+      const seen = await recogniseAssets(stored.map((a) => a.digest))
+      // Забракованная, загруженная снова, — сразу сказать: тем же файлом или
+      // пересохранённой её узнаёт вектор.
+      const bad = seen.filter((s) => s.defect)
+      if (bad.length) setError(bad.map((s) => `${stored.find((a) => a.digest === s.digest)?.name ?? s.digest}: ${defectText(s.defect!)}`).join('; '))
       await queries.invalidateQueries({ queryKey: ['library'] })
     } catch (e) {
       setError(e instanceof UploadRefused ? e.reason : `Не загрузилось: ${e instanceof Error ? e.message : e} — повторите.`)
@@ -105,6 +129,14 @@ export function Prints() {
               placeholder="снег, вертолёт, мишка…"
               aria-label="поиск по картинкам любым словом"
             />
+            <button
+              className={buttonClass({ tone: defects ? 'danger' : 'neutral', variant: defects ? 'soft' : 'outline' })}
+              aria-pressed={defects}
+              onClick={() => setDefects((v) => !v)}
+              title="Забракованные картинки: в выдаче, дропах и референсах их нет"
+            >
+              брак
+            </button>
             <label className={buttonClass({ tone: 'accent', variant: 'outline' })}>
               добавить файлы
               <input
@@ -191,6 +223,38 @@ export function Prints() {
                         )}
                       </div>
                     ))}
+                {item.defect && <div className="text-xs text-destructive">{defectText(item.defect)}</div>}
+                {canDefect && item.defect && (
+                  <button
+                    className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+                    onClick={() => void unmarkDefect(item.digest).then(() => queries.invalidateQueries({ queryKey: ['library'] }))}
+                  >
+                    снять брак
+                  </button>
+                )}
+                {canDefect && !item.defect && marking !== item.digest && (
+                  <button className={buttonClass({ tone: 'danger', variant: 'outline', small: true })} onClick={() => setMarking(item.digest)}>
+                    брак
+                  </button>
+                )}
+                {marking === item.digest && (
+                  <div className="flex gap-1">
+                    <TextInput
+                      value={markReason}
+                      onChange={(e) => setMarkReason(e.target.value)}
+                      placeholder="почему — обязательно"
+                      aria-label="причина брака"
+                      autoFocus
+                    />
+                    <button
+                      className={buttonClass({ tone: 'danger', variant: 'solid', small: true })}
+                      disabled={!markReason.trim()}
+                      onClick={() => mark(item.digest)}
+                    >
+                      забраковать
+                    </button>
+                  </div>
+                )}
                 <div className="mt-auto flex flex-wrap items-center gap-1 text-xs">
                   <span className="text-muted-foreground">где использован:</span>
                   {item.references.length === 0 && <span className="text-muted-foreground">нигде</span>}

@@ -1,9 +1,9 @@
 """Векторы: как хранятся и как ищутся. Бизнес-смысла здесь нет."""
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from reference_api.models.library import AssetEmbedding, LibraryAudience, LibraryDrop, LibraryText
+from reference_api.models.library import AssetDefect, AssetEmbedding, LibraryAudience, LibraryDrop, LibraryText
 
 
 async def put(
@@ -172,3 +172,36 @@ async def decide(
         done += 1
     await db.commit()
     return done
+
+
+async def defects_of(db: AsyncSession, digests: list[str]) -> dict[str, AssetDefect]:
+    if not digests:
+        return {}
+    rows = await db.execute(select(AssetDefect).where(AssetDefect.digest.in_(digests)))
+    return {d.digest: d for d in rows.scalars()}
+
+
+async def all_defects(db: AsyncSession) -> dict[str, AssetDefect]:
+    rows = await db.execute(select(AssetDefect))
+    return {d.digest: d for d in rows.scalars()}
+
+
+async def mark_defect(db: AsyncSession, digest: str, reason: str, by: str | None) -> None:
+    found = await db.get(AssetDefect, digest)
+    if found is None:
+        db.add(AssetDefect(digest=digest, reason=reason, marked_by=by))
+    else:
+        found.reason, found.marked_by = reason, by
+    await db.commit()
+
+
+async def unmark_defect(db: AsyncSession, digest: str) -> None:
+    await db.execute(delete(AssetDefect).where(AssetDefect.digest == digest))
+    await db.commit()
+
+
+async def forget_vectors(db: AsyncSession, digests: list[str], kind: str) -> None:
+    """Векторы файлов, которых больше нет, — чтобы узнавание их не находило."""
+    if digests:
+        await db.execute(delete(AssetEmbedding).where(AssetEmbedding.digest.in_(digests), AssetEmbedding.kind == kind))
+        await db.commit()

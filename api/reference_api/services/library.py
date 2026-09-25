@@ -108,6 +108,12 @@ async def search(db: AsyncSession, query: str) -> list[Found]:
     weighed = [(d, n, s, (s - mean) / spread) for d, n, s in rows]
     if weighed[0][3] < cfg.search_min_weight:
         return []
+    # Забракованное в выдаче не показывается (US-0499): оно видно только
+    # фильтром «брак» на странице принтов.
+    marked = await repo.all_defects(db)
+    weighed = [r for r in weighed if r[0] not in marked]
+    if not weighed or weighed[0][3] < cfg.search_min_weight:
+        return []
     shown = [r for r in weighed if r[3] >= cfg.search_show_weight][: cfg.search_limit]
     used = await cards.by_image(db, [d for d, *_ in shown], exclude=0)
     return [
@@ -181,18 +187,25 @@ class LibraryItem:
     #: сюда не попадают (решение 0014).
     references: list[Reference]
     links: "Links"
+    defect: "Defect | None" = None
 
 
-async def catalogue(db: AsyncSession) -> list[LibraryItem]:
+async def catalogue(db: AsyncSession, defects: bool = False) -> list[LibraryItem]:
     """Библиотека целиком: картинки, свежие первыми, с тегами, названием и
     референсами, где стоят. Одна картинка в десятке референсов — одна плитка."""
     files = await repo.images(db, embeddings.MODEL_NAME)
+    # По умолчанию брака нет, фильтром «брак» — только он.
+    marked = await repo.all_defects(db)
+    files = [(d, n) for d, n in files if (d in marked) == defects]
     digests = [d for d, _ in files]
     tags = {t.digest: t for t in await tags_of_files(db, digests)}
     used = await cards.by_image(db, digests, exclude=0)
     linked = await links(db, "image")
     return [
-        LibraryItem(d, n, tags[d], [c for c, images in used if d in images], linked.get(d) or Links({}, {}, set()))
+        LibraryItem(
+            d, n, tags[d], [c for c, images in used if d in images], linked.get(d) or Links({}, {}, set()),
+            Defect(marked[d].digest, marked[d].reason, marked[d].marked_by, marked[d].marked_at) if d in marked else None,
+        )
         for d, n in files
     ]
 
@@ -395,10 +408,13 @@ async def board(db: AsyncSession, drop_id: int) -> tuple[list[BoardItem], list[V
         n = named.get(key)
         return n.name if n else names.get(key, key[:12])
 
+    marked = await repo.all_defects(db)
     items = [
         BoardItem(p.kind, p.key, title(p.kind, p.key), p.status, p.author_id, p.created_at,
                   p.decided_by, p.decided_at, p.reason)
         for p in await repo.proposals(db, drop_id)
+        # Забракованное в дропах не показывается (US-0499).
+        if not (p.kind == "image" and p.key in marked)
     ]
     proposed = {(i.kind, i.key) for i in items}
     via: list[ViaReference] = []
@@ -430,3 +446,47 @@ async def decide(
         raise BadDecision("у отказа нужна причина")
     keys = [(_normalise_text(k) if kind == "text" else k) for k in keys]
     return await repo.decide(db, kind, keys, drop_id, status, clean, decided_by, datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class Defect:
+    """Брак: какая картинка, почему, кто и когда."""
+
+    digest: str
+    reason: str
+    marked_by: str | None
+    marked_at: datetime
+
+
+async def defect_of(db: AsyncSession, digests: list[str]) -> dict[str, Defect]:
+    """Брак по файлам — и по той же картинке в другом файле: пересохранённая
+    или уменьшенная вдвое узнаётся вектором (план 071), и брак к ней тоже
+    прикладывается. Ключ — проверяемый файл."""
+    if not digests:
+        return {}
+    out: dict[str, Defect] = {}
+    marked = await repo.all_defects(db)
+    if not marked:
+        return {}
+    for d in digests:
+        if d in marked:
+            m = marked[d]
+            out[d] = Defect(m.digest, m.reason, m.marked_by, m.marked_at)
+            continue
+        for same in await same_as(db, d, kind="image"):
+            if same in marked:
+                m = marked[same]
+                out[d] = Defect(m.digest, m.reason, m.marked_by, m.marked_at)
+                break
+    return out
+
+
+async def mark_defect(db: AsyncSession, digest: str, reason: str, by: str | None) -> None:
+    why = (reason or "").strip()
+    if not why:
+        raise BadDecision("у брака нужна причина")
+    await repo.mark_defect(db, digest, why, by)
+
+
+async def unmark_defect(db: AsyncSession, digest: str) -> None:
+    await repo.unmark_defect(db, digest)

@@ -82,3 +82,13 @@ def get(digest: str, preset: str) -> tuple[bytes, str, dict[str, str]] | None:
         return None
     meta = {k: _readable(v) for k, v in obj.get("Metadata", {}).items()}
     return obj["Body"].read(), obj.get("ContentType", "image/png"), meta
+
+
+def remove(digest: str) -> None:
+    """Удалить файл со всеми ступенями. Только для того, что больше не нужно
+    никому: снимки и лист стёртого насовсем референса (US-0499)."""
+    bucket = settings().s3_bucket
+    listed = client().list_objects_v2(Bucket=bucket, Prefix=f"assets/{digest}/")
+    keys = [{"Key": o["Key"]} for o in listed.get("Contents", [])]
+    if keys:
+        client().delete_objects(Bucket=bucket, Delete={"Objects": keys})

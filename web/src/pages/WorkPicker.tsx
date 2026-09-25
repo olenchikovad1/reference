@@ -61,7 +61,7 @@ export function WorkPicker({
   const pictures = useQuery({ queryKey: ['search', asked], queryFn: () => searchAssets(asked), enabled: source === 'all' && !!asked })
   const phrases = useQuery({ queryKey: ['texts', asked], queryFn: () => fetchTexts(asked), enabled: source === 'all' && !!asked })
   // Названия картинок — из библиотеки: у найденного по смыслу только имя файла.
-  const library = useQuery({ queryKey: ['library'], queryFn: fetchLibrary, enabled: source === 'all', staleTime: 60_000 })
+  const library = useQuery({ queryKey: ['library', false], queryFn: () => fetchLibrary(), enabled: source === 'all', staleTime: 60_000 })
   const titleOf = (digest: string, fallback: string) =>
     library.data?.find((i) => i.digest === digest)?.name?.name ?? fallback
   const approvedKeys = approvedIn(board.data)

@@ -73,6 +73,7 @@ async def create(
     пошёл новый. Порядок тот же, что у картинок: сначала ищем, потом
     сохраняем. Иначе принт находит сам себя и сообщает, что он уже был.
     """
+    await refuse_defects(db, image_digests)
     parent_id = None
     if forked_from is not None:
         parent = await repo.version(db, *forked_from)
@@ -105,6 +106,7 @@ async def add_version(
     card = await repo.get(db, reference_id)
     if card is None:
         raise NoSuchReference("референса с таким номером нет")
+    await refuse_defects(db, image_digests)
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=reference_id)
     version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views)
     return Saved(card.id, version.number, found)
@@ -400,3 +402,53 @@ async def origins(db: AsyncSession, cards) -> dict[int, int]:
     """Референс → номер того, от чьей версии он пошёл."""
     by_version = await repo.origins(db, [c.forked_from_version_id for c in cards if c.forked_from_version_id])
     return {c.id: by_version[c.forked_from_version_id] for c in cards if c.forked_from_version_id in by_version}
+
+
+class NoReason(ValueError):
+    """Исключительное удаление без причины: «почему» спросят позже."""
+
+
+class DefectInWork(ValueError):
+    """В работе забракованная картинка — такой референс не сохраняется."""
+
+
+async def erase_forever(db: AsyncSession, reference_id: int, reason: str, by: str | None) -> str:
+    """«Удалить насовсем сразу» (US-0499, решение 0014): любой референс, в том
+    числе согласованный, мимо корзины. После — его нет нигде: ни версий, ни
+    снимков для витрины и листов в хранилище, ни их векторов, ни связей с
+    дропами (они считаются из живых референсов), ни в поиске. Остаётся запись
+    в журнале действий: кто, когда, почему — без самой картинки. Картинки
+    библиотеки не трогаются: их берут другие референсы."""
+    import logging
+
+    from reference_api.repositories import assets as storage
+    from reference_api.repositories import library as library_repo
+
+    why = (reason or "").strip()
+    if not why:
+        raise NoReason("у исключительного удаления нужна причина")
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    name = card.name
+    files = await repo.files_of(db, reference_id)
+    await repo.erase(db, reference_id)
+    orphans = sorted(files - await repo.files_in_use(db, files))
+    await library_repo.forget_vectors(db, orphans, kind=SHEET)
+    for digest in orphans:
+        storage.remove(digest)
+    # Журнал действий платформы (И-5) приложению пока не подключён — вход
+    # платформы ждёт удостоверения (план 072); до тех пор запись — в журнал
+    # сервиса, тем же составом: кто, когда, что, почему.
+    logging.getLogger("reference.audit").warning(
+        "референс удалён насовсем: №%s «%s», кто %s, почему «%s»", reference_id, name, by or "без входа", why)
+    return name
+
+
+async def refuse_defects(db: AsyncSession, image_digests: list[str]) -> None:
+    """Забракованную картинку в референс не положить — ни страницей, ни
+    запросом мимо неё."""
+    found = await library.defect_of(db, image_digests)
+    if found:
+        d = next(iter(found.values()))
+        raise DefectInWork(f"картинка забракована: «{d.reason}»")

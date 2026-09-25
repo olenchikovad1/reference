@@ -1,7 +1,7 @@
 """Файлы: вход по HTTP."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, UploadFile
-from platform_client import Action, requires
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile
+from platform_client import Action, requires, requires_function
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
@@ -11,6 +11,8 @@ from reference_api.schemas.library import (
     FoundCardOut,
     FoundOut,
     AudienceLinkOut,
+    DefectOut,
+    ReasonIn,
     DropLinkOut,
     LibraryItemOut,
     MatchOut,
@@ -19,7 +21,7 @@ from reference_api.schemas.library import (
     TagOut,
 )
 from reference_api.services import assets as service
-from reference_api.services import library
+from reference_api.services import library, people
 from reference_api.services import names as naming
 from reference_api.services import tags as tagging
 
@@ -128,6 +130,9 @@ async def recognise(
         # модель не нужна.
         found = await library.put_tags(db, digest, emb.vector)
         named = await naming.name_of(db, digest, seen)
+        # Забракованная — сразу видно: эта же или та же в другом файле (US-0499).
+        defect = (await library.defect_of(db, [digest])).get(digest)
+        names = await people.names_of(db, [defect.marked_by] if defect and defect.marked_by else [])
         out.append(
             RecognisedOut(
                 digest=digest,
@@ -140,6 +145,7 @@ async def recognise(
                     for x in found
                 ],
                 name=_name_out(named),
+                defect=_defect_out(defect, names),
             )
         )
     return out
@@ -164,10 +170,34 @@ def _tag_out(x: library.TagView) -> TagOut:
     return TagOut(code=x.code, name=x.name, score=x.score, strong=x.strong, model=x.model)
 
 
+def _defect_out(d: library.Defect | None, names: dict[str, str]) -> DefectOut | None:
+    return None if d is None else DefectOut(digest=d.digest, reason=d.reason, marked_by=d.marked_by,
+                                            marked_by_name=names.get(d.marked_by or ""), marked_at=d.marked_at)
+
+
+@router.post("/{digest}/defect", status_code=204, dependencies=[requires_function("prints", "mark-defect")])
+async def mark_defect(digest: str, body: ReasonIn, request: Request, db: AsyncSession = Depends(session)) -> None:
+    """Пометить картинку браком с причиной (US-0499): в выдаче и дропах её
+    больше нет, в референс она не кладётся, при повторной загрузке узнаётся."""
+    subject = getattr(request.state, "subject", None)
+    try:
+        await library.mark_defect(db, digest, body.reason, subject.id if subject else None)
+    except library.BadDecision as refusal:
+        raise HTTPException(422, str(refusal)) from None
+
+
+@router.delete("/{digest}/defect", status_code=204, dependencies=[requires_function("prints", "mark-defect")])
+async def unmark_defect(digest: str, db: AsyncSession = Depends(session)) -> None:
+    """Снять брак — тем же правом, что ставят."""
+    await library.unmark_defect(db, digest)
+
+
 @router.get("/library", response_model=list[LibraryItemOut])
-async def catalogue(db: AsyncSession = Depends(session)) -> list[LibraryItemOut]:
+async def catalogue(defects: bool = False, db: AsyncSession = Depends(session)) -> list[LibraryItemOut]:
     """Библиотека для страницы «Принты»: картинки, свежие первыми, с тегами,
-    названием и «где использован»."""
+    названием и «где использован». defects=true — только забракованные."""
+    items = await library.catalogue(db, defects)
+    names = await people.names_of(db, [i.defect.marked_by for i in items if i.defect and i.defect.marked_by])
     return [
         LibraryItemOut(
             digest=i.digest, file_name=i.file_name, tags=[_tag_out(x) for x in i.tags.tags],
@@ -175,6 +205,7 @@ async def catalogue(db: AsyncSession = Depends(session)) -> list[LibraryItemOut]
             drops=[DropLinkOut(id=d.id, name=d.name, retired=d.retired, via=d.via, status=d.status, reason=d.reason) for d in i.links.drops.values()],
             audiences=[AudienceLinkOut(code=a, via=v) for a, v in i.links.audiences.items()],
             categories=sorted(i.links.categories),
+            defect=_defect_out(i.defect, names),
         )
-        for i in await library.catalogue(db)
+        for i in items
     ]

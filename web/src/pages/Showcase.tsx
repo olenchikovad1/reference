@@ -22,7 +22,7 @@ import { useCan } from '../shared/api/platform'
 import { assetUrl } from '../shared/api/assets'
 import { fetchPalette, toCss } from '../shared/api/colours'
 import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
-import { copyReference, findReferences, listReferences, trashReference, type Card } from '../shared/api/references'
+import { copyReference, eraseForever, findReferences, listReferences, trashReference, type Card } from '../shared/api/references'
 
 /** Строк на витрине — ровно три, при любой высоте окна. */
 const ROWS = 3
@@ -47,7 +47,10 @@ export function Showcase() {
   }, [queries])
   const canCopy = useCan(CODE, 'references', 'write')
   const canTrash = useCan(CODE, 'references', 'delete')
+  const canErase = useCan(CODE, 'references', 'delete-forever')
   const [trashing, setTrashing] = useState<Card | null>(null)
+  const [erasing, setErasing] = useState<Card | null>(null)
+  const [eraseReason, setEraseReason] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const act = (run: () => Promise<unknown>) =>
     run()
@@ -159,6 +162,7 @@ export function Showcase() {
               reasons={found.ids === null ? undefined : found.why.get(c.id)}
               onCopy={canCopy ? () => void act(() => copyReference(c.id)) : undefined}
               onTrash={canTrash ? () => setTrashing(c) : undefined}
+              onErase={canErase ? () => setErasing(c) : undefined}
             />
           ))}
           {cards.data?.length === 0 && (
@@ -200,6 +204,49 @@ export function Showcase() {
           `Референс №${trashing.id} пропадёт с витрины и из поиска. 30 дней его можно вернуть из корзины целиком, с историей.`}
       </Modal>
 
+      <Modal
+        open={erasing !== null}
+        onClose={() => setErasing(null)}
+        title="Удалить насовсем сразу?"
+        actions={
+          <>
+            <button className={buttonClass({ tone: 'neutral', variant: 'outline' })} onClick={() => setErasing(null)}>
+              оставить
+            </button>
+            <button
+              className={buttonClass({ tone: 'danger', variant: 'solid' })}
+              disabled={!eraseReason.trim()}
+              onClick={() => {
+                const c = erasing
+                const why = eraseReason.trim()
+                setErasing(null)
+                setEraseReason('')
+                if (c) void act(() => eraseForever(c.id, why))
+              }}
+            >
+              удалить насовсем
+            </button>
+          </>
+        }
+      >
+        {erasing && (
+          <div className="flex flex-col gap-2 text-sm">
+            <p>
+              Референс №{erasing.id} исчезнет сразу и отовсюду — со всеми версиями и снимками, мимо корзины. В журнале
+              останется кто, когда и почему. Картинки, из которых он собран, останутся в библиотеке — их можно
+              забраковать на «Принтах».
+            </p>
+            <TextInput
+              value={eraseReason}
+              onChange={(e) => setEraseReason(e.target.value)}
+              placeholder="почему — обязательно: «зашквар: Санта на унитазе»"
+              aria-label="причина удаления насовсем"
+              autoFocus
+            />
+          </div>
+        )}
+      </Modal>
+
       <CreateDialog
         open={creating}
         onClose={() => setCreating(false)}
@@ -219,6 +266,7 @@ function ShowcaseCard({
   onOpen,
   onCopy,
   onTrash,
+  onErase,
   reasons,
 }: {
   card: Card
@@ -227,6 +275,7 @@ function ShowcaseCard({
   onOpen: () => void
   onCopy?: () => void
   onTrash?: () => void
+  onErase?: () => void
 }) {
   const front = card.views.front
   const back = card.views.back
@@ -267,7 +316,7 @@ function ShowcaseCard({
         ))}
       </div>
     </button>
-      {(onCopy || onTrash) && (
+      {(onCopy || onTrash || onErase) && (
         <div className="absolute left-1 top-1 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           {onCopy && (
             <button className={corner} onClick={onCopy} title="Копия последней версии — рядом, с отметкой «от №…»">
@@ -277,6 +326,11 @@ function ShowcaseCard({
           {onTrash && (
             <button className={corner} onClick={onTrash} title="В корзину: 30 дней можно вернуть">
               удалить
+            </button>
+          )}
+          {onErase && (
+            <button className={corner} onClick={onErase} title="Зашквар: насовсем сразу, мимо корзины, с причиной">
+              насовсем
             </button>
           )}
         </div>

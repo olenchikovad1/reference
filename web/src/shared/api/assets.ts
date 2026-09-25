@@ -88,6 +88,37 @@ export interface Recognised {
   tags: Tag[]
   /** Нет — названия никто не знает. Догадки модели не бывает. */
   name: Named | null
+  /** Забракована — эта картинка или та же в другом файле (US-0499). */
+  defect?: Defect | null
+}
+
+/** Брак картинки: почему, кто и когда. */
+export interface Defect {
+  digest: string
+  reason: string
+  marked_by: string | null
+  marked_by_name: string | null
+  marked_at: string
+}
+
+/** Словами для человека: «забракована: причина, кто и когда». */
+export function defectText(d: Defect): string {
+  const who = d.marked_by_name ?? (d.marked_by ? 'имя ещё не пришло' : 'без входа')
+  return `забракована: «${d.reason}», ${who}, ${new Date(d.marked_at).toLocaleDateString('ru-RU')}`
+}
+
+export async function markDefect(digest: string, reason: string): Promise<void> {
+  const r = await fetch(`${BASE}assets/${digest}/defect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
+  if (!r.ok) throw new Error(r.status === 422 ? 'у брака нужна причина' : `брак не записался: ${r.status}`)
+}
+
+export async function unmarkDefect(digest: string): Promise<void> {
+  const r = await fetch(`${BASE}assets/${digest}/defect`, { method: 'DELETE' })
+  if (!r.ok) throw new Error(`брак не снялся: ${r.status}`)
 }
 
 export interface FileTags {
@@ -167,6 +198,7 @@ export interface LibraryItem {
   drops: DropLink[]
   audiences: { code: string; via: number | null }[]
   categories: string[]
+  defect: Defect | null
 }
 
 /** Связь с дропом: via пусто — назначен руками, номер — «через референс №…». */
@@ -198,8 +230,9 @@ export async function linkImages(body: LinksBody): Promise<void> {
 }
 
 /** Библиотека целиком, свежие первыми. */
-export async function fetchLibrary(): Promise<LibraryItem[]> {
-  const r = await fetch(`${BASE}assets/library`)
+/** Библиотека; defects — только забракованное (фильтр «брак»). */
+export async function fetchLibrary(defects = false): Promise<LibraryItem[]> {
+  const r = await fetch(`${BASE}assets/library${defects ? '?defects=true' : ''}`)
   if (!r.ok) throw new Error(`библиотека не ответила: ${r.status}`)
   return r.json()
 }
