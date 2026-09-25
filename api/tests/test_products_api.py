@@ -109,3 +109,14 @@ def test_missing_frame_file_names_what_is_missing(client: TestClient) -> None:
     r = client.get("/reference/api/products/B-HDY-14/states/no-such-state/frame")
     assert r.status_code == 404
     assert "no-such-state" in r.json()["detail"]
+
+
+def test_lowered_hood_comes_with_its_source_and_is_marked_provisional(client) -> None:
+    """Граница опущенного капюшона — расчётная, и это видно (US-0519): длина
+    капюшона из табелей Cosmic по размерам и доля, которую он закрывает."""
+    p = client.get("/reference/api/products/B-HDY-14").json()
+    hd = p["hood_down"]
+    assert hd["provisional"] is True and "Cosmic" in hd["source"]
+    assert hd["length_cm_by_size"]["134"] == 34.5 and hd["length_cm_by_size"]["98"] < hd["length_cm_by_size"]["164"]
+    back = next(s for s in p["states"] if s["code"] == "back")
+    assert len(back["zones"]["hood_down"]) >= 3

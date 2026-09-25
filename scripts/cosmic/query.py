@@ -72,9 +72,8 @@ def ensure_tunnel(ssh_target: str, db: str) -> None:
         sys.exit(f"туннель к Cosmic не поднялся через {ssh_target}: {r.stderr.strip() or 'порт не открылся'}")
 
 
-def main() -> None:
-    if len(sys.argv) != 2:
-        sys.exit(__doc__)
+def run(sql: str) -> str:
+    """Выполнить запрос на чтение и вернуть вывод psql. Отказ — выход с причиной."""
     url = urlparse(need(PLMPORTAL_ENV, "PLM_COSMIC_URL", "строка подключения роли plmportal_ro")
                    .replace("postgresql+asyncpg://", "postgresql://"))
     ensure_tunnel(need(OWN_ENV, "COSMIC_SSH", "через кого туннель, напр. «-p 22 логин@sandbox»"),
@@ -83,14 +82,19 @@ def main() -> None:
         ["docker", "run", "--rm", "-e", "PGPASSWORD", PSQL_IMAGE,
          "psql", "-h", "host.docker.internal", "-p", str(LOCAL_PORT),
          "-U", unquote(url.username or ""), "-d", url.path.lstrip("/"),
-         "-v", "ON_ERROR_STOP=1", "-P", "pager=off", "-c", sys.argv[1]],
+         "-v", "ON_ERROR_STOP=1", "-P", "pager=off", "-c", sql],
         env=dict(os.environ, PGPASSWORD=unquote(url.password or "")),
         capture_output=True, text=True, encoding="utf-8",
     )
-    sys.stdout.write(out.stdout)
     if out.returncode:
-        sys.stdout.write(out.stderr)
-        sys.exit(out.returncode)
+        sys.exit(out.stdout + out.stderr)
+    return out.stdout
+
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        sys.exit(__doc__)
+    sys.stdout.write(run(sys.argv[1]))
 
 
 if __name__ == "__main__":

@@ -248,3 +248,30 @@ describe('боковой шов', () => {
     expect(seam?.message).toMatch(/4[.,]3 см/)
   })
 })
+
+describe('опущенный капюшон (US-0519)', () => {
+  // Зона от горловины (y=100) вниз на 6 см — куда ляжет опущенный капюшон.
+  const withHoodDown = {
+    ...STATE,
+    zones: { ...STATE.zones, hood_down: [[40, 100], [160, 100], [160, 160], [40, 160]] as [number, number][] },
+  }
+
+  it('надпись под воротником — предупреждение с долей закрытого', () => {
+    const c = add(EMPTY, picture('высоко', 0, 3, 4))
+    const found = checkZones(c, withHoodDown, CAL).find((f) => f.rule === 'under-lowered-hood')
+    expect(found?.weight).toBe('warning')
+    expect(found?.message).toContain('100%')
+  })
+
+  it('ниже границы — находки нет', () => {
+    const c = add(EMPTY, picture('низко', 0, 9, 4))
+    expect(checkZones(c, withHoodDown, CAL).map((f) => f.rule)).not.toContain('under-lowered-hood')
+  })
+
+  it('на другом размере зона растягивается от горловины', () => {
+    // Масштаб 1.5 — зона до y=190: низкая надпись (170..210) закрыта наполовину.
+    const c = add(EMPTY, picture('низко', 0, 9, 4))
+    const found = checkZones(c, withHoodDown, CAL, null, null, 1.5).find((f) => f.rule === 'under-lowered-hood')
+    expect(found?.message).toContain('50%')
+  })
+})

@@ -50,6 +50,8 @@ export interface CanvasProps {
    *  зона нарисована для отрисованного изделия, а печатают на выбранном. */
   readonly field?: Polygon | null
   readonly fieldLabel?: string | null
+  /** Масштаб зоны опущенного капюшона на выбранном размере — от горловины. */
+  readonly hoodDownScale?: number
   readonly showAnchors: boolean
   readonly onSelect: (id: string | null) => void
   readonly onMove: (id: string, dxCm: number, dyCm: number) => void
@@ -582,7 +584,7 @@ export function GarmentCanvas(props: CanvasProps) {
         })}
 
         {props.showZones && (
-          <Zones state={state} field={props.field ?? null} fieldLabel={props.fieldLabel ?? null} />
+          <Zones state={state} field={props.field ?? null} fieldLabel={props.fieldLabel ?? null} hoodDownScale={props.hoodDownScale ?? 1} />
         )}
         {props.showAnchors && <Anchors state={state} />}
       </svg>
@@ -595,15 +597,27 @@ function Zones({
   state,
   field,
   fieldLabel,
+  hoodDownScale,
 }: {
   state: State
   field: Polygon | null
   fieldLabel: string | null
+  hoodDownScale: number
 }) {
-  const paint: Record<string, string> = { print: '#3b82f6', hood: '#f97316', pocket: '#a855f7' }
+  // Опущенный капюшон — отдельным цветом от надетого: это два разных положения,
+  // и путать их нельзя (US-0519).
+  const paint: Record<string, string> = { print: '#3b82f6', hood: '#f97316', pocket: '#a855f7', hood_down: '#dc2626' }
   // Два контура печати сразу — зона кадра и поле размера — читаются как
   // два разных правила. Правило одно: при выбранном размере это поле.
-  const zones = Object.entries(state.zones).filter(([name]) => !(field && name === 'print'))
+  const neck = state.anchors.neck
+  const zones = Object.entries(state.zones)
+    .filter(([name]) => !(field && name === 'print'))
+    // Зона опущенного капюшона — на выбранном размере, как и в проверке.
+    .map(([name, points]) =>
+      name === 'hood_down' && neck
+        ? ([name, points.map(([x, y]) => [neck[0] + (x - neck[0]) * hoodDownScale, neck[1] + (y - neck[1]) * hoodDownScale])] as const)
+        : ([name, points] as const),
+    )
   return (
     <g pointerEvents="none">
       {field && (
@@ -623,14 +637,26 @@ function Zones({
         </g>
       )}
       {zones.map(([name, points]) => (
-        <polygon
-          key={name}
-          points={points.map(([x, y]) => `${x},${y}`).join(' ')}
-          fill="none"
-          stroke={paint[name] ?? '#94a3b8'}
-          strokeWidth={2}
-          strokeDasharray={name === 'print' ? undefined : '6 4'}
-        />
+        <g key={name}>
+          <polygon
+            points={points.map(([x, y]) => `${x},${y}`).join(' ')}
+            fill="none"
+            stroke={paint[name] ?? '#94a3b8'}
+            strokeWidth={2}
+            strokeDasharray={name === 'print' ? undefined : name === 'hood_down' ? '2 4' : '6 4'}
+          />
+          {name === 'hood_down' && (
+            // Подпись у нижнего края: граница расчётная, и это должно быть видно.
+            <text
+              x={Math.min(...points.map((q) => q[0]))}
+              y={Math.max(...points.map((q) => q[1])) + 14}
+              fontSize={12}
+              fill={paint.hood_down}
+            >
+              опущенный капюшон · расчётно
+            </text>
+          )}
+        </g>
       ))}
       {Object.entries(state.lines).map(([name, pts]) =>
         pts.length >= 2 ? (

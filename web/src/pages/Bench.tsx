@@ -179,6 +179,13 @@ export function Bench() {
   // принт на экране оказался бы не того размера, что в проверке.
   const grid = product?.size_grid ?? null
   const grade = gradeOf(grid, size)
+  // Опущенный капюшон на выбранном размере: его длина растёт медленнее груди,
+  // а кадр показывает любой размер одним рисунком — зона на кадре меняется во
+  // столько раз, во сколько капюшон вырос относительно изделия (US-0519).
+  const hoodLen = product?.hood_down?.length_cm_by_size
+  const hoodBase = hoodLen?.[String(grid?.base ?? 134)]
+  const hoodNow = hoodLen && size !== null ? hoodLen[String(size)] : undefined
+  const hoodDownScale = hoodBase && hoodNow ? hoodNow / hoodBase / grade : 1
   const calibration = useMemo(
     () => calibrationFor({ pxPerCm: product?.calibration.px_per_cm ?? 1, provisional: true }, grade),
     [product, grade],
@@ -282,6 +289,7 @@ export function Bench() {
       calibration,
       field,
       torso && state ? { torso, anchors: state.anchors, fieldCm } : null,
+      hoodDownScale,
     ),
     ...check(
     checked,
@@ -800,6 +808,7 @@ export function Bench() {
               showZones={overlay === 'zones' || overlay === 'all'}
               field={fieldOutline}
               fieldLabel={size ? `поле ${size}` : null}
+              hoodDownScale={hoodDownScale}
               showAnchors={overlay === 'anchors' || overlay === 'all'}
               onSelect={(id) => setComposition((c) => select(c, id))}
               onMove={(id, dxCm, dyCm) => setComposition((c) => placeSized(c, id, { dxCm, dyCm }))}

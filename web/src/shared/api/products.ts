@@ -32,11 +32,23 @@ export interface State {
   defects: string[]
 }
 
+/** Опущенный капюшон: длина капюшона по размерам из табелей Cosmic и доля,
+ *  которую он закрывает, — граница расчётная, и это видно. */
+export interface HoodDown {
+  provisional: boolean
+  source: string
+  lies_share: number
+  why?: string | null
+  length_cm_by_size: Record<string, number>
+}
+
 export interface Product {
   /** Упрощённый объём торса. Нет — показ плоский, как раньше. */
   torso?: TorsoData | null
   /** Размерная сетка. Нет — размер меняет только поле печати. */
   size_grid?: SizeGrid | null
+  /** Куда ляжет опущенный капюшон — расчётно (US-0519). */
+  hood_down?: HoodDown | null
   code: string
   display_name: string
   kind: string

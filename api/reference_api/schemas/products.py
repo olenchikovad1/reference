@@ -116,6 +116,23 @@ class Torso(BaseModel):
     views: dict[str, TorsoView]
 
 
+class HoodDown(BaseModel):
+    """Куда ляжет опущенный капюшон — расчётно (план 076, US-0519).
+
+    Пометка обязательна, без умолчания: граница выведена из длины капюшона
+    по табелям похожих изделий и доли, которую он закрывает, а не измерена.
+    """
+
+    provisional: bool
+    source: str
+    #: Доля длины капюшона, которую он закрывает опущенным: ложится на лопатки
+    #: в изгиб и комкается.
+    lies_share: float
+    why: str | None = None
+    #: Длина капюшона по размерам, см — от неё зона масштабируется по размеру.
+    length_cm_by_size: dict[int, float]
+
+
 class Product(BaseModel):
     code: str
     display_name: str
@@ -132,3 +149,4 @@ class Product(BaseModel):
     print_rules: PrintRules | None = None
     torso: Torso | None = None
     size_grid: SizeGrid | None = None
+    hood_down: HoodDown | None = None

@@ -130,6 +130,7 @@ interface FabricZones {
   bounds: Polygon | undefined
   lines: [string, Point[]][]
   hood: Polygon | undefined
+  hoodDown: Polygon | undefined
 }
 const fabricZones = new WeakMap<Torso, WeakMap<object, Map<string, FabricZones>>>()
 
@@ -137,12 +138,13 @@ function fieldKey(s: SurfaceContext): string {
   return s.fieldCm ? s.fieldCm.join('x') : '-'
 }
 
-function remember(s: SurfaceContext, state: object, z: FabricZones) {
+function remember(s: SurfaceContext, state: object, z: FabricZones, hoodDownScale: number) {
   let byState = fabricZones.get(s.torso)
   if (!byState) fabricZones.set(s.torso, (byState = new WeakMap()))
   let byField = byState.get(state)
   if (!byField) byState.set(state, (byField = new Map()))
-  byField.set(fieldKey(s), z)
+  // Размер меняет и поле, и зону опущенного капюшона — ключ из обоих.
+  byField.set(`${fieldKey(s)}|${hoodDownScale}`, z)
 }
 
 /** Центр многоугольника по габариту. */
@@ -202,6 +204,10 @@ export function checkZones(
   field?: Polygon | null,
   /** Есть — считаем по ткани. Нет — по кадру, как у изделия без объёма. */
   surface?: SurfaceContext | null,
+  /** Во сколько раз зона опущенного капюшона на этом размере больше, чем на
+   *  кадре (нарисована для отрендеренного). Капюшон растёт медленнее груди, и
+   *  на кадре, который показывает любой размер, его доля меняется (US-0519). */
+  hoodDownScale = 1,
 ): Finding[] {
   if (state.kind === 'illustrative') return []
   const found: Finding[] = []
@@ -211,9 +217,20 @@ export function checkZones(
   let bounds: Polygon | undefined
   let lines: [string, Point[]][]
   let hood: Polygon | undefined
-  const cached = onFabric && surface ? fabricZones.get(surface.torso)?.get(state)?.get(fieldKey(surface)) : undefined
+  let hoodDown: Polygon | undefined
+  // Зона опущенного капюшона — от горловины: растёт вниз и в стороны от неё.
+  const neck = state.anchors.neck
+  const hdFrame = state.zones.hood_down as Polygon | undefined
+  const hdScaled =
+    hdFrame && hdFrame.length >= 3 && neck
+      ? hdFrame.map(([x, y]) => [neck[0] + (x - neck[0]) * hoodDownScale, neck[1] + (y - neck[1]) * hoodDownScale] as Point)
+      : hdFrame
+  const cached =
+    onFabric && surface
+      ? fabricZones.get(surface.torso)?.get(state)?.get(`${fieldKey(surface)}|${hoodDownScale}`)
+      : undefined
   if (cached) {
-    ;({ bounds, lines, hood } = cached)
+    ;({ bounds, lines, hood, hoodDown } = cached)
   } else if (onFabric && surface && panel) {
     const zone = state.zones.print as Polygon | undefined
     if (surface.fieldCm && zone && zone.length >= 3) {
@@ -236,11 +253,13 @@ export function checkZones(
     ])
     const hz = state.zones.hood as Polygon | undefined
     hood = hz && hz.length >= 3 ? polyToSurface(surface, panel, hz, true) : undefined
-    remember(surface, state, { bounds, lines, hood })
+    hoodDown = hdScaled && hdScaled.length >= 3 ? polyToSurface(surface, panel, hdScaled, true) : undefined
+    remember(surface, state, { bounds, lines, hood, hoodDown }, hoodDownScale)
   } else {
     bounds = field ?? (state.zones.print as Polygon | undefined)
     lines = Object.entries(state.lines ?? {}).map(([name, line]) => [name, line as Point[]])
     hood = state.zones.hood as Polygon | undefined
+    hoodDown = hdScaled
   }
 
   for (const el of c.elements) {
@@ -310,6 +329,19 @@ export function checkZones(
         weight: 'warning',
         elementId: el.id,
         message: `«${el.name}» попадает под капюшон: напечатается, но видно не будет.`,
+      })
+    }
+
+    const underLowered = hoodDown && hoodDown.length >= 3 ? coverage(hoodDown, rect) : 0
+    if (underLowered > 0.01) {
+      found.push({
+        rule: 'under-lowered-hood',
+        // Предупреждение: при надетом капюшоне принт виден, решает человек.
+        weight: 'warning',
+        elementId: el.id,
+        message:
+          `«${el.name}» при опущенном капюшоне закроется на ${Math.round(underLowered * 100)}%. ` +
+          'Граница расчётная: длина капюшона по табелям Cosmic, опущенный комкается на лопатках.',
       })
     }
   }
