@@ -34,6 +34,14 @@ describe('несохранённое', () => {
     expect(workKey({ colourCode: 'BLACK', composition: withOne })).not.toBe(workKey({ colourCode: 'BLACK', composition: EMPTY }))
   })
 
+  it('порядок ключей из базы — не правка', () => {
+    // JSONB возвращает ключи в своём порядке — та же работа, другой порядок.
+    const shuffled = JSON.parse(JSON.stringify(withOne), (_, v) =>
+      v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).reverse()) : v,
+    ) as Composition
+    expect(workKey({ colourCode: 'BLACK', composition: shuffled })).toBe(workKey({ colourCode: 'BLACK', composition: withOne }))
+  })
+
   it('смена цвета изделия — правка', () => {
     expect(workKey({ colourCode: 'BLACK', composition: withOne })).not.toBe(workKey({ colourCode: 'WHITE', composition: withOne }))
   })

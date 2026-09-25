@@ -177,6 +177,9 @@ export function Bench() {
   // Закрытые предупреждения: «так и задумано». Ключ — правило плюс элемент.
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const viewCanvas = useRef<HTMLCanvasElement | null>(null)
+  // Холсты миниатюр по сторонам: с них снимаются виды для витрины при
+  // сохранении — они уже нарисованы, второй раз рисовать изделие незачем.
+  const thumbCanvases = useRef<Record<string, HTMLCanvasElement | null>>({})
   const measurer = useRef<CanvasRenderingContext2D | null>(null)
 
   useEffect(() => {
@@ -191,7 +194,12 @@ export function Bench() {
     // первая отрисовка надписи уходит в запасной шрифт, то есть показывает не
     // то, что уйдёт в печать, и заметить это трудно: буквы-то на месте.
     const was = load()
-    if (was?.referenceId) {
+    const asked = Number(new URLSearchParams(window.location.search).get('reference'))
+    if (asked) {
+      // Открыли с витрины: референс из адреса главнее прошлой работы, её
+      // черновик лежит под своим номером.
+      void openCard(asked)
+    } else if (was?.referenceId) {
       // Работа была референсом — открывается он на той версии, где остановились;
       // несохранённое предлагается восстановить, а не подменяет сохранённое
       // молча. Пришли из ячейки дропа — начинают новый: черновик референса
@@ -533,7 +541,7 @@ export function Bench() {
     try {
       const body = await versionBody()
       if (!body) return false
-      const saved = await send(body)
+      const saved = await send({ ...body, views: await snapshotSides() })
       const card = await openReference(saved.id)
       // Правки легли в версию — черновик больше не предлагать; при «сохранить
       // как» правки ушли в новый референс, и прежнему они тоже не черновик.
@@ -554,6 +562,25 @@ export function Bench() {
     } finally {
       setSaving(false)
     }
+  }
+
+  /** Снимки переда и спины для витрины (US-0491) — с миниатюр сторон.
+   *  Миниатюры идут за работой с задержкой; если последняя правка до них ещё
+   *  не дошла — ждём её, иначе на витрине окажется предпоследний вид. Снимок
+   *  не сохранился — версия всё равно сохраняется, витрина покажет имя. */
+  async function snapshotSides(): Promise<Record<string, string>> {
+    if (thumbWork !== sized) await new Promise((r) => setTimeout(r, 300))
+    const out: Record<string, string> = {}
+    for (const code of ['front', 'back']) {
+      const canvas = thumbCanvases.current[code]
+      if (!canvas) continue
+      try {
+        out[code] = await uploadCanvas(canvas, `${PRODUCT}-${code}-view.png`)
+      } catch {
+        // см. выше: без снимка — не повод терять версию
+      }
+    }
+    return out
   }
 
   /** Сделать `then`, а при несохранённом сначала спросить: сохранить, не
@@ -1121,6 +1148,7 @@ export function Bench() {
                     onResize={noop}
                     onRotate={noop}
                     images={images.current}
+                    onCanvas={(el) => (thumbCanvases.current[s.code] = el)}
                     key={`${s.code}-${imagesVersion}`}
                   />
                   <span style={S.thumbCaption}>

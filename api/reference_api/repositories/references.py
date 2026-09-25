@@ -33,6 +33,7 @@ async def add_version(
     texts: list[tuple[str, str]],
     work: dict | None,
     author_id: str | None,
+    views: dict[str, str] | None = None,
 ) -> ReferenceVersion:
     """Кладёт НОВУЮ версию поверх последней и фиксирует транзакцию.
 
@@ -46,7 +47,7 @@ async def add_version(
     )
     version = ReferenceVersion(
         reference_id=card.id, number=(last or 0) + 1, sheet_digest=sheet_digest,
-        image_digests=list(image_digests), work=work, author_id=author_id,
+        image_digests=list(image_digests), work=work, author_id=author_id, views=views or None,
     )
     version.texts = [ReferenceText(text=t, normalised=n) for t, n in texts]
     db.add(version)

@@ -16,7 +16,24 @@ export interface WorkShape {
  * «сохранить?». В отпечаток идут элементы и цвет изделия.
  */
 export function workKey(work: WorkShape): string {
-  return JSON.stringify({ colourCode: work.colourCode, elements: work.composition.elements })
+  return canonical({ colourCode: work.colourCode, elements: work.composition.elements })
+}
+
+/**
+ * JSON с ключами по алфавиту. Версия возвращается из JSONB, а PostgreSQL
+ * хранит ключи объекта в своём порядке: простое JSON.stringify видело правку
+ * в каждой открытой версии, и «восстановить несохранённое?» спрашивало там,
+ * где никто ничего не менял.
+ */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']'
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    return '{' + entries.map(([k, v]) => JSON.stringify(k) + ':' + canonical(v)).join(',') + '}'
+  }
+  return JSON.stringify(value)
 }
 
 /**

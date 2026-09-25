@@ -63,6 +63,7 @@ async def create(body: SaveIn, request: Request, db: AsyncSession = Depends(sess
             db, body.name, body.sheet_digest, body.image_digests, body.texts, body.work,
             author_id=_author(request), colour_model_id=body.colour_model_id,
             forked_from=(body.forked_from.reference_id, body.forked_from.number) if body.forked_from else None,
+            views=body.views,
         )
     except service.NoSuchReference as missing:
         raise HTTPException(status_code=422, detail=str(missing)) from None
@@ -79,7 +80,7 @@ async def add_version(
     try:
         saved = await service.add_version(
             db, reference_id, body.name, body.sheet_digest, body.image_digests, body.texts, body.work,
-            author_id=_author(request),
+            author_id=_author(request), views=body.views,
         )
     except service.NoSuchReference as missing:
         raise HTTPException(status_code=404, detail=str(missing)) from None
@@ -102,11 +103,16 @@ async def latest(db: AsyncSession = Depends(session)) -> list[CardOut]:
     """Референсы, свежие по последней версии первыми."""
     rows = await service.latest(db)
     names = await people.names_of(db, [v.author_id for _, v in rows if v.author_id])
-    return [
-        CardOut(id=c.id, name=c.name, number=v.number, saved_at=v.created_at, author_id=v.author_id,
-                author_name=names.get(v.author_id or ""))
-        for c, v in rows
-    ]
+    models = await drops.colour_models_of(db, [c.colour_model_id for c, _ in rows if c.colour_model_id])
+    out = []
+    for c, v in rows:
+        cm = models.get(c.colour_model_id) if c.colour_model_id else None
+        out.append(CardOut(
+            id=c.id, name=c.name, number=v.number, saved_at=v.created_at, author_id=v.author_id,
+            author_name=names.get(v.author_id or ""), views=v.views or {},
+            colour_code=cm.colour_code if cm else None, drops=cm.drops if cm else [],
+        ))
+    return out
 
 
 # Объявлен ПОСЛЕ /search: иначе «search» разбирался бы как номер карточки и

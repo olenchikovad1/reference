@@ -32,6 +32,8 @@ export interface VersionBody {
   /** Работа целиком: без неё версия — снимок для узнавания, открыть
    *  который нечем. */
   work?: unknown
+  /** Снимки изделия по сторонам для витрины: код стороны → файл. */
+  views?: Record<string, string>
 }
 
 async function post(path: string, body: unknown): Promise<Saved> {
@@ -80,6 +82,11 @@ export interface Card extends Saver {
   id: number
   name: string
   number: number
+  /** Снимки последней версии по сторонам; пусто — сохранена до витрины. */
+  views: Record<string, string>
+  /** Цвет изделия и дропы цветомодели; пусто — без цветомодели. */
+  colour_code: string | null
+  drops: string[]
 }
 
 export interface VersionMeta extends Saver {

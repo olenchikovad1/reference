@@ -174,7 +174,10 @@ export interface Renderer {
 }
 
 export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
-  const gl = canvas.getContext('webgl2', { premultipliedAlpha: false, antialias: false })
+  // preserveDrawingBuffer: без него после показа буфер очищается, и снимок
+  // холста вне кадра отрисовки — «сохранить картинкой», снимки сторон для
+  // витрины (US-0491) — выходит пустым прозрачным прямоугольником.
+  const gl = canvas.getContext('webgl2', { premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true })
   if (!gl) return null
 
   const program = link(gl, VERT, FRAG)

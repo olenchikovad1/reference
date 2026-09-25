@@ -64,6 +64,7 @@ async def create(
     author_id: str | None = None,
     colour_model_id: int | None = None,
     forked_from: tuple[int, int] | None = None,
+    views: dict[str, str] | None = None,
 ) -> Saved:
     """Новый референс с первой версией — и что узналось.
 
@@ -79,7 +80,7 @@ async def create(
         parent_id = parent.id
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=0)
     card = await repo.create(db, name, colour_model_id=colour_model_id, forked_from_version_id=parent_id)
-    version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id)
+    version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views)
     return Saved(card.id, version.number, found)
 
 
@@ -92,6 +93,7 @@ async def add_version(
     texts: list[str],
     work: dict | None = None,
     author_id: str | None = None,
+    views: dict[str, str] | None = None,
 ) -> Saved:
     """«Сохранить»: новая версия поверх последней, прежние не трогаются (И-6).
 
@@ -103,13 +105,13 @@ async def add_version(
     if card is None:
         raise NoSuchReference("референса с таким номером нет")
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=reference_id)
-    version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id)
+    version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views)
     return Saved(card.id, version.number, found)
 
 
-async def _put(db, card, name, sheet_digest, image_digests, texts, work, author_id):
+async def _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views):
     version = await repo.add_version(
-        db, card, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts], work, author_id
+        db, card, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts], work, author_id, views
     )
     # Вектор листа считается ПОСЛЕ поиска и по тому же оригиналу, что у картинок.
     content = assets.original(sheet_digest)

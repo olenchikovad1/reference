@@ -87,3 +87,25 @@ async def colour_model_for_work(db: AsyncSession, colour_model_id: int) -> Colou
     if not w.can_work:
         raise CannotWork(w.reason or NO_FRAMES)
     return cm
+
+
+@dataclass(frozen=True)
+class ColourPlace:
+    """Где цветомодель: цвет палитры и дропы, где она выходит."""
+
+    colour_code: str
+    #: Сначала действующие, погашенные в конце: погашенный остаётся виден там,
+    #: где стоит, но первым его не называют.
+    drops: list[str]
+
+
+async def colour_models_of(db: AsyncSession, ids: list[int]) -> dict[int, ColourPlace]:
+    """Цвет и дропы цветомоделей разом — для списка референсов."""
+    found = await repo.colour_models(db, sorted(set(ids)))
+    return {
+        cm_id: ColourPlace(
+            cm.colour_code,
+            [d.name for d in sorted(cm.drops, key=lambda d: (d.retired, d.release_from))],
+        )
+        for cm_id, cm in found.items()
+    }

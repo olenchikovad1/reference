@@ -92,6 +92,11 @@ class ReferenceVersion(Base):
     #: по надписям и картинкам, они лежат рядом отдельно. Пусто — версия
     #: сохранена до того, как работу начали хранить.
     work: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    #: Снимки изделия по сторонам, сделанные при сохранении: код стороны →
+    #: имя файла в хранилище. Витрина показывает их, а не рисует изделия на
+    #: лету — шестьдесят карточек не должны рисовать сто двадцать изделий.
+    #: Пусто — версия сохранена до витрины (US-0491).
+    views: Mapped[dict[str, str] | None] = mapped_column(JSONB, nullable=True)
 
     reference: Mapped[Reference] = relationship(
         back_populates="versions", foreign_keys=[reference_id], lazy="joined"

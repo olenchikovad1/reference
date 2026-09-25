@@ -13,6 +13,7 @@ import { createBrowserRouter, Route, RouterProvider, Routes } from 'react-router
 import { Bench } from '../pages/Bench'
 import { Drops } from '../pages/Drops'
 import { Products } from '../pages/Products'
+import { Showcase } from '../pages/Showcase'
 import { NotFound, Placeholder } from '../pages/Placeholder'
 import { useProfile, useSections, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { BASE, SECTIONS, type SectionPlace } from './sections'
@@ -25,6 +26,7 @@ const PLATFORM_URL = import.meta.env.VITE_PLATFORM_URL ?? 'http://localhost:8100
 
 /** Сделанные страницы разделов; остальные — заглушки со смыслом. */
 const PAGES: Record<string, () => ReactElement> = {
+  references: () => <Showcase />,
   drops: () => <Drops />,
   products: () => <Products />,
 }

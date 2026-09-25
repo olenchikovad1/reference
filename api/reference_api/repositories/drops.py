@@ -26,6 +26,14 @@ async def colour_model(db: AsyncSession, colour_model_id: int) -> ColourModel | 
     return await db.get(ColourModel, colour_model_id)
 
 
+async def colour_models(db: AsyncSession, ids: list[int]) -> dict[int, ColourModel]:
+    """Цветомодели разом, с дропами: список референсов называет дроп каждого."""
+    if not ids:
+        return {}
+    rows = await db.execute(select(ColourModel).where(ColourModel.id.in_(ids)))
+    return {cm.id: cm for cm in rows.scalars()}
+
+
 async def references_by_colour_model(db: AsyncSession, ids: list[int]) -> dict[int, int]:
     """Сколько референсов на каждой цветомодели."""
     if not ids:

@@ -82,3 +82,19 @@ async def test_products_tree_shows_hierarchy_with_colour_models_and_their_drops(
     hdy = next(m for m in hoodies["models"] if m["code"] == "B-HDY-14")
     assert hdy["can_work"] is True
     assert {"Зима 2026/27", "Новый год 2027"} <= {d for cm in hdy["colour_models"] for d in cm["drops"]}
+
+
+async def test_the_showcase_list_names_colour_drops_and_carries_the_views(client) -> None:
+    """Витрина (US-0491): карточка — снимки сторон последней версии, цвет и
+    дропы цветомодели; снимки делает страница при сохранении, сервис хранит."""
+    winter = await drop_named(client, "Зима 2026/27")
+    m = (await client.get(f"/reference/api/drops/{winter['id']}/matrix")).json()
+    black = next(r for r in m["rows"] if r["model"]["code"] == "B-HDY-14")["cells"]["BLACK"]
+    views = {"front": "f" * 64, "back": "b" * 64}
+    saved = await client.post("/reference/api/references",
+                              json={**CARD, "colour_model_id": black["colour_model_id"], "views": views})
+    assert saved.status_code == 200, saved.text
+    card = next(c for c in (await client.get("/reference/api/references")).json() if c["id"] == saved.json()["id"])
+    assert card["views"] == views
+    assert card["colour_code"] == "BLACK"
+    assert card["drops"] == ["Зима 2026/27", "Новый год 2027"], "дропы не те или не по порядку выхода"

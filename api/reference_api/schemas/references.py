@@ -17,6 +17,8 @@ class VersionIn(BaseModel):
     #: как есть, без разбора, чтобы новая история на странице не требовала
     #: правки сервиса.
     work: dict | None = None
+    #: Снимки изделия по сторонам: код стороны → имя файла в хранилище.
+    views: dict[str, str] = {}
 
 
 class ForkIn(BaseModel):
@@ -79,6 +81,12 @@ class CardOut(Saver):
     name: str
     #: Номер последней версии.
     number: int
+    #: Снимки последней версии по сторонам; пусто — сохранена до витрины.
+    views: dict[str, str] = {}
+    #: Цвет изделия (код палитры) и дропы, где цветомодель выходит; пусто —
+    #: референс сохранён без цветомодели.
+    colour_code: str | None = None
+    drops: list[str] = []
 
 
 class VersionMetaOut(Saver):
