@@ -112,3 +112,22 @@ async def test_own_order_is_personal_and_whole(client) -> None:
     assert (cards[b]["my_position"], cards[a]["my_position"]) == (0, 1)
     assert (await client.put("/reference/api/references/order", json={"ids": [a, a]})).status_code == 422
     assert (await client.put("/reference/api/references/order", json={"ids": [a, 99999]})).status_code == 422
+
+
+async def test_copy_takes_the_version_and_leaves_the_draft(client) -> None:
+    """Решение 0015: копия с витрины — последняя версия; черновик остаётся у исходной."""
+    ref, _ = await saved(client)
+    await put(client, f"/reference/api/references/{ref}/draft", MOVED, 2)
+    copy = (await client.post(f"/reference/api/references/{ref}/copy")).json()["id"]
+    opened = (await client.get(f"/reference/api/references/{copy}")).json()
+    assert opened["work"]["colourCode"] == "WHITE" and opened["draft"] is None
+    assert (await client.get(f"/reference/api/references/{ref}")).json()["draft"]["work"]["colourCode"] == "BLACK"
+
+
+async def test_trash_and_restore_bring_the_draft_back(client) -> None:
+    """Решение 0015: корзина уносит карточку вместе с черновиком и так же возвращает."""
+    ref, _ = await saved(client)
+    await put(client, f"/reference/api/references/{ref}/draft", MOVED, 2)
+    await client.post(f"/reference/api/references/{ref}/trash")
+    assert (await client.post(f"/reference/api/references/{ref}/restore")).status_code == 204
+    assert (await client.get(f"/reference/api/references/{ref}")).json()["draft"]["base_number"] == 2
