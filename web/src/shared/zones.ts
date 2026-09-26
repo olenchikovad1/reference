@@ -5,10 +5,10 @@
 // посчитать нечем. Смешав их, получаем проверку, которая на одном изделии
 // работает, а на другом молча ничего не находит.
 
-import type { Composition, PrintElement } from './composition'
+import type { ClipTo, Composition, PrintElement } from './composition'
 import { heightCm } from './composition'
 import type { Finding } from './checks'
-import { type Calibration, cmToPx } from './geometry'
+import { type Calibration, cmToPx, pxToCm } from './geometry'
 import { coverage, type Point, type Polygon } from './mask'
 import { anchorOnSurface, seamArc, toSurface, type Panel, type Torso } from './torso'
 
@@ -188,34 +188,25 @@ function segmentsCross(p1: Point, p2: Point, p3: Point, p4: Point): boolean {
   return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0))
 }
 
-/**
- * Находки, считаемые из кадра.
- *
- * По иллюстративному ракурсу не считаются вовсе: силуэт на нём сокращён, и
- * находка по нему сообщала бы о проблеме, которой нет.
- */
-export function checkZones(
-  c: Composition,
+/** Зоны и линии стороны — на ткани, если есть объём, иначе на кадре.
+ *  Одни и те же для проверок и для обрезки по разметке (US-0505): граница,
+ *  по которой режут, обязана быть той, по которой проверяют. */
+interface SideZones extends FabricZones {
+  onFabric: boolean
+  panel: Panel | null
+}
+
+function zonesFor(
   state: FrameState,
-  cal: Calibration,
-  /** Поле выбранного размера. Есть — считаем по нему: зона нарисована для
-   *  отрендеренного изделия, а печатают на выбранном размере. Нет — по зоне,
-   *  и человеку сказано, что размер без поля. */
-  field?: Polygon | null,
-  /** Есть — считаем по ткани. Нет — по кадру, как у изделия без объёма. */
-  surface?: SurfaceContext | null,
-  /** Во сколько раз зона опущенного капюшона на этом размере больше, чем на
-   *  кадре (нарисована для отрендеренного). Капюшон растёт медленнее груди, и
-   *  на кадре, который показывает любой размер, его доля меняется (US-0519). */
-  hoodDownScale = 1,
-): Finding[] {
-  if (state.kind === 'illustrative') return []
-  const found: Finding[] = []
+  field: Polygon | null | undefined,
+  surface: SurfaceContext | null | undefined,
+  hoodDownScale: number,
+): SideZones {
   const panel = state.code === 'front' || state.code === 'back' ? (state.code as Panel) : null
   const onFabric = !!surface && !!panel && !!surface.torso.views[state.code]
 
   let bounds: Polygon | undefined
-  let lines: [string, Point[]][]
+  let lines: [string, Point[]][] = []
   let hood: Polygon | undefined
   let hoodDown: Polygon | undefined
   // Зона опущенного капюшона — от горловины: растёт вниз и в стороны от неё.
@@ -262,10 +253,138 @@ export function checkZones(
     hoodDown = hdScaled
   }
 
-  for (const el of c.elements) {
-    const rect = onFabric && surface && panel ? rectOnSurface(el, panel, surface) : rectOf(el, state, cal)
+  return { onFabric, panel, bounds, lines, hood, hoodDown }
+}
 
-    if (bounds && bounds.length >= 3) {
+/** Габарит многоугольника. */
+function boxOf(poly: readonly Point[]): Rect {
+  const xs = poly.map((p) => p[0])
+  const ys = poly.map((p) => p[1])
+  const x = Math.min(...xs)
+  const y = Math.min(...ys)
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
+}
+
+/** Пересечение прямоугольников; null — не пересекаются. */
+function overlap(a: Rect, b: Rect): Rect | null {
+  const x = Math.max(a.x, b.x)
+  const y = Math.max(a.y, b.y)
+  const x1 = Math.min(a.x + a.width, b.x + b.width)
+  const y1 = Math.min(a.y + a.height, b.y + b.height)
+  return x1 > x && y1 > y ? { x, y, width: x1 - x, height: y1 - y } : null
+}
+
+/** Далеко за изделием: полуплоскость «левее молнии» — многоугольник до сюда. */
+const FAR = 1000
+
+/**
+ * Контур обрезки в координатах зон стороны — ткань или кадр, как у проверок.
+ * null — такой разметки на стороне нет: молнии на спине, швов без объёма.
+ */
+function clipIn(clip: ClipTo, z: SideZones, surface: SurfaceContext | null | undefined): Polygon | null {
+  if (clip === 'field') return z.bounds && z.bounds.length >= 3 ? z.bounds : null
+  if (clip === 'seams') {
+    if (!z.onFabric || !surface || !z.panel) return null
+    const right: Point[] = []
+    const left: Point[] = []
+    for (let h = 0; h <= 90; h += 2) {
+      const arc = seamArc(surface.torso, z.panel, h)
+      right.push([arc, -h])
+      left.push([-arc, -h])
+    }
+    return [...right, ...left.reverse()]
+  }
+  const line = z.lines.find(([name]) => name === 'zipper')?.[1]
+  if (!line || line.length < 2) return null
+  // Линия сверху вниз, продлённая за край изделия, и замкнутая далеко в свою
+  // сторону: молния в кадре кончается у горловины, а принт выше неё — тоже её
+  // сторона.
+  const down = [...line].sort((a, b) => a[1] - b[1])
+  const top = down[0]
+  const bottom = down[down.length - 1]
+  const far = clip === 'zipper-left' ? -FAR : FAR
+  return [
+    [top[0], top[1] - FAR],
+    ...down,
+    [bottom[0], bottom[1] + FAR],
+    [bottom[0] + far, bottom[1] + FAR],
+    [top[0] + far, top[1] - FAR],
+  ]
+}
+
+/**
+ * Контур обрезки элемента по разметке изделия (US-0505) — в сантиметрах от
+ * ориентира элемента, вправо и вниз, как смещение в размещении. Так его берут
+ * все пути одинаково: показ на ткани, показ на кадре и печатный лист. От
+ * смещения элемента контур не зависит — граница стоит на изделии.
+ */
+export function clipOutline(
+  el: PrintElement,
+  state: FrameState,
+  cal: Calibration,
+  field?: Polygon | null,
+  surface?: SurfaceContext | null,
+): Polygon | null {
+  const clip = el.placement.clip
+  if (!clip) return null
+  const z = zonesFor(state, field, surface, 1)
+  const poly = clipIn(clip, z, surface)
+  if (!poly) return null
+  if (z.onFabric && surface && z.panel) {
+    const a = anchorOnSurface(surface.torso, z.panel, surface.anchors[el.placement.anchor] ?? [0, 0])
+    return poly.map(([u, y]) => [u - a.u, y + a.h] as Point)
+  }
+  const [ax, ay] = state.anchors[el.placement.anchor] ?? [0, 0]
+  return poly.map(([x, y]) => [pxToCm(x - ax, cal), pxToCm(y - ay, cal)] as Point)
+}
+
+/**
+ * Находки, считаемые из кадра.
+ *
+ * По иллюстративному ракурсу не считаются вовсе: силуэт на нём сокращён, и
+ * находка по нему сообщала бы о проблеме, которой нет.
+ */
+export function checkZones(
+  c: Composition,
+  state: FrameState,
+  cal: Calibration,
+  /** Поле выбранного размера. Есть — считаем по нему: зона нарисована для
+   *  отрендеренного изделия, а печатают на выбранном размере. Нет — по зоне,
+   *  и человеку сказано, что размер без поля. */
+  field?: Polygon | null,
+  /** Есть — считаем по ткани. Нет — по кадру, как у изделия без объёма. */
+  surface?: SurfaceContext | null,
+  /** Во сколько раз зона опущенного капюшона на этом размере больше, чем на
+   *  кадре (нарисована для отрендеренного). Капюшон растёт медленнее груди, и
+   *  на кадре, который показывает любой размер, его доля меняется (US-0519). */
+  hoodDownScale = 1,
+): Finding[] {
+  if (state.kind === 'illustrative') return []
+  const found: Finding[] = []
+  const { onFabric, panel, bounds, lines, hood, hoodDown } = zonesFor(state, field, surface, hoodDownScale)
+
+  for (const el of c.elements) {
+    let rect = onFabric && surface && panel ? rectOnSurface(el, panel, surface) : rectOf(el, state, cal)
+    const clip = el.placement.clip ?? null
+    const clipped = clip ? clipIn(clip, { onFabric, panel, bounds, lines, hood, hoodDown }, surface) : null
+    if (clipped) {
+      // Проверяется то, что напечатают, — обрезанное. Габарит обрезки берётся
+      // описанным прямоугольником: ошибка в сторону лишнего предупреждения.
+      const cut = overlap(rect, boxOf(clipped))
+      if (!cut) {
+        found.push({
+          rule: 'clipped-away',
+          weight: 'warning',
+          elementId: el.id,
+          message: `«${el.name}» целиком за линией обрезки — не напечатается ничего.`,
+        })
+        continue
+      }
+      rect = cut
+    }
+
+    // Обрезанное по полю за поле не выходит по построению — не спрашиваем.
+    if (clip !== 'field' && bounds && bounds.length >= 3) {
       const inside = coverage(bounds, rect)
       if (inside < 0.999) {
         const outside = Math.max(1, Math.round((1 - inside) * 100))
@@ -283,6 +402,8 @@ export function checkZones(
     }
 
     for (const [name, line] of lines) {
+      // Обрезанное по молнии кончается на ней, а не пересекает её.
+      if (clipped && name === 'zipper' && clip?.startsWith('zipper')) continue
       if (line.length >= 2 && crosses(line, rect)) {
         found.push({
           rule: 'crosses-line',
@@ -295,7 +416,7 @@ export function checkZones(
       }
     }
 
-    if (onFabric && surface && panel) {
+    if (onFabric && surface && panel && !(clipped && clip === 'seams')) {
       // Шов меряется по самому узкому месту элемента по высоте: глубина торса
       // меняется, и у груди до шва ближе, чем у низа. Верх, низ и середина —
       // достаточно, изгиб по высоте плавный.

@@ -37,7 +37,15 @@ export interface Placement {
   /** Прежняя форма исключения — сантиметрами. Только читается и при чтении
    *  переводится в коэффициент (см. upgrade); не пишется. */
   readonly widthBySize?: Readonly<Record<string, number>>
+  /** Обрезка по разметке изделия (US-0505): ссылка на линию, а не контур.
+   *  Контур строится заново на каждом размере и от ориентира, а не от принта:
+   *  сдвинули принт — граница стоит на месте. Нет — не обрезан. */
+  readonly clip?: ClipTo | null
 }
+
+/** По какой разметке изделия обрезан элемент: печатное поле размера, одна
+ *  сторона молнии, боковые швы. */
+export type ClipTo = 'field' | 'zipper-left' | 'zipper-right' | 'seams'
 
 export interface ImageElement {
   readonly id: string

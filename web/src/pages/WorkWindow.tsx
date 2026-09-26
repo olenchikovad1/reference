@@ -20,6 +20,7 @@ import {
   relook,
   remove,
   select,
+  type ClipTo,
   type Composition,
   restyle,
   retype,
@@ -74,9 +75,9 @@ import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../
 import { forget, forgetDraft, load, loadDraft, save, type SavedState } from '../shared/saved'
 import { neighbour, workKey } from '../shared/versions'
 import { blocking, check, type Finding } from '../shared/checks'
-import { checkZones } from '../shared/zones'
+import { checkZones, clipOutline } from '../shared/zones'
 import { calibrationFor, fieldFor, fieldSize, sizesWithField } from '../shared/fields'
-import { describe as describeSheet, render as renderSheet } from '../shared/sheet'
+import { describe as describeSheet, render as renderSheet, type Clips } from '../shared/sheet'
 import { useHistoryState } from '../shared/useHistory'
 
 // Рабочее окно референса (US-0492): открывается поверх витрины по адресу
@@ -376,6 +377,24 @@ export function WorkWindow() {
     return projectRect(torso, stateCode, panel, centre, fieldCm[0], fieldCm[1], 0, 12)
   }, [torso, stateCode, fieldCm, state, field])
 
+  // Обрезка по разметке (US-0505): контур каждого элемента от его ориентира,
+  // на ВЫБРАННОМ размере — поле 98 и поле 164 разные. Один на показ, листы и
+  // миниатюры: граница, по которой режут, везде одна.
+  const clips: Clips = useMemo(() => {
+    const out = new Map<string, readonly (readonly [number, number])[]>()
+    if (!product) return out
+    for (const el of sized.elements) {
+      if (!el.placement.clip) continue
+      const s = product.states.find((x) => x.code === (el.placement.side ?? 'front'))
+      if (!s) continue
+      const sField = fieldFor(product.print_fields ?? null, size ?? 0, s.code, s.zones?.print, calibration)
+      const sFieldCm = fieldSize(product.print_fields ?? null, size, s.code)
+      const poly = clipOutline(el, s, calibration, sField, torso ? { torso, anchors: s.anchors, fieldCm: sFieldCm } : null)
+      if (poly) out.set(el.id, poly)
+    }
+    return out
+  }, [sized, product, size, calibration, torso])
+
   const selected = find(visible, visible.selectedId)
 
   // Сохраняем то, что закреплено. Живое перетаскивание не пишем: писать
@@ -573,7 +592,7 @@ export function WorkWindow() {
     // точек, а лист в 120 точек на сантиметр (3600 на 30 см) рисовался,
     // кодировался и считался вектором секундами. Печатный лист на фабрику
     // выгружается отдельно и в полном разрешении.
-    const canvas = renderSheet(visible, images.current, RECOGNITION_PX_PER_CM)
+    const canvas = renderSheet(visible, images.current, RECOGNITION_PX_PER_CM, clips)
     const sheet = await uploadCanvas(canvas, `${PRODUCT}-${stateCode}-list.png`)
     return {
       name: `${PRODUCT} · ${SIDE_NAMES[stateCode] ?? stateCode} · ${colourCode}${size ? ' · ' + size : ''}`,
@@ -800,8 +819,8 @@ export function WorkWindow() {
     if (only.elements.length === 0) return
     // 120 пикселей на сантиметр — около 300 точек на дюйм, обычное печатное
     // разрешение. Число названо здесь, а не спрятано: оно уйдёт на фабрику.
-    const spec = describeSheet(only)
-    const canvas = renderSheet(only, images.current, 120)
+    const spec = describeSheet(only, clips)
+    const canvas = renderSheet(only, images.current, 120, clips)
 
     // Пометка о предварительной калибровке НЕ впечатывается в лист: его
     // напечатают вместе с ней. Она уходит в имя файла и в сопроводительную
@@ -1607,6 +1626,36 @@ export function WorkWindow() {
           />
         </Section>
       )}
+      <Section title="Обрезка по разметке">
+        {/* Граница — линия изделия, а не рамка картинки (US-0505): сдвинули
+            принт — видна другая его часть; другой размер — другое поле. */}
+        <div className="flex flex-wrap gap-1">
+          {(
+            [
+              [null, 'не обрезать'],
+              ['field', 'по печатному полю'],
+              ...(state?.lines?.zipper
+                ? ([
+                    ['zipper-left', 'левее молнии'],
+                    ['zipper-right', 'правее молнии'],
+                  ] as const)
+                : []),
+              ...(torso?.views[stateCode] ? ([['seams', 'по боковым швам']] as const) : []),
+            ] as [ClipTo | null, string][]
+          ).map(([clip, name]) => (
+            <button
+              key={name}
+              className={on((selected.placement.clip ?? null) === clip)}
+              onClick={() => commit((c) => place(c, selected.id, { clip }))}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+        {selected.placement.clip && !clips.has(selected.id) && (
+          <p className="text-xs text-muted-foreground">на этой стороне такой разметки нет — принт не обрезан</p>
+        )}
+      </Section>
       {selected.kind === 'image' && (
         <Section title="Обрезка">
           {/* Кусок исходника в его долях (US-0504): раздвинуть обратно можно
@@ -2066,6 +2115,7 @@ export function WorkWindow() {
                   onCommit={() => commit()}
                   onCanvas={(el) => (viewCanvas.current = el)}
                   images={images.current}
+                  clips={clips}
                   key={imagesVersion}
                 />
               </div>
@@ -2126,6 +2176,7 @@ export function WorkWindow() {
                   frameSrc={frameUrl(product.code, s.code)}
                   calibration={calibration}
                   composition={thumbWork}
+                  clips={clips}
                   side={s.code}
                   torso={torso}
                   anchorsBySide={anchorsBySide}
@@ -2379,8 +2430,8 @@ export function WorkWindow() {
                 {/* Габарит ЭТОЙ стороны на ВЫБРАННОМ размере: лист выгружается
                     по сторонам и по размеру. */}
                 {SIDE_NAMES[stateCode] ?? stateCode}
-                {size ? `, ${size}` : ''}: {describeSheet(visible).widthCm.toFixed(1)} ×{' '}
-                {describeSheet(visible).heightCm.toFixed(1)} см, элементов {describeSheet(visible).items.length}
+                {size ? `, ${size}` : ''}: {describeSheet(visible, clips).widthCm.toFixed(1)} ×{' '}
+                {describeSheet(visible, clips).heightCm.toFixed(1)} см, элементов {describeSheet(visible, clips).items.length}
                 {cal.provisional && ' · калибровка предварительная'}
               </p>
             )}

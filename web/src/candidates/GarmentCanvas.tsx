@@ -8,6 +8,7 @@ import type { Calibration } from '../shared/geometry'
 import { cmToPx } from '../shared/geometry'
 import { buildLuminance } from '../shared/luminance'
 import { drawLooked } from '../shared/look'
+import type { Clips } from '../shared/sheet'
 
 /** Кадр изделия и его карта рельефа — по адресу кадра, один раз на вкладку.
  *  Изделие на всех карточках одно и то же (худи — везде худи): грузить и
@@ -102,6 +103,9 @@ export interface CanvasProps {
   /** Загруженные картинки элементов. Кэш общий со страницей: лист печати
    *  собирается там, и вторая копия того же кэша не нужна. */
   readonly images: ReadonlyMap<string, HTMLImageElement>
+  /** Обрезка по разметке изделия (US-0505): контуры в см от ориентира
+   *  элемента. Нет контура — элемент целиком. */
+  readonly clips?: Clips
   /** Полотно отдаётся наружу, чтобы с него можно было снять картинку.
    *  Снимок — то же, что видит человек, а не пересборка похожего. */
   readonly onCanvas?: (canvas: HTMLCanvasElement | null) => void
@@ -222,7 +226,8 @@ export function GarmentCanvas(props: CanvasProps) {
     for (const panel of ['front', 'back'] as const) {
       const mine = composition.elements.filter((el) => (el.placement.side ?? 'front') === panel)
       const loaded = mine.map((el) => (el.kind === 'image' ? props.images.get(el.src)?.complete : true))
-      const sig = JSON.stringify([w, h, surface, mine, loaded, props.anchorsBySide?.[panel]])
+      const cuts = mine.map((el) => props.clips?.get(el.id) ?? null)
+      const sig = JSON.stringify([w, h, surface, mine, loaded, props.anchorsBySide?.[panel], cuts])
       if (panelDrawn.current[panel] === sig) continue
       panelDrawn.current[panel] = sig
       const c = pc[panel]
@@ -255,6 +260,19 @@ export function GarmentCanvas(props: CanvasProps) {
         const ew = el.placement.widthCm * k
         const eh = heightCm(el) * k
         ctx.save()
+        const cut = props.clips?.get(el.id)
+        if (cut && cut.length >= 3) {
+          // Контур от ориентира, а не от элемента: граница стоит на изделии.
+          ctx.beginPath()
+          cut.forEach(([cx, cy], i) => {
+            const x = (a.u + cx + surface.halfU) * k
+            const y = (surface.heightCm - (a.h - cy)) * k
+            if (i) ctx.lineTo(x, y)
+            else ctx.moveTo(x, y)
+          })
+          ctx.closePath()
+          ctx.clip()
+        }
         ctx.translate((u + surface.halfU) * k, (surface.heightCm - hh) * k)
         ctx.rotate((el.placement.rotation * Math.PI) / 180)
         if (el.kind === 'text') drawText(ctx, el, ew)
@@ -303,6 +321,21 @@ export function GarmentCanvas(props: CanvasProps) {
       const w = cmToPx(el.placement.widthCm, calibration) * renderScale
       const h = cmToPx(heightCm(el), calibration) * renderScale
       ctx.save()
+      const cut = props.clips?.get(el.id)
+      if (cut && cut.length >= 3) {
+        // Ориентир на кадре — центр элемента минус его смещение.
+        const ax = cx - cmToPx(el.placement.dxCm, calibration)
+        const ay = cy - cmToPx(el.placement.dyCm, calibration)
+        ctx.beginPath()
+        cut.forEach(([px, py], i) => {
+          const x = (ax + cmToPx(px, calibration)) * renderScale
+          const y = (ay + cmToPx(py, calibration)) * renderScale
+          if (i) ctx.lineTo(x, y)
+          else ctx.moveTo(x, y)
+        })
+        ctx.closePath()
+        ctx.clip()
+      }
       ctx.translate(cx * renderScale, cy * renderScale)
       ctx.rotate((el.placement.rotation * Math.PI) / 180)
       if (el.kind === 'text') {
@@ -355,7 +388,7 @@ export function GarmentCanvas(props: CanvasProps) {
   useEffect(() => {
     drawAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composition, props.params, renderScale, calibration, props.images, surface])
+  }, [composition, props.params, renderScale, calibration, props.images, surface, props.clips])
 
   function toFrame(e: { clientX: number; clientY: number }): [number, number] {
     const el = svg.current
