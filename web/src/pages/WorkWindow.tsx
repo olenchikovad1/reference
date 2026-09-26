@@ -1,7 +1,7 @@
 import { Modal, TextInput, buttonClass } from '@platform/ui'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
 import { WorkFrame } from '../candidates/WorkFrame'
@@ -43,6 +43,8 @@ import {
 } from '../shared/api/assets'
 import type { ReferenceMatch } from '../shared/api/references'
 import {
+  dropDraft as discardDraft,
+  newDraft,
   openReference,
   openVersion,
   addTag,
@@ -52,6 +54,7 @@ import {
   saveVersion,
   tagNames,
   unhideTag,
+  type Draft,
   type RefTags,
   type ReferenceFull,
   type Saved,
@@ -72,7 +75,7 @@ import { approvedIn, PICK_TYPE, WorkPicker, type Pick as Picked } from './WorkPi
 import { ColourCompare, type ColourChoice } from './ColourCompare'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../shared/grading'
-import { forget, forgetDraft, load, loadDraft, save, type SavedState } from '../shared/saved'
+import { readBuffer, useDraftWriter, type Buffered, type DraftBody } from '../shared/draftWriter'
 import { neighbour, workKey } from '../shared/versions'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones, clipOutline } from '../shared/zones'
@@ -220,10 +223,16 @@ export function WorkWindow() {
   // Отпечаток открытой версии, с ним сравнивается экран. null — сравнивать не
   // с чем: несохранённое — всё, что есть на холсте.
   const [baseline, setBaseline] = useState<string | null>(null)
-  // Вопрос «сохранить, не сохранять, остаться» и что сделать после ответа.
-  const [leaving, setLeaving] = useState<{ then: () => void } | null>(null)
-  // Вопрос «восстановить несохранённое?»: черновик и референс, к которому он.
-  const [draftOffer, setDraftOffer] = useState<{ draft: SavedState; card: ReferenceFull; at: number } | null>(null)
+  // Черновик между версиями (US-0598): пишется сам на каждое действие,
+  // вопроса «сохранить?» при уходе нет. draftHeld — мой черновик к открытой
+  // работе, даже когда на экране версия: строка «несохранённые изменения» в
+  // истории открывает его обратно.
+  const { writer, status: draftStatus } = useDraftWriter()
+  const [draftHeld, setDraftHeld] = useState<DraftBody | null>(null)
+  // Отпечаток работы, которая уже лежит на сервере черновиком: открытый
+  // черновик переписывать самим собой незачем — эта запись и гонялась с
+  // «отбросить».
+  const onServer = useRef<string | null>(null)
   const [saving, setSaving] = useState(false)
   useEffect(() => {
     const missing = [
@@ -263,24 +272,11 @@ export function WorkWindow() {
     // Браузер грузит шрифт лениво — до первого применения. Без явного ожидания
     // первая отрисовка надписи уходит в запасной шрифт, то есть показывает не
     // то, что уйдёт в печать, и заметить это трудно: буквы-то на месте.
-    const was = load()
     const asked = Number(ref)
-    if (asked) {
-      // Референс из адреса окна. Несохранённое с прошлого раза предлагается
-      // восстановить, а не подменяет сохранённое молча.
-      void openCard(asked)
-    } else if (was && !was.referenceId) {
-      // Новый референс — возвращается только несохранённая ни разу работа;
-      // черновики референсов лежат под своими номерами и ждут их открытия.
-      setStateCode(was.stateCode)
-      if (!colourFromDrop) setColourCode(was.colourCode)
-      setSize(was.size ?? null)
-      for (const el of was.composition.elements) {
-        if (el.kind === 'image') cacheImage(el.src)
-      }
-      commit(was.composition)
-      setRestored(true)
-    }
+    // Референс из адреса окна — со своим черновиком, если он есть; новая
+    // работа — с черновиком новой работы.
+    if (asked) void openCard(asked)
+    else void restoreNew()
     void Promise.all(FONTS.map((f) => document.fonts.load(`600 100px "${f.family}"`)))
       .then(() => setFontsReady(true))
       .catch(() => setFontsReady(true))
@@ -397,43 +393,33 @@ export function WorkWindow() {
 
   const selected = find(visible, visible.selectedId)
 
-  // Сохраняем то, что закреплено. Живое перетаскивание не пишем: писать
-  // десятки раз в секунду незачем, а отличить закреплённое от живого умеет
-  // только тот, кто менял.
-  useEffect(() => {
-    if (composition.elements.length === 0) return
-    save({ version: 2, stateCode, colourCode, size, composition, referenceId: current?.id ?? null, number: viewing })
-  }, [composition, stateCode, colourCode, size, current, viewing])
-
   // Несохранённое — отличие экрана от открытой версии; у несохранённой ни разу
   // работы — всё, что на холсте.
   const nowKey = workKey({ colourCode, composition })
   const dirty = baseline === null ? composition.elements.length > 0 : nowKey !== baseline
 
-  // Закрыть вкладку с правками — вопрос браузера «уйти или остаться»; своих
-  // кнопок в нём браузер не даёт, поэтому «сохранить» там нет, но черновик
-  // остаётся и при следующем открытии предлагается восстановить.
+  // Черновик пишется сам, пока экран отличается от версии (US-0598). Пишется
+  // закреплённое: живое перетаскивание не меняет отпечаток работы, выбор
+  // принта — тоже. Писатель сам ждёт, пока рука остановится, и шлёт одну
+  // запись на пачку правок.
   useEffect(() => {
-    if (!dirty) return
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ''
+    if (!dirty || nowKey === onServer.current) return
+    onServer.current = nowKey
+    const body: DraftBody = {
+      work: { version: 2, stateCode, colourCode, size, composition: { ...composition, selectedId: null } },
+      base_number: current ? viewing : null,
     }
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [dirty])
-
-  // Уход на другую страницу приложения с правками — тот же вопрос из трёх.
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname,
-  )
-  // По состоянию, а не по самому blocker: объект новый на каждой отрисовке, и
-  // зависимость от него ставила бы вопрос заново бесконечно.
-  const blocked = blocker.state === 'blocked'
-  useEffect(() => {
-    if (blocked) setLeaving({ then: () => blocker.proceed?.() })
+    writer.change(current?.id ?? null, body)
+    setDraftHeld(body)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocked])
+  }, [nowKey, dirty])
+  // Окно закрыли — витрина узнаёт про черновик, когда последняя правка дошла.
+  useEffect(
+    () => () => void writer.flush().finally(() => void queries.invalidateQueries({ queryKey: ['references'] })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
+
   // Пороги приходят из описания изделия, а не из кода.
   const rules = product?.print_rules
   // Две группы находок, а не одна: первая считается из самого принта и верна на
@@ -636,15 +622,19 @@ export function WorkWindow() {
     if (saving) return false
     setSaving(true)
     try {
+      // Последняя правка черновика доходит раньше версии: иначе запоздавшая
+      // запись вернула бы черновик уже после того, как он стал версией.
+      await writer.flush()
       // Лист и снимки сторон — одновременно, а не друг за другом.
       const [body, views] = await Promise.all([versionBody(), snapshotSides()])
       if (!body) return false
       const saved = await send({ ...body, views })
       const card = await openReference(saved.id)
-      // Правки легли в версию — черновик больше не предлагать; при «сохранить
+      // Правки легли в версию — черновик сервер убрал сам; при «сохранить
       // как» правки ушли в новый референс, и прежнему они тоже не черновик.
-      if (current) forgetDraft(current.id)
-      forgetDraft(saved.id)
+      writer.forget(current?.id ?? null)
+      onServer.current = null
+      setDraftHeld(null)
       setCurrent(card)
       setViewing(saved.number)
       setBaseline(nowKey)
@@ -687,12 +677,6 @@ export function WorkWindow() {
     return out
   }
 
-  /** Сделать `then`, а при несохранённом сначала спросить: сохранить, не
-   *  сохранять или остаться. */
-  function askLeave(then: () => void) {
-    if (dirty) setLeaving({ then })
-    else then()
-  }
 
   /** Листать историю: соседняя версия открывается целиком. */
   function step(towards: 'older' | 'newer') {
@@ -705,15 +689,14 @@ export function WorkWindow() {
     if (n !== null) goTo(n)
   }
 
-  /** Открыть версию номер n — при несохранённом сначала спросить. */
+  /** Открыть версию номер n. Черновик не пропадает: он в истории строкой и
+   *  заменится, только если править открытую версию. */
   function goTo(n: number) {
     if (!current) return
     const card = current
-    askLeave(() => {
-      void openVersion(card.id, n)
-        .then((v) => showVersion(card, n, v.work))
-        .catch((e: Error) => setDropHint(`Версия №${n} не открылась: ${e.message}`))
-    })
+    void openVersion(card.id, n)
+      .then((v) => showVersion(card, n, v.work))
+      .catch((e: Error) => setDropHint(`Версия №${n} не открылась: ${e.message}`))
   }
 
   /** Показать версию референса как сохранили: стороны, цвет, размер. */
@@ -747,60 +730,89 @@ export function WorkWindow() {
     return true
   }
 
-  /** Открыть референс — последнюю версию или `at`. Остались правки с прошлого
-   *  раза — сначала вопрос, восстановить ли их. */
+  /** Открыть референс — со своим черновиком, если он есть, иначе последнюю
+   *  версию или `at`. Вопроса «восстановить?» нет: черновик и есть работа. */
   async function openCard(id: number, at?: number) {
     try {
       const card = await openReference(id)
-      const number = at && card.versions.some((v) => v.number === at) ? at : card.number
-      const work = number === card.number ? card.work : (await openVersion(id, number)).work
-      const draft = loadDraft(id)
-      // Черновик сравнивается с той версией, поверх которой правили, а не с
-      // последней: открыть старую версию и не тронуть её — не правка.
-      const baseNumber = draft?.number && card.versions.some((v) => v.number === draft.number) ? draft.number : number
-      const base = baseNumber === number ? work : (await openVersion(id, baseNumber)).work
-      const b = base as { colourCode?: string; composition?: typeof composition } | null
-      const differs =
-        draft !== null &&
-        (!b?.composition ||
-          workKey(draft) !== workKey({ colourCode: b.colourCode ?? 'WHITE', composition: upgrade(b.composition) }))
-      if (differs) {
-        setDraftOffer({ draft, card, at: baseNumber })
+      const draft = newer(card.draft ?? null, readBuffer(id))
+      if (draft && !at) {
+        await showDraft(card, draft)
         return
       }
+      const number = at && card.versions.some((v) => v.number === at) ? at : card.number
+      const work = number === card.number ? card.work : (await openVersion(id, number)).work
       showVersion(card, number, work)
+      setDraftHeld(draft)
     } catch (e) {
       setDropHint(`Референс №${id} не открылся: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
-  /** «Восстановить»: на экране черновик, сравнивается он с версией, поверх
-   *  которой правили, — значит, виден как несохранённый. */
-  async function restoreDraft(offer: { draft: SavedState; card: ReferenceFull; at: number }) {
-    setDraftOffer(null)
-    const d = offer.draft
-    const base = offer.at === offer.card.number ? offer.card.work : (await openVersion(offer.card.id, offer.at)).work
-    const b = base as { colourCode?: string; composition?: typeof composition } | null
-    for (const el of d.composition.elements) if (el.kind === 'image') cacheImage(el.src)
-    setStateCode(d.stateCode)
-    setColourCode(d.colourCode)
+  /** На экране черновик; сравнивается он с версией, поверх которой правили, —
+   *  значит, виден как несохранённый. */
+  async function showDraft(card: ReferenceFull, draft: DraftBody) {
+    const d = draft.work as SavedWork | null
+    const at = draft.base_number && card.versions.some((v) => v.number === draft.base_number) ? draft.base_number : card.number
+    const base = at === card.number ? card.work : (await openVersion(card.id, at)).work
+    if (!d?.composition) {
+      showVersion(card, card.number, card.work)
+      return
+    }
+    const c = upgrade(d.composition)
+    const b = base as SavedWork | null
+    onServer.current = workKey({ colourCode: d.colourCode ?? colourCode, composition: c })
+    for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
+    if (d.stateCode) setStateCode(d.stateCode)
+    setColourCode(d.colourCode ?? colourCode)
     setSize(d.size ?? null)
-    commit(d.composition)
-    setCurrent(offer.card)
-    setViewing(offer.at)
-    setColourModelId(offer.card.colour_model_id)
+    commit({ ...c, selectedId: null })
+    setCurrent(card)
+    setViewing(at)
+    setColourModelId(card.colour_model_id)
     setBaseline(
       b?.composition ? workKey({ colourCode: b.colourCode ?? 'WHITE', composition: upgrade(b.composition) }) : null,
     )
     setRestored(true)
+    setDraftHeld(draft)
   }
 
-  /** «Не восстанавливать»: правки забыты, открыта сохранённая версия. */
-  async function dropDraft(offer: { draft: SavedState; card: ReferenceFull; at: number }) {
-    setDraftOffer(null)
-    forgetDraft(offer.card.id)
-    const work = offer.at === offer.card.number ? offer.card.work : (await openVersion(offer.card.id, offer.at)).work
-    showVersion(offer.card, offer.at, work)
+  /** Новая, ни разу не сохранённая работа — с её черновиком. */
+  async function restoreNew() {
+    const draft = newer(await newDraft().catch(() => null), readBuffer(null))
+    const d = draft?.work as SavedWork | null | undefined
+    if (!draft || !d?.composition) return
+    const c = upgrade(d.composition)
+    onServer.current = workKey({ colourCode: d.colourCode ?? colourCode, composition: c })
+    for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
+    if (d.stateCode) setStateCode(d.stateCode)
+    if (!colourFromDrop && d.colourCode) setColourCode(d.colourCode)
+    setSize(d.size ?? null)
+    commit({ ...c, selectedId: null })
+    setRestored(true)
+    setDraftHeld(draft)
+  }
+
+  /** «Отбросить черновик»: на экране снова версия, поверх которой правили. */
+  async function discard() {
+    const card = current
+    const at = draftHeld?.base_number ?? card?.number ?? null
+    writer.forget(card?.id ?? null)
+    await writer.settle()
+    onServer.current = null
+    try {
+      await discardDraft(card?.id ?? null)
+    } catch (e) {
+      setDropHint(`Черновик не отброшен: ${e instanceof Error ? e.message : String(e)}`)
+      return
+    }
+    setDraftHeld(null)
+    if (card && at) goTo(at)
+    else {
+      commit(EMPTY)
+      setBaseline(null)
+      setRestored(false)
+    }
   }
 
   /** Печатный лист: сборка из сантиметров, мимо шейдера, в печатном разрешении. */
@@ -985,7 +997,7 @@ export function WorkWindow() {
 
   /** Закрыть окно — туда, откуда открыли: шагом назад по истории, чтобы
    *  «назад» после закрытия не открывало окно снова. Открыли прямой ссылкой —
-   *  на витрину. С несохранённым уход задержит вопрос. */
+   *  на витрину. Вопроса нет: несохранённое осталось черновиком. */
   function close() {
     if (location.key !== 'default') navigate(-1)
     else navigate('/references', { replace: true })
@@ -1006,8 +1018,6 @@ export function WorkWindow() {
   // на экране при подписке.
   const keyAction = useRef<(e: KeyboardEvent) => void>(() => undefined)
   keyAction.current = (e: KeyboardEvent) => {
-    // Открыт вопрос «сохранить?» или «восстановить?» — клавиши у него.
-    if (leaving || draftOffer) return
     const target = e.target as HTMLElement | null
     const typing =
       !!target &&
@@ -1477,11 +1487,17 @@ export function WorkWindow() {
         {current ? `версия ${viewing} из ${current.versions.length}` : 'ещё не сохранён'}
         {current?.forked_from &&
           ` · пошёл от №${current.forked_from.reference_id}, версия ${current.forked_from.number}`}
-        {restored && ' · восстановлено с прошлого раза'}
+        {restored && ' · открыт черновик'}
       </span>
-      {dirty && (
-        <span role="status" className="shrink-0 text-xs text-warning">
-          ● не сохранено
+      {(dirty || draftStatus === 'unsent') && (
+        <span
+          role="status"
+          className={`shrink-0 text-xs ${draftStatus === 'unsent' ? 'text-destructive' : 'text-warning'}`}
+          title="Правки пишутся в черновик сами и ждут вас здесь же, на любом компьютере. Версия — Ctrl+S."
+        >
+          {draftStatus === 'unsent'
+            ? '● черновик не записан на сервер — нет связи, повторю сам'
+            : `● черновик${draftStatus === 'written' ? ' записан' : ''} · не версия`}
         </span>
       )}
       <span className="flex-1" />
@@ -2350,6 +2366,27 @@ export function WorkWindow() {
           {current && viewing !== null && (
             <Section title={`История · ${current.versions.length}`}>
               <div className="flex flex-col gap-0.5">
+                {draftHeld && (
+                  <div className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${dirty ? 'bg-tone-amber-soft' : 'hover:bg-hover'}`}>
+                    <button
+                      className="flex-1 text-left"
+                      aria-current={dirty}
+                      disabled={dirty}
+                      onClick={() => current && void showDraft(current, draftHeld)}
+                      title={dirty ? 'на экране' : 'открыть черновик'}
+                    >
+                      несохранённые изменения
+                      {draftHeld.base_number ? ` · поверх версии ${draftHeld.base_number}` : ''}
+                    </button>
+                    <button
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => void discard()}
+                      title="Отбросить черновик — останутся версии"
+                    >
+                      отбросить
+                    </button>
+                  </div>
+                )}
                 {[...current.versions].reverse().map((v) => (
                   <button
                     key={v.number}
@@ -2455,91 +2492,23 @@ export function WorkWindow() {
         </p>
       </Modal>
 
-      {/* Правки не теряются молча: листание истории, другой референс, новый
-          и уход со страницы спрашивают. Ответ по умолчанию — остаться. */}
-      <Modal
-        open={leaving !== null}
-        onClose={() => {
-          setLeaving(null)
-          if (blocker.state === 'blocked') blocker.reset()
-        }}
-        title="Есть несохранённые правки"
-        actions={
-          <>
-            <button
-              className={buttonClass({ tone: 'neutral', variant: 'outline' })}
-              onClick={() => {
-                setLeaving(null)
-                if (blocker.state === 'blocked') blocker.reset()
-              }}
-            >
-              остаться
-            </button>
-            <button
-              className={buttonClass({ tone: 'danger', variant: 'outline' })}
-              onClick={() => {
-                const then = leaving?.then
-                setLeaving(null)
-                // Отказались — черновик больше не предлагать, иначе отказ
-                // вернётся вопросом «восстановить?» при следующем открытии.
-                if (current) forgetDraft(current.id)
-                else forget()
-                setBaseline(null)
-                then?.()
-              }}
-            >
-              не сохранять
-            </button>
-            {canSave && (
-              <button
-                className={buttonClass({ tone: 'accent', variant: 'solid' })}
-                disabled={saving}
-                onClick={() => {
-                  const then = leaving?.then
-                  void saveCard().then((ok) => {
-                    if (!ok) return
-                    setLeaving(null)
-                    then?.()
-                  })
-                }}
-              >
-                сохранить
-              </button>
-            )}
-          </>
-        }
-      >
-        {current
-          ? `Правки к референсу №${current.id} (поверх версии ${viewing}) ещё не сохранены.`
-          : 'Этот принт ещё ни разу не сохранён.'}
-      </Modal>
-
-      <Modal
-        open={draftOffer !== null}
-        onClose={() => draftOffer && void dropDraft(draftOffer)}
-        title="Восстановить несохранённое?"
-        actions={
-          <>
-            <button
-              className={buttonClass({ tone: 'neutral', variant: 'outline' })}
-              onClick={() => draftOffer && void dropDraft(draftOffer)}
-            >
-              открыть сохранённую
-            </button>
-            <button
-              className={buttonClass({ tone: 'accent', variant: 'solid' })}
-              onClick={() => draftOffer && void restoreDraft(draftOffer)}
-            >
-              восстановить
-            </button>
-          </>
-        }
-      >
-        {draftOffer &&
-          `У референса №${draftOffer.card.id} остались правки поверх версии ${draftOffer.at}, которые не сохранили до закрытия.`}
-      </Modal>
     </>
   )
+}
+
+/** Работа, как она лежит в версии и в черновике. */
+interface SavedWork {
+  stateCode?: string
+  colourCode?: string
+  size?: number | null
+  composition?: Composition
+}
+
+/** Какой черновик свежее: браузерная копия (не дошла до сервера) или
+ *  серверный (записан с другого компьютера). */
+function newer(server: Draft | null, local: Buffered | null): DraftBody | null {
+  if (local && (!server || local.at > Date.parse(server.updated_at))) return local.body
+  return server ? { work: server.work, base_number: server.base_number } : null
 }
 
 /** Настройки подбора уходят файлом: иначе они испарятся вместе с вкладкой. */

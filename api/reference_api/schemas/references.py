@@ -93,6 +93,21 @@ class CardOut(Saver):
     drop_ids: list[int] = []
     audience: str | None = None
     category: str | None = None
+    #: У смотрящего есть несохранённое по этой карточке (US-0598).
+    my_draft: bool = False
+    #: У кого ещё — имена: «у Иванова есть несохранённое».
+    others_drafts: list[str] = []
+
+
+class DraftIn(BaseModel):
+    """Черновик между версиями: работа целиком и версия, поверх которой."""
+
+    work: dict
+    base_number: int | None = None
+
+
+class DraftOut(DraftIn):
+    updated_at: datetime
 
 
 class TrashedOut(CardOut):
@@ -156,6 +171,8 @@ class ReferenceOut(BaseModel):
     #: Пусто — версия сохранена до того, как работу начали хранить.
     work: dict | None
     tags: TagsOut
+    #: Свой черновик смотрящего; пусто — правок поверх версий нет.
+    draft: DraftOut | None = None
 
 
 class VersionOut(VersionMetaOut):

@@ -8,6 +8,8 @@ from reference_api.db import session
 from reference_api.schemas.library import ReasonIn
 from reference_api.schemas.references import (
     CardOut,
+    DraftIn,
+    DraftOut,
     TrashedOut,
     FoundReferenceOut,
     HiddenTagIn,
@@ -166,13 +168,16 @@ async def search(q: str, db: AsyncSession = Depends(session)) -> list[FoundOut]:
 
 
 @router.get("", response_model=list[CardOut])
-async def latest(db: AsyncSession = Depends(session)) -> list[CardOut]:
+async def latest(request: Request, db: AsyncSession = Depends(session)) -> list[CardOut]:
     """Референсы, свежие по последней версии первыми."""
-    return await _cards(db, await service.latest(db))
+    return await _cards(db, await service.latest(db), _author(request))
 
 
-async def _cards(db: AsyncSession, rows) -> list[CardOut]:
-    names = await people.names_of(db, [v.author_id for _, v in rows if v.author_id])
+async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[CardOut]:
+    drafting = await service.drafters(db, [c.id for c, _ in rows])
+    names = await people.names_of(
+        db, [v.author_id for _, v in rows if v.author_id] + [a for authors in drafting.values() for a in authors]
+    )
     models = await drops.colour_models_of(db, [c.colour_model_id for c, _ in rows if c.colour_model_id])
     origins = await service.origins(db, [c for c, _ in rows])
     out = []
@@ -185,6 +190,8 @@ async def _cards(db: AsyncSession, rows) -> list[CardOut]:
             forked_from_id=origins.get(c.id),
             drop_ids=[d.id for d in cm.drop_refs] if cm else [],
             audience=cm.audience if cm else None, category=cm.category if cm else None,
+            my_draft=viewer in drafting.get(c.id, []),
+            others_drafts=[names.get(a, a) for a in drafting.get(c.id, []) if a != viewer],
         ))
     return out
 
@@ -272,10 +279,56 @@ async def erase(reference_id: int, db: AsyncSession = Depends(session)) -> None:
         raise HTTPException(409, str(refusal)) from None
 
 
+def _draft(d) -> DraftOut | None:
+    return DraftOut(work=d.work, base_number=d.base_number, updated_at=d.updated_at) if d else None
+
+
+def _drafter(request: Request) -> str:
+    author = _author(request)
+    if author is None:
+        # Черновик — чей-то; без субъекта записать его некому.
+        raise HTTPException(403, "черновик пишется от имени человека — войдите")
+    return author
+
+
+@router.get("/drafts/new", response_model=DraftOut | None)
+async def new_draft(request: Request, db: AsyncSession = Depends(session)) -> DraftOut | None:
+    """Черновик новой, ещё не сохранённой работы смотрящего (US-0598)."""
+    author = _author(request)
+    return _draft(await service.draft(db, None, author)) if author else None
+
+
+@router.put("/drafts/new", status_code=204, dependencies=[requires("references", Action.WRITE)])
+async def put_new_draft(body: DraftIn, request: Request, db: AsyncSession = Depends(session)) -> None:
+    await service.put_draft(db, None, _drafter(request), body.work, body.base_number)
+
+
+@router.delete("/drafts/new", status_code=204, dependencies=[requires("references", Action.WRITE)])
+async def drop_new_draft(request: Request, db: AsyncSession = Depends(session)) -> None:
+    await service.drop_draft(db, None, _drafter(request))
+
+
+@router.put("/{reference_id}/draft", status_code=204, dependencies=[requires("references", Action.WRITE)])
+async def put_draft(
+    reference_id: int, body: DraftIn, request: Request, db: AsyncSession = Depends(session)
+) -> None:
+    """Записать черновик карточки — пишется сам на каждое действие (US-0598)."""
+    try:
+        await service.put_draft(db, reference_id, _drafter(request), body.work, body.base_number)
+    except service.NoSuchReference as missing:
+        raise HTTPException(404, str(missing)) from None
+
+
+@router.delete("/{reference_id}/draft", status_code=204, dependencies=[requires("references", Action.WRITE)])
+async def drop_draft(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> None:
+    """Отбросить черновик: на экране снова сохранённая версия."""
+    await service.drop_draft(db, reference_id, _drafter(request))
+
+
 # Объявлен ПОСЛЕ /search: иначе «search» разбирался бы как номер карточки и
 # падал бы проверкой типа, а не находил поиск.
 @router.get("/{reference_id}", response_model=ReferenceOut)
-async def open_card(reference_id: int, db: AsyncSession = Depends(session)) -> ReferenceOut:
+async def open_card(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> ReferenceOut:
     """Референс с версиями и работой последней — чтобы открыть его там, где
     сохранили, или на другом компьютере."""
     opened = await service.open_card(db, reference_id)
@@ -297,6 +350,7 @@ async def open_card(reference_id: int, db: AsyncSession = Depends(session)) -> R
         number=last.number,
         work=last.work,
         tags=_tags(await service.tags_of(db, card.id)),
+        draft=_draft(await service.draft(db, card.id, author)) if (author := _author(request)) else None,
     )
 
 

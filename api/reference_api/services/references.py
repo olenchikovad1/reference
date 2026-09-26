@@ -81,6 +81,12 @@ async def create(
             raise NoSuchReference("версии, от которой сохраняют, нет")
         parent_id = parent.id
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=0)
+    if author_id:
+        # Правки легли в версию: черновик новой работы больше не нужен, а при
+        # «сохранить как» они ушли в новую карточку и прежней — не черновик.
+        await repo.drop_draft(db, None, author_id)
+        if forked_from is not None:
+            await repo.drop_draft(db, forked_from[0], author_id)
     card = await repo.create(db, name, colour_model_id=colour_model_id, forked_from_version_id=parent_id)
     version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views)
     return Saved(card.id, version.number, found)
@@ -108,6 +114,8 @@ async def add_version(
         raise NoSuchReference("референса с таким номером нет")
     await refuse_defects(db, image_digests)
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=reference_id)
+    if author_id:
+        await repo.drop_draft(db, reference_id, author_id)
     version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views)
     return Saved(card.id, version.number, found)
 
@@ -495,3 +503,30 @@ async def refuse_defects(db: AsyncSession, image_digests: list[str]) -> None:
     if found:
         d = next(iter(found.values()))
         raise DefectInWork(f"картинка забракована: «{d.reason}»")
+
+
+async def draft(db: AsyncSession, reference_id: int | None, author_id: str):
+    """Черновик человека: к карточке или к новой работе (US-0598)."""
+    return await repo.draft(db, reference_id, author_id)
+
+
+async def put_draft(
+    db: AsyncSession, reference_id: int | None, author_id: str, work: dict, base_number: int | None
+) -> None:
+    """Записать черновик. К удалённой или несуществующей карточке — отказ:
+    черновик к ней не откроет никто, и молча копить его незачем."""
+    if reference_id is not None:
+        card = await repo.get(db, reference_id)
+        if card is None or card.deleted_at is not None:
+            raise NoSuchReference("референса с таким номером нет")
+    await repo.put_draft(db, reference_id, author_id, work, base_number)
+
+
+async def drop_draft(db: AsyncSession, reference_id: int | None, author_id: str) -> None:
+    """Отбросить черновик: на экране снова сохранённая версия."""
+    await repo.drop_draft(db, reference_id, author_id)
+    await db.commit()
+
+
+async def drafters(db: AsyncSession, reference_ids: list[int]) -> dict[int, list[str]]:
+    return await repo.drafters(db, reference_ids)

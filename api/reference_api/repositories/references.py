@@ -7,10 +7,12 @@
 from datetime import datetime
 
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.models.references import (
     Reference,
+    ReferenceDraft,
     ReferenceHiddenTag,
     ReferenceTag,
     ReferenceText,
@@ -359,3 +361,47 @@ async def files_in_use(db: AsyncSession, digests: set[str]) -> set[str]:
         used.update((views or {}).values())
         used.update(images or [])
     return used & digests
+
+
+def _draft_key(card_id: int | None, author_id: str):
+    where = ReferenceDraft.author_id == author_id
+    return where & (ReferenceDraft.reference_id.is_(None) if card_id is None else ReferenceDraft.reference_id == card_id)
+
+
+async def draft(db: AsyncSession, card_id: int | None, author_id: str) -> ReferenceDraft | None:
+    return (await db.execute(select(ReferenceDraft).where(_draft_key(card_id, author_id)))).scalar_one_or_none()
+
+
+async def put_draft(db: AsyncSession, card_id: int | None, author_id: str, work: dict, base_number: int | None) -> None:
+    """Записать черновик поверх прежнего одним запросом: пишется он на каждое
+    действие, и «прочитать — решить — записать» гонялось бы само с собой."""
+    stmt = insert(ReferenceDraft).values(
+        reference_id=card_id, author_id=author_id, work=work, base_number=base_number
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["reference_id", "author_id"] if card_id is not None else ["author_id"],
+        index_where=ReferenceDraft.reference_id.is_not(None) if card_id is not None else ReferenceDraft.reference_id.is_(None),
+        set_={"work": work, "base_number": base_number, "updated_at": func.now()},
+    )
+    await db.execute(stmt)
+    await db.commit()
+
+
+async def drop_draft(db: AsyncSession, card_id: int | None, author_id: str) -> None:
+    """Без коммита: черновик уходит в той же транзакции, где легла версия."""
+    await db.execute(delete(ReferenceDraft).where(_draft_key(card_id, author_id)))
+
+
+async def drafters(db: AsyncSession, card_ids: list[int]) -> dict[int, list[str]]:
+    """Кто держит несохранённое по каждой карточке."""
+    if not card_ids:
+        return {}
+    rows = await db.execute(
+        select(ReferenceDraft.reference_id, ReferenceDraft.author_id)
+        .where(ReferenceDraft.reference_id.in_(card_ids))
+        .order_by(ReferenceDraft.updated_at)
+    )
+    out: dict[int, list[str]] = {}
+    for card_id, author in rows:
+        out.setdefault(card_id, []).append(author)
+    return out

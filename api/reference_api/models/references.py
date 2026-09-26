@@ -204,3 +204,39 @@ class ReferenceHiddenTag(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ReferenceDraft(Base):
+    """Черновик — работа человека между версиями (US-0598): пишется сам на
+    каждое действие, версией не является и неизменяемости версий (И-6) не
+    подчиняется — это ровно то место, где правки живут до «Сохранить».
+
+    Свой у каждого человека: другие видят последнюю версию, а не чужую
+    недоделку. Строка на карточку и человека; у новой, ни разу не сохранённой
+    работы карточки нет — одна такая строка на человека.
+
+    Со связью только в одну сторону: карточка черновики не грузит никогда, а
+    удаление карточки уносит их каскадом базы — черновик без карточки ничей.
+    """
+
+    __tablename__ = "reference_drafts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    #: Пусто — новая работа, ещё не сохранённая ни разу.
+    reference_id: Mapped[int | None] = mapped_column(ForeignKey("reference_cards.id", ondelete="CASCADE"))
+    #: Чей — id субъекта платформы; на стенде без входа — «stand».
+    author_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: Номер версии, поверх которой правки. Пусто — у работы версий нет.
+    base_number: Mapped[int | None] = mapped_column(Integer)
+    work: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_reference_drafts_card_author", "reference_id", "author_id",
+            unique=True, postgresql_where=reference_id.is_not(None),
+        ),
+        Index("uq_reference_drafts_new_author", "author_id", unique=True, postgresql_where=reference_id.is_(None)),
+    )

@@ -450,6 +450,18 @@ function ShowcaseCard({
           {card.drops[0] ?? 'без дропа'} · {new Date(card.saved_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
           {card.forked_from_id && ` · от №${card.forked_from_id}`}
         </div>
+        {/* Несохранённое поверх версий (US-0598): своё — «черновик», чужое —
+            чьё, чтобы не удивляться, что у коллеги на экране другое. */}
+        {(card.my_draft || (card.others_drafts?.length ?? 0) > 0) && (
+          <div
+            className="truncate text-warning"
+            title="Правки поверх последней версии, ещё не ставшие версией. На витрине — последняя версия."
+          >
+            {[card.my_draft && 'мой черновик', card.others_drafts?.length && `несохранённое у: ${card.others_drafts.join(', ')}`]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+        )}
         {reasons?.slice(0, 2).map((r) => (
           <div key={r} className="truncate text-primary" title={r}>
             {r}

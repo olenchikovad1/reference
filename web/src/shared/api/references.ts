@@ -93,6 +93,18 @@ export interface Card extends Saver {
   drop_ids: number[]
   audience: string | null
   category: string | null
+  /** У смотрящего есть несохранённое по карточке (US-0598). */
+  my_draft?: boolean
+  /** У кого ещё — имена. */
+  others_drafts?: string[]
+}
+
+/** Черновик между версиями (US-0598): работа целиком и версия, поверх
+ *  которой правили. Свой у каждого человека. */
+export interface Draft {
+  work: unknown
+  base_number: number | null
+  updated_at: string
 }
 
 /** Референс в корзине: когда удалён и когда сотрётся сам (решение 0014). */
@@ -165,6 +177,8 @@ export interface ReferenceFull {
   number: number
   work: unknown
   tags: RefTags
+  /** Свой черновик; пусто — правок поверх версий нет. */
+  draft?: Draft | null
 }
 
 /** Свои теги референса и скрытые у него автотеги (US-0493). */
@@ -222,3 +236,31 @@ export const openReference = (id: number) => get<ReferenceFull>(`references/${id
 /** Версия целиком — листание истории открывает её. */
 export const openVersion = (id: number, number: number) =>
   get<VersionMeta & { work: unknown }>(`references/${id}/versions/${number}`, 'Версия')
+
+/** Черновик карточки; null — новой, ещё не сохранённой работы. */
+const draftPath = (id: number | null) => (id === null ? 'references/drafts/new' : `references/${id}/draft`)
+
+/** Записать черновик. `keepalive` — запрос переживает закрытие страницы:
+ *  последняя правка перед уходом не теряется. */
+export async function putDraft(
+  id: number | null,
+  body: { work: unknown; base_number: number | null },
+  keepalive = false,
+): Promise<void> {
+  const r = await fetch(`${BASE}${draftPath(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    keepalive,
+  })
+  if (!r.ok) throw await refusal(r, 'Черновик')
+}
+
+/** Отбросить черновик: на экране снова сохранённая версия. */
+export async function dropDraft(id: number | null): Promise<void> {
+  const r = await fetch(`${BASE}${draftPath(id)}`, { method: 'DELETE' })
+  if (!r.ok) throw await refusal(r, 'Черновик')
+}
+
+/** Черновик новой работы смотрящего; null — его нет. */
+export const newDraft = () => get<Draft | null>('references/drafts/new', 'Черновик')
