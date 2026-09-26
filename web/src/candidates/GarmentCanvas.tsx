@@ -103,6 +103,9 @@ export interface CanvasProps {
   /** Загруженные картинки элементов. Кэш общий со страницей: лист печати
    *  собирается там, и вторая копия того же кэша не нужна. */
   readonly images: ReadonlyMap<string, HTMLImageElement>
+  /** Счётчик догрузившихся картинок: растёт — холст перерисовывается. Раньше
+   *  холст пересоздавался ключом, и каждая картинка стоила нового WebGL. */
+  readonly imagesVersion?: number
   /** Обрезка по разметке изделия (US-0505): контуры в см от ориентира
    *  элемента. Нет контура — элемент целиком. */
   readonly clips?: Clips
@@ -388,7 +391,7 @@ export function GarmentCanvas(props: CanvasProps) {
   useEffect(() => {
     drawAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composition, props.params, renderScale, calibration, props.images, surface, props.clips])
+  }, [composition, props.params, renderScale, calibration, props.images, surface, props.clips, props.imagesVersion])
 
   function toFrame(e: { clientX: number; clientY: number }): [number, number] {
     const el = svg.current

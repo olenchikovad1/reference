@@ -62,12 +62,16 @@ function Pages() {
     <Routes>
       {/* Временный экран примерки убран: работа идёт в окне поверх витрины. */}
       <Route path="/" element={<Navigate to="/references" replace />} />
+      {/* Витрина и окно — ОДИН маршрут с необязательным номером (US-0600):
+          разные маршруты пересоздавали витрину при каждом открытии окна, а окно
+          — при каждом закрытии. Теперь оба живут всё время, закрытое окно
+          скрыто, и открыть карточку — значит показать её, а не собрать экран. */}
       <Route
-        path="/references/:ref"
+        path="/references/:ref?"
         element={<Guarded section={SECTIONS.find((s) => s.code === 'references')!} overlay={<WorkWindow />} />}
       />
       {SECTIONS.flatMap((s) => [
-        <Route key={s.code} path={s.path} element={<Guarded section={s} />} />,
+        ...(s.code === 'references' ? [] : [<Route key={s.code} path={s.path} element={<Guarded section={s} />} />]),
         ...s.children.map((c) => (
           <Route key={`${s.code}/${c.code}`} path={c.path} element={<Guarded section={s} sub={c.code} />} />
         )),

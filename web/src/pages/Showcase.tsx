@@ -9,7 +9,7 @@
 
 import { EmptyState, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { type KeyboardEvent, memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
@@ -20,6 +20,7 @@ import { passes, useDropFilter } from '../shared/filters'
 import { useCan } from '../shared/api/platform'
 
 import { assetUrl } from '../shared/api/assets'
+import { ORDER_KEY, prefetchCard } from '../shared/cardCache'
 import { fetchPalette, toCss } from '../shared/api/colours'
 import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
 import { copyReference, eraseForever, findReferences, listReferences, moveToDrop, trashReference, type Card } from '../shared/api/references'
@@ -121,6 +122,12 @@ export function Showcase() {
   const rowHeight = Math.max(120, (height.value - GAP * (ROWS - 1)) / ROWS)
 
   shownRef.current = shown
+
+  // Порядок витрины — окну: A и D листают карточки в нём (US-0600).
+  const order = (shown ?? []).map((c) => c.id).join(',')
+  useEffect(() => {
+    queries.setQueryData(ORDER_KEY, order ? order.split(',').map(Number) : [])
+  }, [order, queries])
 
   /** Стрелки ходят по карточкам: вверх-вниз — в столбце, вбок — на столбец;
    *  пробел выделяет. */
@@ -270,6 +277,7 @@ export function Showcase() {
               key={c.id}
               card={c}
               onOpen={(e) => (e.ctrlKey || e.metaKey || e.shiftKey ? pick(c.id, e) : navigate(`/references/${c.id}`))}
+              onHover={() => prefetchCard(queries, c.id)}
               selected={selected.has(c.id)}
               reasons={found.ids === null ? undefined : found.why.get(c.id)}
               onCopy={canCopy ? () => void act(() => copyReference(c.id)) : undefined}
@@ -397,9 +405,29 @@ export function Showcase() {
 /** Карточка: перед в левом нижнем углу, спина в правом верхнем, внахлёст.
  *  Нажатие открывает окно; «копия» и «удалить» — отдельными кнопками в углу,
  *  а не меню: делают их часто и без открытия. */
-function ShowcaseCard({
+/**
+ * Карточка витрины перерисовывается, только когда поменялась она сама
+ * (правка владельца 26.09): витрина показывает сохранённое, и сохранение
+ * одной карточки не должно перерисовывать остальные. Список после сохранения
+ * перечитывается, но неизменённые карточки приходят теми же объектами —
+ * сравнение по ссылке их пропускает. Обработчики не сравниваются: они берут
+ * актуальное через ref и функциональные обновления.
+ */
+const ShowcaseCard = memo(
+  ShowcaseCardView,
+  (a, b) =>
+    a.card === b.card &&
+    a.selected === b.selected &&
+    a.reasons === b.reasons &&
+    !a.onCopy === !b.onCopy &&
+    !a.onTrash === !b.onTrash &&
+    !a.onErase === !b.onErase,
+)
+
+function ShowcaseCardView({
   card,
   onOpen,
+  onHover,
   onCopy,
   onTrash,
   onErase,
@@ -412,6 +440,8 @@ function ShowcaseCard({
   /** Почему найдена — при поиске (US-0498). */
   reasons?: string[]
   onOpen: (e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => void
+  /** Мышь над карточкой — карточку готовят заранее (US-0600). */
+  onHover?: () => void
   onCopy?: () => void
   onTrash?: () => void
   onErase?: () => void
@@ -426,6 +456,8 @@ function ShowcaseCard({
       data-card-id={card.id}
       aria-pressed={selected}
       onClick={(e) => onOpen(e)}
+      onPointerEnter={onHover}
+      onFocus={onHover}
       className={`pf-card flex min-h-0 flex-1 flex-col overflow-hidden border text-left ${selected ? 'border-primary ring-2 ring-primary' : 'border-line'}`}
       title={`${card.name} · версия ${card.number}`}
     >

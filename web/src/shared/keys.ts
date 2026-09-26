@@ -17,20 +17,24 @@ export function historyKey(e: KeyboardEvent): 'undo' | 'redo' | null {
 
 /**
  * Что просит сочетание клавиш у версий референса (US-0490): Ctrl+S — сохранить,
- * Ctrl+Shift+S — сохранить как, A и D — листать историю назад и вперёд.
+ * Ctrl+Shift+S — сохранить как, A и D — соседняя карточка витрины (US-0600),
+ * Shift+A и Shift+D — история назад и вперёд.
  *
  * Тоже по физической клавише: A и D в русской раскладке — «ф» и «в». Буквы
  * без модификаторов — только вне полей ввода: набирая «Дед Мороз», историю не
  * листают. Поле проверяет вызывающий — событие про фокус знает он.
  */
-export function versionKey(e: KeyboardEvent): 'save' | 'save-as' | 'older' | 'newer' | null {
+export function versionKey(
+  e: KeyboardEvent,
+): 'save' | 'save-as' | 'older' | 'newer' | 'prev-card' | 'next-card' | null {
   if (e.ctrlKey || e.metaKey) {
     if (e.code === 'KeyS') return e.shiftKey ? 'save-as' : 'save'
     return null
   }
-  if (e.altKey || e.shiftKey) return null
-  if (e.code === 'KeyA') return 'older'
-  if (e.code === 'KeyD') return 'newer'
+  if (e.altKey) return null
+  // Карточки листают чаще, чем историю, — им клавиша без модификатора.
+  if (e.code === 'KeyA') return e.shiftKey ? 'older' : 'prev-card'
+  if (e.code === 'KeyD') return e.shiftKey ? 'newer' : 'next-card'
   return null
 }
 
@@ -42,6 +46,7 @@ export type WindowAction =
   | { kind: 'save-as' }
   | { kind: 'older' }
   | { kind: 'newer' }
+  | { kind: 'card'; back: boolean }
   | { kind: 'escape' }
   | { kind: 'help' }
   | { kind: 'view'; index: number }
@@ -89,5 +94,6 @@ export function windowKey(e: KeyboardEvent, typing: boolean): WindowAction | nul
   const digit = /^(?:Digit|Numpad)([1-9])$/.exec(e.code)
   if (digit && !e.shiftKey) return { kind: 'view', index: Number(digit[1]) - 1 }
   if (version === 'older' || version === 'newer') return { kind: version }
+  if (version === 'prev-card' || version === 'next-card') return { kind: 'card', back: version === 'prev-card' }
   return null
 }

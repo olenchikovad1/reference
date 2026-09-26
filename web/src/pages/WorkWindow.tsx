@@ -76,6 +76,8 @@ import { ColourCompare, type ColourChoice } from './ColourCompare'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../shared/grading'
 import { readBuffer, useDraftWriter, type Buffered, type DraftBody } from '../shared/draftWriter'
+import { cardKey, cardNow, ORDER_KEY, prefetchCard, rememberDraft } from '../shared/cardCache'
+import { imageCache, onImageLoad, warmImage } from '../shared/imageCache'
 import { historyRows, neighbour, workKey } from '../shared/versions'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones, clipOutline } from '../shared/zones'
@@ -126,7 +128,8 @@ const KEYS: [string, string][] = [
   ['+ / −', 'приблизить, отдалить'],
   ['0', 'вписать изделие в окно'],
   ['1 / 2 / 3', 'перед, спина, бок'],
-  ['A / D', 'история: раньше, позже'],
+  ['A / D', 'соседняя карточка витрины'],
+  ['Shift+A / Shift+D', 'история: раньше, позже'],
   ['Ctrl+Z / Ctrl+Y', 'отменить, вернуть'],
   ['Ctrl+S', 'сохранить новой версией'],
   ['Ctrl+Shift+S', 'сохранить как новый референс'],
@@ -135,12 +138,16 @@ const KEYS: [string, string][] = [
 ]
 
 export function WorkWindow() {
-  // Номер референса из адреса окна; new — новый (цветомодель — в ?colour_model).
-  const { ref = 'new' } = useParams()
+  // Номер референса из адреса окна; new — новый (цветомодель — в ?colour_model);
+  // нет — окно закрыто, но живёт скрытым (US-0600).
+  const { ref } = useParams()
+  const windowOpen = ref !== undefined
   const navigate = useNavigate()
   const location = useLocation()
   const queries = useQueryClient()
-  const [product, setProduct] = useState<Product | null>(null)
+  // Из кэша сразу, а не промисом: окно, открытое второй раз, не должно
+  // проходить через «Загружаю изделие…» ни на кадр (US-0600).
+  const [product, setProduct] = useState<Product | null>(() => queries.getQueryData<Product>(productQuery(PRODUCT).queryKey) ?? null)
   const [error, setError] = useState<string | null>(null)
   const [stateCode, setStateCode] = useState('front')
   // Размер изделия. Печатное поле идёт за ним: принт, помещающийся на 164,
@@ -156,7 +163,7 @@ export function WorkWindow() {
   const [params, setParams] = useState<RenderParams>(DEFAULT_PARAMS)
   const [renderScale, setRenderScale] = useState(2)
   const [fps, setFps] = useState<number | null>(null)
-  const [colours, setColours] = useState<Colour[]>([])
+  const [colours, setColours] = useState<Colour[]>(() => queries.getQueryData<{ colors: Colour[] }>(['palette'])?.colors ?? [])
   // Цвет из ячейки дропа главнее восстановленной прошлой работы: человек
   // пришёл рисовать именно на этой цветомодели.
   const colourFromDrop = new URLSearchParams(window.location.search).get('colour')
@@ -168,9 +175,11 @@ export function WorkWindow() {
     return v ? Number(v) : null
   })
   const [fontsReady, setFontsReady] = useState(false)
-  const [prints, setPrints] = useState<PrintItem[]>([])
+  const [prints, setPrints] = useState<PrintItem[]>(() => queries.getQueryData<PrintItem[]>(['prints']) ?? [])
   // Кэш картинок один на страницу: им пользуются и холст, и печатный лист.
-  const images = useRef(new Map<string, HTMLImageElement>())
+  // Картинки — общие на вкладку (US-0600): соседняя карточка и повторное
+  // открытие берут их из памяти, а не качают заново.
+  const images = useRef(imageCache)
   const [imagesVersion, setImagesVersion] = useState(0)
   const [restored, setRestored] = useState(false)
   // Приближение показа. НЕ размер принта: приблизить показ и увеличить принт —
@@ -228,6 +237,12 @@ export function WorkWindow() {
   // работе, даже когда на экране версия: строка «несохранённые изменения» в
   // истории открывает его обратно.
   const { writer, status: draftStatus } = useDraftWriter()
+  // Карточка, которую открываем последней (US-0600): по ней считается соседняя
+  // при быстрых A/D и отбрасываются запоздавшие ответы.
+  const aimed = useRef<number | null>(null)
+  // Снимок витрины, пока карточка ещё не пришла (US-0600): открытие с витрины
+  // показывает изделие сразу, работа подменяет снимок, когда готова.
+  const [coldView, setColdView] = useState<string | null>(null)
   const [draftHeld, setDraftHeld] = useState<DraftBody | null>(null)
   // Раскрытые пачки автоверсий в истории — по номеру верхней в пачке.
   const [openAutos, setOpenAutos] = useState<Set<number>>(new Set())
@@ -276,9 +291,9 @@ export function WorkWindow() {
     // то, что уйдёт в печать, и заметить это трудно: буквы-то на месте.
     const asked = Number(ref)
     // Референс из адреса окна — со своим черновиком, если он есть; новая
-    // работа — с черновиком новой работы.
+    // работа — с черновиком новой работы; закрытое окно ждёт.
     if (asked) void openCard(asked)
-    else void restoreNew()
+    else if (ref === 'new') void restoreNew()
     void Promise.all(FONTS.map((f) => document.fonts.load(`600 100px "${f.family}"`)))
       .then(() => setFontsReady(true))
       .catch(() => setFontsReady(true))
@@ -399,6 +414,8 @@ export function WorkWindow() {
   // работы — всё, что на холсте.
   const nowKey = workKey({ colourCode, composition })
   const dirty = baseline === null ? composition.elements.length > 0 : nowKey !== baseline
+  const dirtyNow = useRef(dirty)
+  dirtyNow.current = dirty
 
   // Черновик пишется сам, пока экран отличается от версии (US-0598). Пишется
   // закреплённое: живое перетаскивание не меняет отпечаток работы, выбор
@@ -412,15 +429,10 @@ export function WorkWindow() {
       base_number: current ? viewing : null,
     }
     writer.change(current?.id ?? null, body)
+    if (current) rememberDraft(queries, current.id, body)
     setDraftHeld(body)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nowKey, dirty])
-  // Окно закрыли — витрина узнаёт про черновик, когда последняя правка дошла.
-  useEffect(
-    () => () => void writer.flush().finally(() => void queries.invalidateQueries({ queryKey: ['references'] })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  )
 
   // Пороги приходят из описания изделия, а не из кода.
   const rules = product?.print_rules
@@ -528,12 +540,9 @@ export function WorkWindow() {
 
   /** Кладёт картинку в общий кэш и будит тех, кто её ждёт. */
   function cacheImage(src: string) {
-    if (images.current.has(src)) return
-    const img = new Image()
-    img.onload = () => setImagesVersion((v) => v + 1)
-    img.src = src
-    images.current.set(src, img)
+    warmImage(src)
   }
+  useEffect(() => onImageLoad(() => setImagesVersion((v) => v + 1)), [])
 
   /** Приблизить показ.
    *
@@ -648,6 +657,12 @@ export function WorkWindow() {
       if (!body) return null
       const saved = await send({ ...body, views })
       const card = await openReference(saved.id)
+      queries.setQueryData(cardKey(saved.id), card)
+      // Витрина показывает сохранённое — и меняется только от сохранения:
+      // перечитанный список отдаёт прежние карточки теми же объектами, и
+      // перерисуется ровно эта (правка владельца 26.09).
+      void queries.invalidateQueries({ queryKey: ['references'] })
+      if (current && current.id !== saved.id) rememberDraft(queries, current.id, null)
       // Правки легли в версию — черновик сервер убрал сам; при «сохранить
       // как» правки ушли в новый референс, и прежнему они тоже не черновик.
       writer.forget(current?.id ?? null)
@@ -695,6 +710,42 @@ export function WorkWindow() {
     return out
   }
 
+
+  /** Соседняя карточка витрины по A/D (US-0600): в порядке витрины, с её
+   *  фильтром. Считается от последней запрошенной, а не от показанной: при
+   *  быстрых нажатиях показанная отстаёт. */
+  function flip(back: boolean) {
+    const order =
+      queries.getQueryData<number[]>(ORDER_KEY) ??
+      (queries.getQueryData<{ id: number }[]>(['references']) ?? []).map((c) => c.id)
+    const from = aimed.current ?? current?.id
+    if (from == null || order.length === 0) return
+    const at = order.indexOf(from)
+    const next = order[at < 0 ? 0 : at + (back ? -1 : 1)]
+    if (next === undefined) {
+      setDropHint(back ? 'Это первая карточка витрины.' : 'Это последняя карточка витрины.')
+      return
+    }
+    // Открываем сразу, адрес — в том же обработчике: карточка из кэша
+    // ложится раньше, чем React отрисует смену адреса, и оба изменения
+    // приходят одним кадром — без обложки и без прежней карточки.
+    void openCard(next)
+    navigate(`/references/${next}`, { replace: true })
+  }
+
+  // Соседи по витрине готовятся заранее — данные и картинки: следующее A или
+  // D показывает, а не загружает.
+  useEffect(() => {
+    if (!current) return
+    const order = queries.getQueryData<number[]>(ORDER_KEY) ?? []
+    const at = order.indexOf(current.id)
+    if (at < 0) return
+    for (const d of [1, -1, 2, -2]) {
+      const id = order[at + d]
+      if (id !== undefined) prefetchCard(queries, id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id])
 
   /** Листать историю: соседняя версия открывается целиком. */
   function step(towards: 'older' | 'newer') {
@@ -750,9 +801,25 @@ export function WorkWindow() {
 
   /** Открыть референс — со своим черновиком, если он есть, иначе последнюю
    *  версию или `at`. Вопроса «восстановить?» нет: черновик и есть работа. */
-  async function openCard(id: number, at?: number) {
+  async function openCard(id: number, at?: number, fromShowcase = false) {
+    // Десять D подряд — десять открытий в полёте; показать надо последнее, а
+    // не то, чей ответ пришёл позже.
+    aimed.current = id
+    const late = () => aimed.current !== id
+    // С витрины окно показывается раньше, чем в нём сменится работа: снимок
+    // закрывает прежнюю карточку, пока новая не легла.
+    if (fromShowcase || !queries.getQueryData(cardKey(id))) {
+      const listed = queries.getQueryData<{ id: number; views: Record<string, string> }[]>(['references'])?.find((c) => c.id === id)
+      const view = listed?.views[stateCode] ?? listed?.views.front ?? listed?.views.back
+      setColdView(view ? assetUrl(view, 'preview') : null)
+    }
     try {
-      const card = await openReference(id)
+      const card = await cardNow(queries, id, (fresh) => {
+        // Пока листали, кто-то сохранил новую версию. Своё несохранённое на
+        // экране не подменяем — черновик и есть работа.
+        if (!late() && !dirtyNow.current) showVersion(fresh, fresh.number, fresh.work)
+      })
+      if (late()) return
       const draft = newer(card.draft ?? null, readBuffer(id))
       if (draft && !at) {
         await showDraft(card, draft)
@@ -760,10 +827,13 @@ export function WorkWindow() {
       }
       const number = at && card.versions.some((v) => v.number === at) ? at : card.number
       const work = number === card.number ? card.work : (await openVersion(id, number)).work
+      if (late()) return
       showVersion(card, number, work)
       setDraftHeld(draft)
     } catch (e) {
       setDropHint(`Референс №${id} не открылся: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      if (!late()) setColdView(null)
     }
   }
 
@@ -773,6 +843,7 @@ export function WorkWindow() {
     const d = draft.work as SavedWork | null
     const at = draft.base_number && card.versions.some((v) => v.number === draft.base_number) ? draft.base_number : card.number
     const base = at === card.number ? card.work : (await openVersion(card.id, at)).work
+    if (aimed.current !== null && aimed.current !== card.id) return
     if (!d?.composition) {
       showVersion(card, card.number, card.work)
       return
@@ -818,6 +889,7 @@ export function WorkWindow() {
     writer.forget(card?.id ?? null)
     await writer.settle()
     onServer.current = null
+    if (card) rememberDraft(queries, card.id, null)
     try {
       await discardDraft(card?.id ?? null)
     } catch (e) {
@@ -1045,6 +1117,8 @@ export function WorkWindow() {
   // на экране при подписке.
   const keyAction = useRef<(e: KeyboardEvent) => void>(() => undefined)
   keyAction.current = (e: KeyboardEvent) => {
+    // Закрытое окно живёт скрытым — клавиши принадлежат витрине.
+    if (!windowOpen) return
     const target = e.target as HTMLElement | null
     const typing =
       !!target &&
@@ -1072,6 +1146,10 @@ export function WorkWindow() {
       case 'save-as':
         e.preventDefault()
         if (canSave) void (a.kind === 'save' ? saveCard() : saveCardAs())
+        return
+      case 'card':
+        e.preventDefault()
+        flip(a.back)
         return
       case 'older':
       case 'newer':
@@ -1211,16 +1289,50 @@ export function WorkWindow() {
   // Сохранили новый — адрес окна становится адресом референса: ссылку можно
   // отдать, а «назад» по-прежнему ведёт на витрину.
   useEffect(() => {
-    if (current && ref !== String(current.id)) navigate(`/references/${current.id}`, { replace: true })
+    if (windowOpen && current && ref !== String(current.id) && (aimed.current === null || aimed.current === current.id))
+      navigate(`/references/${current.id}`, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id])
 
-  // Другой референс по ссылке изнутри окна (поиск, узнанное) — открыть его.
+  // Адрес окна сменился (US-0600): окно живёт всё время, и открыть карточку,
+  // начать новую работу или закрыть — это реакция на адрес, а не сборка окна.
+  const wasRef = useRef(ref)
   useEffect(() => {
+    const was = wasRef.current
+    wasRef.current = ref
+    if (was === ref) return
+    if (ref === undefined) {
+      // Закрыли: последняя правка уходит сразу, выбор снят.
+      void writer.flush()
+      setComposition((c) => select(c, null))
+      return
+    }
+    if (ref === 'new') {
+      startNew()
+      return
+    }
     const id = Number(ref)
-    if (id && current && id !== current.id) void openCard(id)
+    if (id && id !== current?.id && id !== aimed.current) void openCard(id, undefined, was === undefined)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ref])
+
+  /** Новая работа в уже живущем окне: всё от прежней карточки забыто,
+   *  цветомодель и цвет — из адреса (ячейка дропа). */
+  function startNew() {
+    const q = new URLSearchParams(window.location.search)
+    aimed.current = null
+    onServer.current = null
+    setCurrent(null)
+    setViewing(null)
+    setBaseline(null)
+    setDraftHeld(null)
+    setColourModelId(q.get('colour_model') ? Number(q.get('colour_model')) : null)
+    setColourCode(q.get('colour') ?? 'WHITE')
+    setSize(null)
+    commit(EMPTY)
+    setRestored(false)
+    void restoreNew()
+  }
 
   // Дропы референса — от цветомодели (US-0497): по ним выбор показывает
   // одобренное, а на изделии отмечено взятое не из одобренного.
@@ -1476,13 +1588,13 @@ export function WorkWindow() {
   )
   if (error)
     return (
-      <WorkFrame label="рабочее окно" bar={closeOnly}>
+      <WorkFrame label="рабочее окно" bar={closeOnly} open={windowOpen}>
         <p className="p-6">Изделие не загрузилось: {error}. Закройте окно и откройте референс ещё раз.</p>
       </WorkFrame>
     )
   if (!product || !state)
     return (
-      <WorkFrame label="рабочее окно" bar={closeOnly}>
+      <WorkFrame label="рабочее окно" bar={closeOnly} open={windowOpen}>
         <p className="p-6 text-muted-foreground">Загружаю изделие…</p>
       </WorkFrame>
     )
@@ -1508,6 +1620,18 @@ export function WorkWindow() {
   const small = (tone: 'neutral' | 'accent' | 'danger' = 'neutral') =>
     buttonClass({ tone, variant: tone === 'accent' ? 'solid' : 'outline', small: true })
   const on = (active: boolean) => buttonClass({ tone: active ? 'accent' : 'neutral', variant: active ? 'soft' : 'outline', small: true })
+
+  // Окно уже видно, а в нём ещё прежняя карточка — на кадр-другой, пока новая
+  // не легла. Закрываем холст снимком витрины, а без снимка — фоном: чужой
+  // принт на миг хуже пустоты (US-0600).
+  const stale = windowOpen && !!ref && ref !== 'new' && Number(ref) !== current?.id
+  const cover = (() => {
+    if (coldView) return coldView
+    if (!stale) return null
+    const listed = queries.getQueryData<{ id: number; views: Record<string, string> }[]>(['references'])?.find((c) => c.id === Number(ref))
+    const view = listed?.views[stateCode] ?? listed?.views.front ?? listed?.views.back
+    return view ? assetUrl(view, 'preview') : 'blank'
+  })()
 
   const bar = (
     <>
@@ -2103,7 +2227,7 @@ export function WorkWindow() {
 
   return (
     <>
-      <WorkFrame label={`рабочее окно: ${title}`} bar={bar} onBackdrop={close}>
+      <WorkFrame label={`рабочее окно: ${title}`} bar={bar} onBackdrop={close} open={windowOpen}>
         <div
           ref={area}
           tabIndex={0}
@@ -2139,6 +2263,11 @@ export function WorkWindow() {
                   cursor: zoom > 1 ? 'grab' : 'default',
                 }}
               >
+                {cover && (
+                  <div className="pointer-events-none absolute inset-0 z-10 bg-background">
+                    {cover !== 'blank' && <img src={cover} alt="" className="h-full w-full object-contain" />}
+                  </div>
+                )}
                 <GarmentCanvas
                   state={state}
                   frameSrc={frameUrl(product.code, state.code)}
@@ -2163,7 +2292,7 @@ export function WorkWindow() {
                   onCanvas={(el) => (viewCanvas.current = el)}
                   images={images.current}
                   clips={clips}
-                  key={imagesVersion}
+                  imagesVersion={imagesVersion}
                 />
               </div>
             </div>
@@ -2237,7 +2366,8 @@ export function WorkWindow() {
                   onRotate={noop}
                   images={images.current}
                   onCanvas={(el) => (thumbCanvases.current[s.code] = el)}
-                  key={`${s.code}-${imagesVersion}`}
+                  imagesVersion={imagesVersion}
+                  key={s.code}
                 />
                 <span className="absolute left-1 top-0 text-[10px] text-muted-foreground">{i + 1}</span>
               </button>
@@ -2460,7 +2590,7 @@ export function WorkWindow() {
               {viewing !== current.number && (
                 <p className="text-xs text-warning">не последняя: сохранение ляжет новой версией поверх последней</p>
               )}
-              <p className="text-xs text-muted-foreground">A и D — листать</p>
+              <p className="text-xs text-muted-foreground">Shift+A и Shift+D — листать историю; A и D — соседние карточки</p>
             </Section>
           )}
 

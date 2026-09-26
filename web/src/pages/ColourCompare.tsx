@@ -49,7 +49,7 @@ export function ColourCompare({
   torso: Torso | null
   anchorsBySide: Record<string, Record<string, [number, number]>>
   params: RenderParams
-  images: Map<string, HTMLImageElement>
+  images: ReadonlyMap<string, HTMLImageElement>
   imagesVersion: number
   choices: ColourChoice[]
   /** Цвета — из ассортимента этого дропа; пусто — вся палитра. */

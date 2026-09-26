@@ -16,6 +16,7 @@ export function WorkFrame({
   bar,
   children,
   onBackdrop,
+  open = true,
 }: {
   /** Имя окна для чтения с экрана. */
   label: string
@@ -24,10 +25,15 @@ export function WorkFrame({
   children: ReactNode
   /** Щелчок мимо окна — по затемнённой странице. */
   onBackdrop?: () => void
+  /** Закрытое окно не разбирается, а прячется (US-0600): следующее открытие —
+   *  показ, а не сборка холстов заново. Скрыто невидимостью, а не выключением
+   *  из раскладки: холсты сохраняют размер и не пересчитываются. */
+  open?: boolean
 }) {
   const root = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
+    if (!open) return
     const before = document.activeElement as HTMLElement | null
     // Страница под окном не едет: колесо и клавиши принадлежат окну.
     const overflow = document.body.style.overflow
@@ -37,11 +43,12 @@ export function WorkFrame({
       document.body.style.overflow = overflow
       before?.focus?.()
     }
-  }, [])
+  }, [open])
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40"
+      className={`fixed inset-0 z-40 flex items-center justify-center bg-black/40 ${open ? '' : 'pointer-events-none invisible'}`}
+      aria-hidden={!open}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onBackdrop?.()
       }}
