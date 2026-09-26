@@ -76,7 +76,7 @@ import { ColourCompare, type ColourChoice } from './ColourCompare'
 import { buildTorso, projectRect, toSurface } from '../shared/torso'
 import { editAtSize, gradeOf, graded, resetAtSize, scaleAt, setScale } from '../shared/grading'
 import { readBuffer, useDraftWriter, type Buffered, type DraftBody } from '../shared/draftWriter'
-import { neighbour, workKey } from '../shared/versions'
+import { historyRows, neighbour, workKey } from '../shared/versions'
 import { blocking, check, type Finding } from '../shared/checks'
 import { checkZones, clipOutline } from '../shared/zones'
 import { calibrationFor, fieldFor, fieldSize, sizesWithField } from '../shared/fields'
@@ -229,6 +229,8 @@ export function WorkWindow() {
   // истории открывает его обратно.
   const { writer, status: draftStatus } = useDraftWriter()
   const [draftHeld, setDraftHeld] = useState<DraftBody | null>(null)
+  // Раскрытые пачки автоверсий в истории — по номеру верхней в пачке.
+  const [openAutos, setOpenAutos] = useState<Set<number>>(new Set())
   // Отпечаток работы, которая уже лежит на сервере черновиком: открытый
   // черновик переписывать самим собой незачем — эта запись и гонялась с
   // «отбросить».
@@ -601,25 +603,41 @@ export function WorkWindow() {
    *  нет — новый референс. Открытая старая версия ложится поверх последней,
    *  а не на своё место. false — не сохранилось, и сказано почему. */
   async function saveCard(): Promise<boolean> {
-    return keep(async (body) =>
+    const saved = await keep(async (body) =>
       current ? saveVersion(current.id, body) : saveReference({ ...body, colour_model_id: colourModelId }),
     )
+    return saved !== null
+  }
+
+  /**
+   * Версия сама перед переходом (US-0599): работа уходит наружу — на фабрику,
+   * в копии, — и уходить должна версия, а не черновик. Ничего не меняли —
+   * версия та, что на экране, новой нет. Новая работа карточки сама не
+   * заводит: null. 'failed' — версия не сохранилась, переход не делаем.
+   */
+  async function versionBefore(reason: string): Promise<number | null | 'failed'> {
+    if (!current) return null
+    if (!dirty) return viewing
+    const card = current
+    const saved = await keep((body) => saveVersion(card.id, { ...body, auto_reason: reason }))
+    return saved ? saved.number : 'failed'
   }
 
   /** «Сохранить как» (Ctrl+Shift+S): новый референс, первая версия — то, что
    *  на экране; у нового записано, от какой версии он пошёл. */
   async function saveCardAs(): Promise<boolean> {
-    return keep(async (body) =>
+    const saved = await keep(async (body) =>
       saveReference({
         ...body,
         colour_model_id: current?.colour_model_id ?? colourModelId,
         forked_from: current && viewing ? { reference_id: current.id, number: viewing } : null,
       }),
     )
+    return saved !== null
   }
 
-  async function keep(send: (body: VersionBody) => Promise<Saved>): Promise<boolean> {
-    if (saving) return false
+  async function keep(send: (body: VersionBody) => Promise<Saved>): Promise<Saved | null> {
+    if (saving) return null
     setSaving(true)
     try {
       // Последняя правка черновика доходит раньше версии: иначе запоздавшая
@@ -627,7 +645,7 @@ export function WorkWindow() {
       await writer.flush()
       // Лист и снимки сторон — одновременно, а не друг за другом.
       const [body, views] = await Promise.all([versionBody(), snapshotSides()])
-      if (!body) return false
+      if (!body) return null
       const saved = await send({ ...body, views })
       const card = await openReference(saved.id)
       // Правки легли в версию — черновик сервер убрал сам; при «сохранить
@@ -640,12 +658,12 @@ export function WorkWindow() {
       setBaseline(nowKey)
       setRestored(false)
       setSeenCards(saved.matches)
-      return true
+      return saved
     } catch (e) {
       // Работа не теряется: она на экране и в черновике, повторить — то же
       // сочетание клавиш.
       setDropHint(`Не сохранилось: ${e instanceof Error ? e.message : String(e)} — повторите Ctrl+S.`)
-      return false
+      return null
     } finally {
       setSaving(false)
     }
@@ -816,17 +834,22 @@ export function WorkWindow() {
   }
 
   /** Печатный лист: сборка из сантиметров, мимо шейдера, в печатном разрешении. */
-  function downloadSheet() {
+  async function downloadSheet() {
     if (composition.elements.length === 0) return
+    // На фабрику уходит версия, а не черновик: несохранённое сначала станет
+    // версией, и её номер будет на листе (US-0599).
+    const n = await versionBefore('перед выгрузкой листа')
+    if (n === 'failed') return
+    const version = current && n ? { id: current.id, number: n } : null
     // По файлу на КАЖДУЮ сторону, где что-то есть. Сведённые в один лист перед
     // и спина дают файл, который на фабрике не печатается ничем: это два
     // разных прогона.
     for (const side of Object.keys(sidesUsed(composition))) {
-      downloadSheetOf(side)
+      downloadSheetOf(side, version)
     }
   }
 
-  function downloadSheetOf(side: string) {
+  function downloadSheetOf(side: string, version: { id: number; number: number } | null) {
     const only = onSide(sized, side)
     if (only.elements.length === 0) return
     // 120 пикселей на сантиметр — около 300 точек на дюйм, обычное печатное
@@ -840,7 +863,8 @@ export function WorkWindow() {
     const mark = cal.provisional ? '-PREDVARITELNO' : ''
     // Размер — в имени файла: на фабрику уходит лист каждого размера, и
     // безымянный лист на 98 неотличим от листа на 164.
-    const stem = PRODUCT + '-' + side + '-' + (size ?? grid?.base ?? 'baza') + mark
+    const stem =
+      PRODUCT + '-' + side + '-' + (size ?? grid?.base ?? 'baza') + (version ? `-ref${version.id}-v${version.number}` : '') + mark
 
     const save = (blob: Blob, name: string) => {
       const a = document.createElement('a')
@@ -852,6 +876,9 @@ export function WorkWindow() {
 
     const lines = [
       'Изделие: ' + PRODUCT + ', сторона: ' + (SIDE_NAMES[side] ?? side),
+      version
+        ? `Референс №${version.id}, версия ${version.number} — лист совпадает с ней`
+        : 'Референс не сохранён — лист без версии',
       'Габарит печати: ' + spec.widthCm.toFixed(1) + ' x ' + spec.heightCm.toFixed(1) + ' см',
       'Разрешение файла: 120 px/см (около 300 dpi)',
       cal.provisional
@@ -1241,6 +1268,10 @@ export function WorkWindow() {
    *  цвета, работа — та же с другим кодом цвета. */
   async function saveColours(picked: ColourChoice[], canvases: Record<string, Record<string, HTMLCanvasElement | null>>) {
     if (saving || picked.length === 0) return
+    // Копии идут от версии, а не от черновика: «пошёл от версии N» должно
+    // значить ровно то, что на экране (US-0599).
+    const base = await versionBefore('перед копиями в других цветах')
+    if (base === 'failed') return
     setSaving(true)
     try {
       const body = await versionBody()
@@ -1260,7 +1291,7 @@ export function WorkWindow() {
           work: { ...(body.work as Record<string, unknown>), colourCode: c.code },
           views,
           colour_model_id: c.colourModelId,
-          forked_from: current && viewing ? { reference_id: current.id, number: viewing } : null,
+          forked_from: current && base ? { reference_id: current.id, number: base } : null,
         })
         made.push(saved.id)
       }
@@ -2387,17 +2418,44 @@ export function WorkWindow() {
                     </button>
                   </div>
                 )}
-                {[...current.versions].reverse().map((v) => (
-                  <button
-                    key={v.number}
-                    onClick={() => v.number !== viewing && goTo(v.number)}
-                    aria-current={v.number === viewing}
-                    className={`rounded px-2 py-1 text-left text-xs ${v.number === viewing ? 'bg-primary-soft' : 'hover:bg-hover'}`}
-                  >
-                    версия {v.number} · {v.author_name ?? (v.author_id ? 'имя ещё не пришло' : 'без входа')} ·{' '}
-                    {new Date(v.saved_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                  </button>
-                ))}
+                {historyRows([...current.versions].reverse()).flatMap((row) => {
+                  const one = (v: (typeof current.versions)[number]) => (
+                    <button
+                      key={v.number}
+                      onClick={() => v.number !== viewing && goTo(v.number)}
+                      aria-current={v.number === viewing}
+                      className={`rounded px-2 py-1 text-left text-xs ${v.number === viewing ? 'bg-primary-soft' : 'hover:bg-hover'} ${v.auto_reason ? 'text-muted-foreground' : ''}`}
+                    >
+                      версия {v.number}
+                      {v.auto_reason ? ` · авто: ${v.auto_reason}` : ''} ·{' '}
+                      {v.author_name ?? (v.author_id ? 'имя ещё не пришло' : 'без входа')} ·{' '}
+                      {new Date(v.saved_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </button>
+                  )
+                  if (row.kind === 'one') return [one(row.version)]
+                  // Автоверсии подряд — одной строкой, пока их не раскрыли или
+                  // пока одна из них не на экране (US-0599).
+                  const top = row.versions[0].number
+                  const shown = openAutos.has(top) || row.versions.some((v) => v.number === viewing)
+                  return [
+                    <button
+                      key={`autos-${top}`}
+                      className="rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-hover"
+                      aria-expanded={shown}
+                      onClick={() =>
+                        setOpenAutos((s) => {
+                          const next = new Set(s)
+                          if (next.has(top)) next.delete(top)
+                          else next.add(top)
+                          return next
+                        })
+                      }
+                    >
+                      {shown ? '▾' : '▸'} автоверсии {row.versions[row.versions.length - 1].number}–{top} · {row.versions.length} шт.
+                    </button>,
+                    ...(shown ? row.versions.map(one) : []),
+                  ]
+                })}
               </div>
               {viewing !== current.number && (
                 <p className="text-xs text-warning">не последняя: сохранение ляжет новой версией поверх последней</p>
@@ -2447,13 +2505,17 @@ export function WorkWindow() {
           <Section title="Выгрузка">
             <div className="flex flex-wrap gap-1">
               <button
-                onClick={downloadSheet}
-                disabled={composition.elements.length === 0 || blocking(open).length > 0}
+                onClick={() => void downloadSheet()}
+                // Пока проверки не догнали работу, лист не выгружается: иначе
+                // «находок нет» значило бы «ещё не считали».
+                disabled={composition.elements.length === 0 || blocking(open).length > 0 || checked !== sized}
                 className={small()}
                 title={
-                  blocking(open).length > 0
-                    ? 'Сначала исправьте блокирующие находки: такой принт не пропечатается'
-                    : 'Плоский лист в сантиметрах, мимо складок и света — он идёт на фабрику'
+                  checked !== sized
+                    ? 'Проверки считаются…'
+                    : blocking(open).length > 0
+                      ? 'Сначала исправьте блокирующие находки: такой принт не пропечатается'
+                      : 'Плоский лист в сантиметрах, мимо складок и света — он идёт на фабрику'
                 }
               >
                 печатный лист

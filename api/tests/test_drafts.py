@@ -85,3 +85,16 @@ async def test_erased_card_takes_its_drafts_along(client) -> None:
     async with engine.begin() as conn:
         left = (await conn.execute(text("select count(*) from reference_drafts where reference_id = :r"), {"r": ref}))
         assert left.scalar_one() == 0
+
+
+async def test_auto_version_says_before_what_and_takes_the_draft(client) -> None:
+    """US-0599: черновик стал версией сам перед переходом — и видно, перед каким."""
+    ref, image = await saved(client)
+    await put(client, f"/reference/api/references/{ref}/draft", MOVED, 2)
+    r = await client.post(f"/reference/api/references/{ref}/versions", json={
+        "name": "работа", "sheet_digest": image, "image_digests": [image], "texts": [], "work": MOVED,
+        "auto_reason": "перед выгрузкой листа"})
+    assert r.status_code == 200, r.text
+    opened = (await client.get(f"/reference/api/references/{ref}")).json()
+    assert [v["auto_reason"] for v in opened["versions"]] == [None, None, "перед выгрузкой листа"]
+    assert opened["draft"] is None

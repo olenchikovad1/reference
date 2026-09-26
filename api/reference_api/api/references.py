@@ -21,7 +21,7 @@ from reference_api.schemas.references import (
     ReferenceOut,
     SavedOut,
     SaveIn,
-    VersionIn,
+    AutoVersionIn,
     VersionMetaOut,
     VersionOut,
 )
@@ -84,13 +84,13 @@ async def create(body: SaveIn, request: Request, db: AsyncSession = Depends(sess
     "/{reference_id}/versions", response_model=SavedOut, dependencies=[requires("references", Action.WRITE)]
 )
 async def add_version(
-    reference_id: int, body: VersionIn, request: Request, db: AsyncSession = Depends(session)
+    reference_id: int, body: AutoVersionIn, request: Request, db: AsyncSession = Depends(session)
 ) -> SavedOut:
     """«Сохранить»: новая версия поверх последней; прежние не меняются (И-6)."""
     try:
         saved = await service.add_version(
             db, reference_id, body.name, body.sheet_digest, body.image_digests, body.texts, body.work,
-            author_id=_author(request), views=body.views,
+            author_id=_author(request), views=body.views, auto_reason=body.auto_reason,
         )
     except service.NoSuchReference as missing:
         raise HTTPException(status_code=404, detail=str(missing)) from None
@@ -344,7 +344,7 @@ async def open_card(reference_id: int, request: Request, db: AsyncSession = Depe
         forked_from=ForkOut(reference_id=fork.reference_id, number=fork.number, name=fork.name) if fork else None,
         versions=[
             VersionMetaOut(number=v.number, saved_at=v.created_at, author_id=v.author_id,
-                           author_name=names.get(v.author_id or ""))
+                           author_name=names.get(v.author_id or ""), auto_reason=v.auto_reason)
             for v in versions
         ],
         number=last.number,

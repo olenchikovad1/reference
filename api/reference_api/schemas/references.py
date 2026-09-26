@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class VersionIn(BaseModel):
@@ -26,6 +26,13 @@ class ForkIn(BaseModel):
 
     reference_id: int
     number: int
+
+
+class AutoVersionIn(VersionIn):
+    """Версия, сделанная сама перед переходом (US-0599)."""
+
+    #: Перед каким переходом: «перед выгрузкой листа». Пусто — сохранил человек.
+    auto_reason: str | None = Field(default=None, max_length=120)
 
 
 class SaveIn(VersionIn):
@@ -119,6 +126,8 @@ class TrashedOut(CardOut):
 
 class VersionMetaOut(Saver):
     number: int
+    #: Сделана сама перед переходом — перед каким; пусто — сохранил человек.
+    auto_reason: str | None = None
 
 
 class ForkOut(BaseModel):

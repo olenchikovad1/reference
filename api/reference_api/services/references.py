@@ -102,8 +102,12 @@ async def add_version(
     work: dict | None = None,
     author_id: str | None = None,
     views: dict[str, str] | None = None,
+    auto_reason: str | None = None,
 ) -> Saved:
     """«Сохранить»: новая версия поверх последней, прежние не трогаются (И-6).
+
+    ``auto_reason`` — версия сделана сама перед переходом (US-0599): черновик
+    стал версией, потому что работа уходит наружу.
 
     Правка открытой старой версии идёт сюда же: она ложится номером после
     последней, а не на место старой. Узнавание своих версий не видит — пятая
@@ -116,13 +120,14 @@ async def add_version(
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=reference_id)
     if author_id:
         await repo.drop_draft(db, reference_id, author_id)
-    version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views)
+    version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views, auto_reason)
     return Saved(card.id, version.number, found)
 
 
-async def _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views):
+async def _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views, auto_reason=None):
     version = await repo.add_version(
-        db, card, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts], work, author_id, views
+        db, card, name, sheet_digest, image_digests, [(t, normalise(t)) for t in texts], work, author_id, views,
+        auto_reason,
     )
     # Вектор листа считается ПОСЛЕ поиска и по тому же оригиналу, что у картинок.
     content = assets.original(sheet_digest)

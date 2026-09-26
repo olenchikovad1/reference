@@ -77,6 +77,9 @@ class ReferenceVersion(Base):
     )
     #: Номер внутри референса, с единицы. Его и называют: «вернись ко второй».
     number: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: Версия сделана сама перед переходом (US-0599) — и перед каким: «перед
+    #: выгрузкой листа». Пусто — сохранил человек; такая версия важнее.
+    auto_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
     #: Печатный лист целиком — по нему считается вектор «такой принт уже был».
     sheet_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     #: Картинки, из которых собран. Массив postgresql, а не общий: пересечение

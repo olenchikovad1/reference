@@ -34,6 +34,8 @@ export interface VersionBody {
   work?: unknown
   /** Снимки изделия по сторонам для витрины: код стороны → файл. */
   views?: Record<string, string>
+  /** Версия сама перед переходом — перед каким (US-0599). Нет — руками. */
+  auto_reason?: string | null
 }
 
 async function post(path: string, body: unknown): Promise<Saved> {
@@ -164,6 +166,8 @@ export async function listTrash(): Promise<Trashed[]> {
 
 export interface VersionMeta extends Saver {
   number: number
+  /** Сделана сама перед переходом — перед каким; нет — сохранил человек. */
+  auto_reason?: string | null
 }
 
 export interface ReferenceFull {

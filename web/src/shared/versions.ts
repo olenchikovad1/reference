@@ -48,3 +48,30 @@ export function neighbour(numbers: readonly number[], current: number, towards: 
   const next = towards === 'older' ? at - 1 : at + 1
   return next >= 0 && next < numbers.length ? numbers[next] : null
 }
+
+/** Строка истории: одна версия или свёрнутые автоверсии подряд. */
+export type HistoryRow<V> = { kind: 'one'; version: V } | { kind: 'autos'; versions: V[] }
+
+/**
+ * Автоверсии, идущие подряд между ручными (две и больше), — одной строкой
+ * (US-0599): версия руками важнее, и ручные не должны тонуть среди «перед
+ * выгрузкой листа». Одна автоверсия стоит сама — сворачивать нечего.
+ */
+export function historyRows<V extends { auto_reason?: string | null }>(newestFirst: readonly V[]): HistoryRow<V>[] {
+  const rows: HistoryRow<V>[] = []
+  let run: V[] = []
+  const close = () => {
+    if (run.length >= 2) rows.push({ kind: 'autos', versions: run })
+    else run.forEach((version) => rows.push({ kind: 'one', version }))
+    run = []
+  }
+  for (const v of newestFirst) {
+    if (v.auto_reason) run.push(v)
+    else {
+      close()
+      rows.push({ kind: 'one', version: v })
+    }
+  }
+  close()
+  return rows
+}
