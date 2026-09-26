@@ -16,7 +16,37 @@ export interface Ink {
   readonly rgb: Rgb
 }
 
+/** Фигура обрезки (US-0504) внутри рамки. */
+export type CropShape = 'rect' | 'ellipse' | 'hexagon'
+
+/** Обрезка в ДОЛЯХ исходника, а не в точках экрана: печатный лист режет тот
+ *  же кусок, какого бы размера ни была картинка на экране. */
+export interface Crop {
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
+  readonly shape: CropShape
+}
+
+export const FULL: Crop = { x: 0, y: 0, w: 1, h: 1, shape: 'rect' }
+
+/** Рамка в пределах исходника: не меньше 2 % и не за краем. */
+export function clampCrop(c: Crop): Crop {
+  const w = Math.min(1, Math.max(0.02, c.w))
+  const h = Math.min(1, Math.max(0.02, c.h))
+  return { ...c, w, h, x: Math.min(1 - w, Math.max(0, c.x)), y: Math.min(1 - h, Math.max(0, c.y)) }
+}
+
+/** Вершины фигуры в долях рамки. */
+export function shapePoints(shape: CropShape): readonly [number, number][] | null {
+  if (shape !== 'hexagon') return null
+  return [[0.25, 0], [0.75, 0], [1, 0.5], [0.75, 1], [0.25, 1], [0, 0.5]]
+}
+
 export interface Look {
+  /** Обрезка — кусок исходника; нет — картинка целиком (US-0504). */
+  readonly crop?: Crop | null
   /** Краска палитры, в которую перекрашен одноцветный принт; нет — исходный. */
   readonly tint?: Ink | null
   /** Непрозрачность 0–1: насколько принт закрывает ткань. Нет — 1. */
@@ -239,7 +269,7 @@ const cache = new WeakMap<HTMLImageElement, Map<string, HTMLCanvasElement>>()
 
 /** Картинка с применённым видом — одна на картинку и набор параметров. */
 function looked(img: HTMLImageElement, look: Look): HTMLCanvasElement | null {
-  const { opacity: _opacity, ...pixels } = look
+  const { opacity: _opacity, crop: _crop, ...pixels } = look
   const key = JSON.stringify(pixels)
   let byLook = cache.get(img)
   if (!byLook) cache.set(img, (byLook = new Map()))
@@ -284,6 +314,26 @@ export function drawLooked(
   const source = look && changesPixels(look) ? (looked(img, look) ?? img) : img
   const alpha = ctx.globalAlpha
   ctx.globalAlpha = alpha * Math.min(1, Math.max(0, look?.opacity ?? 1))
-  ctx.drawImage(source, x, y, w, h)
+  const crop = look?.crop
+  if (!crop) {
+    ctx.drawImage(source, x, y, w, h)
+  } else {
+    // Кусок исходника на место элемента; фигура — вырезом по рамке.
+    const sw = img.naturalWidth
+    const sh = img.naturalHeight
+    ctx.save()
+    if (crop.shape !== 'rect') {
+      ctx.beginPath()
+      if (crop.shape === 'ellipse') ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2)
+      else {
+        const pts = shapePoints(crop.shape) ?? []
+        pts.forEach(([px, py], i) => (i ? ctx.lineTo(x + px * w, y + py * h) : ctx.moveTo(x + px * w, y + py * h)))
+        ctx.closePath()
+      }
+      ctx.clip()
+    }
+    ctx.drawImage(source, crop.x * sw, crop.y * sh, crop.w * sw, crop.h * sh, x, y, w, h)
+    ctx.restore()
+  }
   ctx.globalAlpha = alpha
 }

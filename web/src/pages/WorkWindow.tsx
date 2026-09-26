@@ -16,6 +16,7 @@ import {
   heightCm,
   nudge,
   place,
+  recrop,
   relook,
   remove,
   select,
@@ -61,7 +62,8 @@ import { readDropped } from '../shared/dropped'
 import { windowKey } from '../shared/keys'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
 import { useFrameAlpha } from '../shared/frameAlpha'
-import { declaredInks, mainColoursOf, type Ink } from '../shared/look'
+import { declaredInks, FULL, mainColoursOf, type CropShape, type Ink } from '../shared/look'
+import { CropBox } from '../candidates/CropBox'
 import { detectAlpha } from '../shared/dropped'
 import { fetchBoard, fetchCatalogue, fetchDrops } from '../shared/api/drops'
 import { fetchTexts } from '../shared/api/texts'
@@ -994,7 +996,7 @@ export function WorkWindow() {
     const a = windowKey(e, typing)
     if (!a) return
     // В окне выбора стрелки ходят по плитке, Delete и цифры — не про принт.
-    const inPicker = !!target?.closest?.('[data-picker]')
+    const inPicker = !!target?.closest?.('[data-picker],[data-own-keys]')
     if (inPicker && !['save', 'save-as', 'escape', 'undo', 'redo'].includes(a.kind)) return
     if (helpOpen) {
       if (a.kind === 'escape' || a.kind === 'help') setHelpOpen(false)
@@ -1603,6 +1605,55 @@ export function WorkWindow() {
             digits={2}
             onChange={(v) => commit((comp) => relook(comp, selected.id, { opacity: 1 - v }))}
           />
+        </Section>
+      )}
+      {selected.kind === 'image' && (
+        <Section title="Обрезка">
+          {/* Кусок исходника в его долях (US-0504): раздвинуть обратно можно
+              всегда, исходник цел; печатный лист режет тот же кусок. */}
+          <CropBox
+            src={selected.src}
+            sourceAspect={selected.aspect * ((selected.look?.crop ?? FULL).h / (selected.look?.crop ?? FULL).w)}
+            crop={selected.look?.crop ?? FULL}
+            onChange={(crop, done) => (done ? commit : setComposition)((c) => recrop(c, selected.id, crop))}
+          />
+          <div className="flex flex-wrap gap-1">
+            {(
+              [
+                ['rect', 'прямоугольник'],
+                ['ellipse', 'круг'],
+                ['hexagon', 'шестиугольник'],
+              ] as [CropShape, string][]
+            ).map(([shape, name]) => (
+              <button
+                key={shape}
+                className={on((selected.look?.crop?.shape ?? 'rect') === shape)}
+                onClick={() => commit((c) => recrop(c, selected.id, { ...(selected.look?.crop ?? FULL), shape }))}
+              >
+                {name}
+              </button>
+            ))}
+            <button className={small()} onClick={() => commit((c) => recrop(c, selected.id, FULL))}>
+              вся картинка
+            </button>
+            <button
+              className={small()}
+              title="Ещё один кусок того же исходника — своей обрезкой, без копии файла"
+              onClick={() =>
+                commit((c) => {
+                  const id = newElementId()
+                  const copy = add(c, {
+                    ...selected,
+                    id,
+                    placement: { ...selected.placement, dxCm: selected.placement.dxCm + selected.placement.widthCm + 2 },
+                  })
+                  return recrop(copy, id, { x: 0.25, y: 0.25, w: 0.5, h: 0.5, shape: 'ellipse' })
+                })
+              }
+            >
+              второй кусок
+            </button>
+          </div>
         </Section>
       )}
       {selected.kind === 'image' && (

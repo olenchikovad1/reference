@@ -6,7 +6,7 @@
 // придётся пересчитывать. Сантиметры переживают всё это, потому что они
 // принадлежат лекалу, а не картинке.
 
-import type { Look } from './look'
+import { clampCrop, FULL, type Crop, type Look } from './look'
 export type ElementKind = 'image' | 'text'
 
 export interface Placement {
@@ -82,6 +82,30 @@ export interface Composition {
 }
 
 export const EMPTY: Composition = { elements: [], selectedId: null }
+
+/**
+ * Обрезать картинку (US-0504): новая рамка в долях исходника. Пропорция
+ * элемента становится пропорцией куска, а ширина меняется в той же доле, что
+ * рамка, — масштаб исходника на изделии остаётся прежним: сузили рамку вдвое —
+ * кусок стал вдвое уже, а не растянулся на прежнюю ширину.
+ */
+export function recrop(c: Composition, id: string, crop: Crop): Composition {
+  return {
+    ...c,
+    elements: c.elements.map((el) => {
+      if (el.id !== id || el.kind !== 'image') return el
+      const was = el.look?.crop ?? FULL
+      const sourceAspect = el.aspect * (was.h / was.w)
+      const next = clampCrop(crop)
+      return {
+        ...el,
+        aspect: sourceAspect * (next.w / next.h),
+        placement: { ...el.placement, widthCm: el.placement.widthCm * (next.w / was.w) },
+        look: { ...el.look, crop: next },
+      }
+    }),
+  }
+}
 
 /** Поменять вид картинки — краску и прозрачность; `null` в краске — вернуть
  *  исходный цвет. Исходник не трогается. */
