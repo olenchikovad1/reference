@@ -129,7 +129,7 @@ const KEYS: [string, string][] = [
   ['0', 'вписать изделие в окно'],
   ['1 / 2 / 3', 'перед, спина, бок'],
   ['A / D', 'соседняя карточка витрины'],
-  ['Shift+A / Shift+D', 'история: раньше, позже'],
+  ['Q / E', 'история: раньше, позже'],
   ['Ctrl+Z / Ctrl+Y', 'отменить, вернуть'],
   ['Ctrl+S', 'сохранить новой версией'],
   ['Ctrl+Shift+S', 'сохранить как новый референс'],
@@ -2590,7 +2590,7 @@ export function WorkWindow() {
               {viewing !== current.number && (
                 <p className="text-xs text-warning">не последняя: сохранение ляжет новой версией поверх последней</p>
               )}
-              <p className="text-xs text-muted-foreground">Shift+A и Shift+D — листать историю; A и D — соседние карточки</p>
+              <p className="text-xs text-muted-foreground">Q и E — листать историю; A и D — соседние карточки</p>
             </Section>
           )}
 

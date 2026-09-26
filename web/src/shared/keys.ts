@@ -17,8 +17,9 @@ export function historyKey(e: KeyboardEvent): 'undo' | 'redo' | null {
 
 /**
  * Что просит сочетание клавиш у версий референса (US-0490): Ctrl+S — сохранить,
- * Ctrl+Shift+S — сохранить как, A и D — соседняя карточка витрины (US-0600),
- * Shift+A и Shift+D — история назад и вперёд.
+ * Ctrl+Shift+S — сохранить как, A и D — соседняя карточка витрины, Q и E —
+ * история назад и вперёд (US-0630): все четыре под левой рукой и без
+ * модификатора — Shift ради истории владелец отверг.
  *
  * Тоже по физической клавише: A и D в русской раскладке — «ф» и «в». Буквы
  * без модификаторов — только вне полей ввода: набирая «Дед Мороз», историю не
@@ -31,10 +32,11 @@ export function versionKey(
     if (e.code === 'KeyS') return e.shiftKey ? 'save-as' : 'save'
     return null
   }
-  if (e.altKey) return null
-  // Карточки листают чаще, чем историю, — им клавиша без модификатора.
-  if (e.code === 'KeyA') return e.shiftKey ? 'older' : 'prev-card'
-  if (e.code === 'KeyD') return e.shiftKey ? 'newer' : 'next-card'
+  if (e.altKey || e.shiftKey) return null
+  if (e.code === 'KeyA') return 'prev-card'
+  if (e.code === 'KeyD') return 'next-card'
+  if (e.code === 'KeyQ') return 'older'
+  if (e.code === 'KeyE') return 'newer'
   return null
 }
 

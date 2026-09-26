@@ -342,7 +342,7 @@ export function Showcase() {
   })
 
   /** Стрелки ходят по карточкам: вверх-вниз — в столбце, вбок — на столбец;
-   *  пробел выделяет; Alt со стрелками — переставить (US-0601). */
+   *  пробел выделяет. */
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
     const all = [...(grid.current?.querySelectorAll<HTMLButtonElement>('[data-card]') ?? [])]
     const at = all.indexOf(document.activeElement as HTMLButtonElement)
@@ -358,17 +358,8 @@ export function Showcase() {
     const by: Record<string, number> = { ArrowDown: 1, ArrowUp: -1, ArrowRight: ROWS, ArrowLeft: -ROWS }
     if (!(e.key in by)) return
     e.preventDefault()
-    if (e.altKey) {
-      // Переставить: пробел уже выделяет (US-0501), поэтому «взять и
-      // поставить» с клавиатуры — одним нажатием Alt со стрелкой.
-      const id = Number((document.activeElement as HTMLElement).dataset.cardId)
-      if (!id || found.ids !== null) return
-      setSortOwn(true)
-      const { visible, ids } = carried(id)
-      void saveOrder(moveTo(fullOwn(), visible, ids, placeOf(visible, ids) + by[e.key]), ids)
-      requestAnimationFrame(() => grid.current?.querySelector<HTMLElement>(`[data-card-id="${id}"]`)?.focus())
-      return
-    }
+    // Переставлять карточки с клавиатуры нельзя (владелец 26.09): порядок
+    // меняется только мышью. Alt со стрелками — просто стрелки.
     const next = all[Math.min(all.length - 1, Math.max(0, at + by[e.key]))]
     next.focus()
     next.scrollIntoView({ block: 'nearest', inline: 'nearest' })
@@ -381,7 +372,7 @@ export function Showcase() {
         description={
           found.ids === null
             ? sortOwn
-              ? 'мой порядок: зажмите карточку или возьмите за ⠿; Alt со стрелками — с клавиатуры; Ctrl+Z — вернуть'
+              ? 'мой порядок: зажмите карточку или возьмите за ⠿ и перетащите; Ctrl+Z — вернуть'
               : 'последние сохранённые первыми'
             : `по запросу «${query.trim()}» — ${shown?.length ?? 0}`
         }

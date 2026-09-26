@@ -70,11 +70,12 @@ describe('клавиши версий', () => {
     expect(versionKey(k('KeyS', { metaKey: true }))).toBe('save')
   })
 
-  it('A и D — карточки, Shift+A и Shift+D — история, с Ctrl — ничего', () => {
+  it('A и D — карточки, Q и E — история, с модификатором — ничего', () => {
     expect(versionKey(k('KeyA'))).toBe('prev-card')
     expect(versionKey(k('KeyD'))).toBe('next-card')
-    expect(versionKey(k('KeyA', { shiftKey: true }))).toBe('older')
-    expect(versionKey(k('KeyD', { shiftKey: true }))).toBe('newer')
+    expect(versionKey(k('KeyQ'))).toBe('older')
+    expect(versionKey(k('KeyE'))).toBe('newer')
+    expect(versionKey(k('KeyA', { shiftKey: true }))).toBeNull()
     expect(versionKey(k('KeyD', { ctrlKey: true }))).toBeNull()
   })
 })

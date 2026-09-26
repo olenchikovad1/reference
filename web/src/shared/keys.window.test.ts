@@ -9,11 +9,11 @@ const k = (code: string, key = '', extra: Partial<KeyboardEventInit> = {}) =>
   ({ code, key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...extra }) as KeyboardEvent
 
 describe('клавиши окна', () => {
-  it('в русской раскладке: A и D — соседняя карточка, с Shift — история, 1/2/3 — виды', () => {
+  it('в русской раскладке: A и D — соседняя карточка, Q и E — история, 1/2/3 — виды', () => {
     expect(windowKey(k('KeyA', 'ф'), false)).toEqual({ kind: 'card', back: true })
     expect(windowKey(k('KeyD', 'в'), false)).toEqual({ kind: 'card', back: false })
-    expect(windowKey(k('KeyA', 'Ф', { shiftKey: true }), false)).toEqual({ kind: 'older' })
-    expect(windowKey(k('KeyD', 'В', { shiftKey: true }), false)).toEqual({ kind: 'newer' })
+    expect(windowKey(k('KeyQ', 'й'), false)).toEqual({ kind: 'older' })
+    expect(windowKey(k('KeyE', 'у'), false)).toEqual({ kind: 'newer' })
     expect(windowKey(k('Digit2', '2'), false)).toEqual({ kind: 'view', index: 1 })
   })
 
