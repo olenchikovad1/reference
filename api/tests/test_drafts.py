@@ -98,3 +98,17 @@ async def test_auto_version_says_before_what_and_takes_the_draft(client) -> None
     opened = (await client.get(f"/reference/api/references/{ref}")).json()
     assert [v["auto_reason"] for v in opened["versions"]] == [None, None, "перед выгрузкой листа"]
     assert opened["draft"] is None
+
+
+async def test_own_order_is_personal_and_whole(client) -> None:
+    """US-0601: свой порядок витрины — у смотрящего; повтор и чужой номер — отказ."""
+    a, _ = await saved(client)
+    b, _ = await saved(client)
+    assert (await client.put("/reference/api/references/order", json={"ids": [a, b]})).status_code == 204
+    cards = {c["id"]: c for c in (await client.get("/reference/api/references")).json()}
+    assert (cards[a]["my_position"], cards[b]["my_position"]) == (0, 1)
+    assert (await client.put("/reference/api/references/order", json={"ids": [b, a]})).status_code == 204
+    cards = {c["id"]: c for c in (await client.get("/reference/api/references")).json()}
+    assert (cards[b]["my_position"], cards[a]["my_position"]) == (0, 1)
+    assert (await client.put("/reference/api/references/order", json={"ids": [a, a]})).status_code == 422
+    assert (await client.put("/reference/api/references/order", json={"ids": [a, 99999]})).status_code == 422

@@ -9,13 +9,15 @@
 
 import { EmptyState, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { type KeyboardEvent, memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { type KeyboardEvent, memo, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
 import { warmGarments } from '../candidates/GarmentCanvas'
 import { frameUrl, productQuery } from '../shared/api/products'
 import { DropFilterBar } from '../candidates/DropFilter'
+import { useFlip } from '../candidates/useFlip'
+import { moveTo, ownOrder, placeOf, preview } from '../shared/order'
 import { passes, useDropFilter } from '../shared/filters'
 import { useCan } from '../shared/api/platform'
 
@@ -23,8 +25,20 @@ import { assetUrl } from '../shared/api/assets'
 import { ORDER_KEY, prefetchCard } from '../shared/cardCache'
 import { fetchPalette, toCss } from '../shared/api/colours'
 import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
-import { copyReference, eraseForever, findReferences, listReferences, moveToDrop, trashReference, type Card } from '../shared/api/references'
+import {
+  copyReference,
+  eraseForever,
+  findReferences,
+  listReferences,
+  moveToDrop,
+  setOrder,
+  trashReference,
+  type Card,
+} from '../shared/api/references'
 import { fetchDrops } from '../shared/api/drops'
+
+/** Где браузер помнит выбранный порядок витрины. */
+const SORT_KEY = 'reference.showcase.sort'
 
 /** Строк на витрине — ровно три, при любой высоте окна. */
 const ROWS = 3
@@ -63,6 +77,33 @@ export function Showcase() {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkReport, setBulkReport] = useState<string | null>(null)
   const drops = useQuery({ queryKey: ['drops'], queryFn: fetchDrops })
+  // Свой порядок (US-0601): «по дате» или «мой». Выбор помнит браузер —
+  // это удобство смотрящего, а не данные.
+  const [sortOwn, setSortOwn] = useState(() => {
+    try {
+      return localStorage.getItem(SORT_KEY) === 'own'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(SORT_KEY, sortOwn ? 'own' : 'date')
+    } catch {
+      // хранилище запрещено — выбор проживёт до перезагрузки
+    }
+  }, [sortOwn])
+  // Перенос мышью: какие карточки, на какое место среди видимых, видимые на
+  // момент начала. Во время переноса витрина показывает предварительный
+  // порядок — остальные раздвигаются, место видно заранее.
+  const [drag, setDrag] = useState<{ ids: number[]; at: number; visible: number[] } | null>(null)
+  const ghost = useRef<HTMLDivElement | null>(null)
+  // Щелчок, пришедший сразу после переноса, — не «открыть карточку».
+  const justDragged = useRef(false)
+  // Прежние порядки для Ctrl+Z: отмена — это тоже порядок целиком.
+  const undoOrders = useRef<number[][]>([])
+  const [announce, setAnnounce] = useState('')
+  const { ref: openRef } = useParams()
 
   function pick(id: number, e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) {
     const order = (shownRef.current ?? []).map((c) => c.id)
@@ -111,7 +152,7 @@ export function Showcase() {
 
   // В поиске — порядок совпадения (свой тег первым), без него — свежие первыми.
   const shownRef = useRef<Card[] | undefined>(undefined)
-  const shown = (
+  const filtered = (
     found.ids === null ? cards.data : found.ids.flatMap((id) => cards.data?.find((c) => c.id === id) ?? [])
   )?.filter((c) =>
     passes(
@@ -119,6 +160,11 @@ export function Showcase() {
       drop.filter,
     ),
   )
+  // В поиске — порядок совпадения всегда: там важнее, что нашлось первым.
+  const shown = filtered && found.ids === null && sortOwn ? ownOrder(filtered) : filtered
+  // Во время переноса — предварительный порядок: переносимые на месте курсора.
+  const display = shown && drag ? preview(shown, drag.ids, drag.at) : shown
+  useFlip(grid, (display ?? []).map((c) => c.id).join(','))
   const rowHeight = Math.max(120, (height.value - GAP * (ROWS - 1)) / ROWS)
 
   shownRef.current = shown
@@ -129,8 +175,174 @@ export function Showcase() {
     queries.setQueryData(ORDER_KEY, order ? order.split(',').map(Number) : [])
   }, [order, queries])
 
+  /** Свой порядок целиком — все карточки, не только видимые. */
+  const fullOwn = () => ownOrder(cards.data ?? []).map((c) => c.id)
+
+  /** Положить новый порядок: сразу на экран, потом на сервер; не вышло —
+   *  вернуть прежний и сказать. */
+  async function saveOrder(next: number[], moved: number[], remember = true) {
+    const prev = fullOwn()
+    if (next.join(',') === prev.join(',')) return
+    if (remember) undoOrders.current.push(prev)
+    const put = (order: number[]) => {
+      const pos = new Map(order.map((id, i) => [id, i]))
+      queries.setQueryData<Card[]>(['references'], (cs) => cs?.map((c) => ({ ...c, my_position: pos.get(c.id) ?? null })))
+    }
+    put(next)
+    setAnnounce(
+      moved.length
+        ? `№${moved.join(', №')} — на месте ${next.indexOf(moved[0]) + 1} из ${next.length}`
+        : 'порядок возвращён',
+    )
+    try {
+      await setOrder(next)
+    } catch (e) {
+      put(prev)
+      setActionError(`Порядок не сохранился: ${e instanceof Error ? e.message : String(e)} — повторите.`)
+    }
+  }
+
+  /** Видимые в своём порядке и что переносим: выделенные, если взяли одну из
+   *  них, иначе одну. */
+  function carried(id: number): { visible: number[]; ids: number[] } {
+    const visible = ownOrder(filtered ?? []).map((c) => c.id)
+    return { visible, ids: selected.has(id) ? visible.filter((v) => selected.has(v)) : [id] }
+  }
+
+  /** Взять карточку мышью: за ручку сразу, долгим нажатием — через 0,35 с. */
+  function startDrag(id: number, x: number, y: number) {
+    if (found.ids !== null) {
+      setAnnounce('В поиске порядок не меняется — сбросьте поиск.')
+      return
+    }
+    setSortOwn(true)
+    const { visible, ids } = carried(id)
+    const rest = visible.filter((v) => !ids.includes(v))
+    let at = placeOf(visible, ids)
+    setDrag({ ids, at, visible })
+    const place = (px: number, py: number) => {
+      if (ghost.current) ghost.current.style.transform = `translate(${px + 14}px, ${py + 14}px)`
+    }
+    place(x, y)
+    const move = (ev: PointerEvent) => {
+      place(ev.clientX, ev.clientY)
+      const box = grid.current?.getBoundingClientRect()
+      // У края витрина едет сама: карточки дальше экрана тоже достижимы.
+      if (box && grid.current) {
+        if (ev.clientX < box.left + 48) grid.current.scrollLeft -= 16
+        else if (ev.clientX > box.right - 48) grid.current.scrollLeft += 16
+      }
+      for (const el of grid.current?.querySelectorAll<HTMLElement>('[data-flip]') ?? []) {
+        const cid = Number(el.dataset.flip)
+        if (ids.includes(cid)) continue
+        const r = el.getBoundingClientRect()
+        if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) continue
+        // Столбцы по три: соседи по порядку — сверху и снизу. Верхняя
+        // половина — перед карточкой, нижняя — после.
+        const next = rest.indexOf(cid) + (ev.clientY > r.top + r.height / 2 ? 1 : 0)
+        if (next !== at) {
+          at = next
+          setDrag({ ids, at, visible })
+        }
+        break
+      }
+    }
+    const stop = (commit: boolean) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('keydown', key)
+      setDrag(null)
+      justDragged.current = true
+      setTimeout(() => (justDragged.current = false), 0)
+      if (commit) void saveOrder(moveTo(fullOwn(), visible, ids, at), ids)
+    }
+    const up = () => stop(true)
+    const key = (ev: globalThis.KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        ev.preventDefault()
+        stop(false)
+        setAnnounce('перенос отменён')
+      }
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('keydown', key)
+  }
+
+  /** Долгое нажатие на карточку — взять её; сдвинул раньше — это не перенос. */
+  function pressStart(id: number, e: ReactPointerEvent) {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return
+    const x0 = e.clientX
+    const y0 = e.clientY
+    const cancel = () => {
+      clearTimeout(timer)
+      window.removeEventListener('pointermove', early)
+      window.removeEventListener('pointerup', cancel)
+    }
+    const early = (ev: PointerEvent) => {
+      if (Math.hypot(ev.clientX - x0, ev.clientY - y0) > 6) cancel()
+    }
+    const timer = setTimeout(() => {
+      cancel()
+      startDrag(id, x0, y0)
+    }, 350)
+    window.addEventListener('pointermove', early)
+    window.addEventListener('pointerup', cancel)
+  }
+
+  /** Ручка ⠿: потянул дальше 4 точек — перенос, просто щёлкнул — меню. */
+  function gripStart(id: number, e: ReactPointerEvent) {
+    const x0 = e.clientX
+    const y0 = e.clientY
+    const done = () => {
+      window.removeEventListener('pointermove', go)
+      window.removeEventListener('pointerup', done)
+    }
+    const go = (ev: PointerEvent) => {
+      if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return
+      done()
+      startDrag(id, ev.clientX, ev.clientY)
+    }
+    window.addEventListener('pointermove', go)
+    window.addEventListener('pointerup', done)
+  }
+
+  /** Меню «переместить»: в начало, в конец, перед №… — по всему порядку. */
+  function moveMenu(id: number, to: 'start' | 'end' | number) {
+    const full = fullOwn()
+    const ids = selected.has(id) ? full.filter((v) => selected.has(v)) : [id]
+    const rest = full.filter((v) => !ids.includes(v))
+    const at = to === 'start' ? 0 : to === 'end' ? rest.length : rest.indexOf(to)
+    if (at < 0) {
+      setAnnounce(`Карточки №${to} на витрине нет.`)
+      return
+    }
+    setSortOwn(true)
+    void saveOrder(moveTo(full, full, ids, at), ids)
+  }
+
+  // Карточки мемоизированы и держат обработчики прошлой отрисовки; свежие
+  // функции — здесь, иначе перенос брал бы устаревшее выделение и фильтр.
+  const live = useRef({ gripStart, pressStart, moveMenu })
+  live.current = { gripStart, pressStart, moveMenu }
+
+  // Ctrl+Z на витрине — вернуть прежний порядок. Открыто окно — отмена его.
+  useEffect(() => {
+    const onUndo = (e: globalThis.KeyboardEvent) => {
+      if (openRef !== undefined || !(e.ctrlKey || e.metaKey) || e.code !== 'KeyZ' || e.shiftKey) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      const prev = undoOrders.current.pop()
+      if (!prev) return
+      e.preventDefault()
+      void saveOrder(prev, [], false)
+    }
+    window.addEventListener('keydown', onUndo)
+    return () => window.removeEventListener('keydown', onUndo)
+  })
+
   /** Стрелки ходят по карточкам: вверх-вниз — в столбце, вбок — на столбец;
-   *  пробел выделяет. */
+   *  пробел выделяет; Alt со стрелками — переставить (US-0601). */
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
     const all = [...(grid.current?.querySelectorAll<HTMLButtonElement>('[data-card]') ?? [])]
     const at = all.indexOf(document.activeElement as HTMLButtonElement)
@@ -146,6 +358,17 @@ export function Showcase() {
     const by: Record<string, number> = { ArrowDown: 1, ArrowUp: -1, ArrowRight: ROWS, ArrowLeft: -ROWS }
     if (!(e.key in by)) return
     e.preventDefault()
+    if (e.altKey) {
+      // Переставить: пробел уже выделяет (US-0501), поэтому «взять и
+      // поставить» с клавиатуры — одним нажатием Alt со стрелкой.
+      const id = Number((document.activeElement as HTMLElement).dataset.cardId)
+      if (!id || found.ids !== null) return
+      setSortOwn(true)
+      const { visible, ids } = carried(id)
+      void saveOrder(moveTo(fullOwn(), visible, ids, placeOf(visible, ids) + by[e.key]), ids)
+      requestAnimationFrame(() => grid.current?.querySelector<HTMLElement>(`[data-card-id="${id}"]`)?.focus())
+      return
+    }
     const next = all[Math.min(all.length - 1, Math.max(0, at + by[e.key]))]
     next.focus()
     next.scrollIntoView({ block: 'nearest', inline: 'nearest' })
@@ -157,7 +380,9 @@ export function Showcase() {
         title="Референсы"
         description={
           found.ids === null
-            ? 'последние сохранённые первыми'
+            ? sortOwn
+              ? 'мой порядок: зажмите карточку или возьмите за ⠿; Alt со стрелками — с клавиатуры; Ctrl+Z — вернуть'
+              : 'последние сохранённые первыми'
             : `по запросу «${query.trim()}» — ${shown?.length ?? 0}`
         }
         actions={
@@ -180,6 +405,26 @@ export function Showcase() {
         }
       />
       <DropFilterBar {...drop} />
+      <div className="mb-2 flex items-center gap-1 text-xs" role="group" aria-label="порядок карточек">
+        <span className="text-muted-foreground">порядок:</span>
+        <button className={buttonClass({ tone: sortOwn ? 'neutral' : 'accent', variant: sortOwn ? 'outline' : 'soft', small: true })} aria-pressed={!sortOwn} onClick={() => setSortOwn(false)}>
+          по дате
+        </button>
+        <button className={buttonClass({ tone: sortOwn ? 'accent' : 'neutral', variant: sortOwn ? 'soft' : 'outline', small: true })} aria-pressed={sortOwn} onClick={() => setSortOwn(true)}>
+          мой
+        </button>
+      </div>
+      <div aria-live="polite" className="sr-only">
+        {announce}
+      </div>
+      <div
+        ref={ghost}
+        aria-hidden
+        className="pf-card pointer-events-none fixed left-0 top-0 z-50 border border-primary bg-background px-2 py-1 text-xs shadow-lg"
+        style={{ display: drag ? 'block' : 'none' }}
+      >
+        {drag && `№${drag.ids.join(', №')}`}
+      </div>
       {selected.size > 0 && (
         <div className="pf-card mb-2 flex flex-wrap items-center gap-2 border border-line p-2 text-sm" role="region" aria-label="действия над выделенным">
           <strong>выделено {selected.size}</strong>
@@ -272,11 +517,19 @@ export function Showcase() {
             <span className="text-sm">новый референс</span>
           </button>
           {cards.isPending && <p className="text-sm text-muted-foreground">Загружаю референсы…</p>}
-          {shown?.map((c) => (
+          {display?.map((c) => (
             <ShowcaseCard
               key={c.id}
               card={c}
-              onOpen={(e) => (e.ctrlKey || e.metaKey || e.shiftKey ? pick(c.id, e) : navigate(`/references/${c.id}`))}
+              dragging={drag?.ids.includes(c.id) ?? false}
+              onGrip={found.ids === null ? (e) => live.current.gripStart(c.id, e) : undefined}
+              onPress={found.ids === null ? (e) => live.current.pressStart(c.id, e) : undefined}
+              onMoveTo={found.ids === null ? (to) => live.current.moveMenu(c.id, to) : undefined}
+              onOpen={(e) => {
+                if (justDragged.current) return
+                if (e.ctrlKey || e.metaKey || e.shiftKey) pick(c.id, e)
+                else navigate(`/references/${c.id}`)
+              }}
               onHover={() => prefetchCard(queries, c.id)}
               selected={selected.has(c.id)}
               reasons={found.ids === null ? undefined : found.why.get(c.id)}
@@ -418,16 +671,23 @@ const ShowcaseCard = memo(
   (a, b) =>
     a.card === b.card &&
     a.selected === b.selected &&
+    a.dragging === b.dragging &&
+    !a.onGrip === !b.onGrip &&
     a.reasons === b.reasons &&
     !a.onCopy === !b.onCopy &&
     !a.onTrash === !b.onTrash &&
     !a.onErase === !b.onErase,
+  // Обработчики не сравниваются: они зовут свежие функции через ref (live).
 )
 
 function ShowcaseCardView({
   card,
   onOpen,
   onHover,
+  dragging,
+  onGrip,
+  onPress,
+  onMoveTo,
   onCopy,
   onTrash,
   onErase,
@@ -442,6 +702,14 @@ function ShowcaseCardView({
   onOpen: (e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => void
   /** Мышь над карточкой — карточку готовят заранее (US-0600). */
   onHover?: () => void
+  /** Её сейчас переносят: на её месте — пустое место с чертой (US-0601). */
+  dragging?: boolean
+  /** Взяли за ручку ⠿ — перенос сразу. */
+  onGrip?: (e: ReactPointerEvent) => void
+  /** Нажали на карточку — долгое нажатие станет переносом. */
+  onPress?: (e: ReactPointerEvent) => void
+  /** Меню «переместить». */
+  onMoveTo?: (to: 'start' | 'end' | number) => void
   onCopy?: () => void
   onTrash?: () => void
   onErase?: () => void
@@ -449,13 +717,18 @@ function ShowcaseCardView({
   const front = card.views.front
   const back = card.views.back
   const corner = buttonClass({ tone: 'neutral', variant: 'outline', small: true })
+  const [menu, setMenu] = useState(false)
+  const [before, setBefore] = useState('')
   return (
-    <div className="group relative flex min-h-0 flex-col">
+    <div data-flip={card.id} className={`group relative flex min-h-0 flex-col ${dragging ? 'opacity-40' : ''}`}>
+      {/* Куда встанет — видно заранее: черта над местом переносимой. */}
+      {dragging && <div aria-hidden className="absolute -top-2 left-0 right-0 z-10 h-1 rounded bg-primary" />}
     <button
       data-card
       data-card-id={card.id}
       aria-pressed={selected}
       onClick={(e) => onOpen(e)}
+      onPointerDown={onPress}
       onPointerEnter={onHover}
       onFocus={onHover}
       className={`pf-card flex min-h-0 flex-1 flex-col overflow-hidden border text-left ${selected ? 'border-primary ring-2 ring-primary' : 'border-line'}`}
@@ -501,6 +774,55 @@ function ShowcaseCardView({
         ))}
       </div>
     </button>
+      {onGrip && (
+        <button
+          className={`${corner} absolute right-1 top-1 cursor-grab opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100`}
+          style={{ touchAction: 'none' }}
+          onPointerDown={(e) => {
+            e.preventDefault()
+            onGrip(e)
+          }}
+          onClick={() => {
+            // Щелчок после переноса мышью — не просьба о меню.
+            if (!dragging) setMenu((m) => !m)
+          }}
+          title="Тяните, чтобы переставить; щелчок — меню «переместить»"
+          aria-label={`переместить №${card.id}`}
+          aria-expanded={menu}
+        >
+          ⠿
+        </button>
+      )}
+      {menu && onMoveTo && (
+        <div className="pf-card absolute right-1 top-9 z-20 flex w-40 flex-col gap-1 border border-line bg-background p-2 text-xs shadow">
+          <button className={corner} onClick={() => (onMoveTo('start'), setMenu(false))}>
+            в начало
+          </button>
+          <button className={corner} onClick={() => (onMoveTo('end'), setMenu(false))}>
+            в конец
+          </button>
+          <form
+            className="flex gap-1"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (Number(before)) onMoveTo(Number(before))
+              setMenu(false)
+            }}
+          >
+            <input
+              className="w-16 rounded border border-line px-1"
+              inputMode="numeric"
+              placeholder="перед №"
+              aria-label="поставить перед карточкой номер"
+              value={before}
+              onChange={(e) => setBefore(e.target.value)}
+            />
+            <button className={corner} type="submit">
+              ок
+            </button>
+          </form>
+        </div>
+      )}
       {(onCopy || onTrash || onErase) && (
         <div className="absolute left-1 top-1 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           {onCopy && (

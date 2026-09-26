@@ -104,6 +104,14 @@ class CardOut(Saver):
     my_draft: bool = False
     #: У кого ещё — имена: «у Иванова есть несохранённое».
     others_drafts: list[str] = []
+    #: Место в личном порядке смотрящего (US-0601); пусто — не расставлена.
+    my_position: int | None = None
+
+
+class OrderIn(BaseModel):
+    """Личный порядок витрины целиком — номера карточек от начала."""
+
+    ids: list[int] = Field(max_length=1000)
 
 
 class DraftIn(BaseModel):

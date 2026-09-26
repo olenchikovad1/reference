@@ -535,3 +535,24 @@ async def drop_draft(db: AsyncSession, reference_id: int | None, author_id: str)
 
 async def drafters(db: AsyncSession, reference_ids: list[int]) -> dict[int, list[str]]:
     return await repo.drafters(db, reference_ids)
+
+
+class BadOrder(ValueError):
+    """Порядок, который нельзя положить: повторы или чужие номера."""
+
+
+async def positions(db: AsyncSession, author_id: str, reference_ids: list[int]) -> dict[int, int]:
+    return await repo.positions(db, author_id, reference_ids)
+
+
+async def set_order(db: AsyncSession, author_id: str, reference_ids: list[int]) -> None:
+    """Личный порядок витрины (US-0601). Повтор номера — отказ: карточка на
+    двух местах сразу значит, что порядок собран с ошибкой, и молча выбрать
+    одно из мест — спрятать эту ошибку."""
+    if len(set(reference_ids)) != len(reference_ids):
+        raise BadOrder("карточка в порядке дважды")
+    known = await repo.alive_ids(db, reference_ids)
+    missing = [i for i in reference_ids if i not in known]
+    if missing:
+        raise BadOrder(f"таких карточек на витрине нет: {', '.join(map(str, missing))}")
+    await repo.set_order(db, author_id, reference_ids)

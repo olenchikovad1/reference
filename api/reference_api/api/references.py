@@ -10,6 +10,7 @@ from reference_api.schemas.references import (
     CardOut,
     DraftIn,
     DraftOut,
+    OrderIn,
     TrashedOut,
     FoundReferenceOut,
     HiddenTagIn,
@@ -175,6 +176,7 @@ async def latest(request: Request, db: AsyncSession = Depends(session)) -> list[
 
 async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[CardOut]:
     drafting = await service.drafters(db, [c.id for c, _ in rows])
+    placed = await service.positions(db, viewer, [c.id for c, _ in rows]) if viewer else {}
     names = await people.names_of(
         db, [v.author_id for _, v in rows if v.author_id] + [a for authors in drafting.values() for a in authors]
     )
@@ -192,6 +194,7 @@ async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[Card
             audience=cm.audience if cm else None, category=cm.category if cm else None,
             my_draft=viewer in drafting.get(c.id, []),
             others_drafts=[names.get(a, a) for a in drafting.get(c.id, []) if a != viewer],
+            my_position=placed.get(c.id),
         ))
     return out
 
@@ -289,6 +292,16 @@ def _drafter(request: Request) -> str:
         # Черновик — чей-то; без субъекта записать его некому.
         raise HTTPException(403, "черновик пишется от имени человека — войдите")
     return author
+
+
+@router.put("/order", status_code=204, dependencies=[requires("references", Action.VIEW)])
+async def set_order(body: OrderIn, request: Request, db: AsyncSession = Depends(session)) -> None:
+    """Личный порядок витрины (US-0601). Право — просмотр, а не запись:
+    раскладка своей витрины не меняет ни одного референса."""
+    try:
+        await service.set_order(db, _drafter(request), body.ids)
+    except service.BadOrder as refusal:
+        raise HTTPException(422, str(refusal)) from None
 
 
 @router.get("/drafts/new", response_model=DraftOut | None)

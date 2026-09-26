@@ -243,3 +243,21 @@ class ReferenceDraft(Base):
         ),
         Index("uq_reference_drafts_new_author", "author_id", unique=True, postgresql_where=reference_id.is_(None)),
     )
+
+
+class ReferencePosition(Base):
+    """Место карточки в личном порядке витрины (US-0601): «как мне удобно».
+
+    Свой у каждого человека и на сами референсы не влияет — это взгляд, а не
+    данные карточки. Карточки без строки стоят в начале, свежие первыми: новая
+    работа не прячется в хвосте чужой раскладки.
+    """
+
+    __tablename__ = "reference_positions"
+
+    author_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    reference_id: Mapped[int] = mapped_column(
+        ForeignKey("reference_cards.id", ondelete="CASCADE"), primary_key=True
+    )
+    #: Чем меньше, тем ближе к началу витрины.
+    position: Mapped[int] = mapped_column(Integer, nullable=False)

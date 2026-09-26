@@ -99,6 +99,8 @@ export interface Card extends Saver {
   my_draft?: boolean
   /** У кого ещё — имена. */
   others_drafts?: string[]
+  /** Место в своём порядке витрины (US-0601); нет — не расставлена. */
+  my_position?: number | null
 }
 
 /** Черновик между версиями (US-0598): работа целиком и версия, поверх
@@ -268,3 +270,13 @@ export async function dropDraft(id: number | null): Promise<void> {
 
 /** Черновик новой работы смотрящего; null — его нет. */
 export const newDraft = () => get<Draft | null>('references/drafts/new', 'Черновик')
+
+/** Свой порядок витрины целиком — номера карточек от начала (US-0601). */
+export async function setOrder(ids: number[]): Promise<void> {
+  const r = await fetch(`${BASE}references/order`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
+  if (!r.ok) throw await refusal(r, 'Порядок')
+}

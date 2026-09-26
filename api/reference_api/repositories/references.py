@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from reference_api.models.references import (
     Reference,
     ReferenceDraft,
+    ReferencePosition,
     ReferenceHiddenTag,
     ReferenceTag,
     ReferenceText,
@@ -407,3 +408,33 @@ async def drafters(db: AsyncSession, card_ids: list[int]) -> dict[int, list[str]
     for card_id, author in rows:
         out.setdefault(card_id, []).append(author)
     return out
+
+
+async def positions(db: AsyncSession, author_id: str, card_ids: list[int]) -> dict[int, int]:
+    """Места карточек в личном порядке человека."""
+    if not card_ids:
+        return {}
+    rows = await db.execute(
+        select(ReferencePosition.reference_id, ReferencePosition.position).where(
+            ReferencePosition.author_id == author_id, ReferencePosition.reference_id.in_(card_ids)
+        )
+    )
+    return {card_id: position for card_id, position in rows}
+
+
+async def set_order(db: AsyncSession, author_id: str, card_ids: list[int]) -> None:
+    """Порядок целиком, одной транзакцией: перенос — это новый порядок, а
+    отмена — прежний; оба приходят списком, и половина не ляжет никогда."""
+    await db.execute(delete(ReferencePosition).where(ReferencePosition.author_id == author_id))
+    db.add_all(
+        ReferencePosition(author_id=author_id, reference_id=card_id, position=i)
+        for i, card_id in enumerate(card_ids)
+    )
+    await db.commit()
+
+
+async def alive_ids(db: AsyncSession, card_ids: list[int]) -> set[int]:
+    """Какие из номеров — живые карточки, не в корзине."""
+    if not card_ids:
+        return set()
+    return set((await db.execute(select(Reference.id).where(Reference.id.in_(card_ids), ALIVE))).scalars())
