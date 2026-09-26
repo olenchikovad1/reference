@@ -99,3 +99,40 @@ export function windowKey(e: KeyboardEvent, typing: boolean): WindowAction | nul
   if (version === 'prev-card' || version === 'next-card') return { kind: 'card', back: version === 'prev-card' }
   return null
 }
+
+/** Строка подсказки «?» (US-0631). `probe` — нажатия, которыми тест сверяет
+ *  строку с разбором клавиш: подсказка не должна обещать того, чего нет. */
+export interface KeyRow {
+  readonly keys: string
+  readonly what: string
+  readonly probe?: readonly { code: string; key?: string; shiftKey?: boolean; ctrlKey?: boolean }[]
+}
+
+/** Клавиши рабочего окна — всё, что оно умеет без мыши. */
+export const WINDOW_KEYS: readonly KeyRow[] = [
+  { keys: 'Tab / Shift+Tab', what: 'по объектам на холсте', probe: [{ code: 'Tab' }, { code: 'Tab', shiftKey: true }] },
+  { keys: '← → ↑ ↓', what: 'сдвинуть выбранное на 1 мм, с Shift — на 1 см', probe: [{ code: 'ArrowLeft' }, { code: 'ArrowUp', shiftKey: true }] },
+  { keys: 'Delete', what: 'убрать выбранное', probe: [{ code: 'Delete' }] },
+  { keys: '+ / −', what: 'приблизить, отдалить', probe: [{ code: 'Equal' }, { code: 'Minus' }] },
+  { keys: '0', what: 'вписать изделие в окно', probe: [{ code: 'Digit0' }] },
+  { keys: '1 / 2 / 3', what: 'перед, спина, бок', probe: [{ code: 'Digit1' }, { code: 'Digit2' }, { code: 'Digit3' }] },
+  { keys: 'A / D', what: 'соседняя карточка витрины', probe: [{ code: 'KeyA' }, { code: 'KeyD' }] },
+  { keys: 'Q / E', what: 'история: раньше, позже', probe: [{ code: 'KeyQ' }, { code: 'KeyE' }] },
+  { keys: 'Ctrl+Z / Ctrl+Y', what: 'отменить, вернуть', probe: [{ code: 'KeyZ', ctrlKey: true }, { code: 'KeyY', ctrlKey: true }] },
+  { keys: 'Ctrl+S', what: 'сохранить новой версией', probe: [{ code: 'KeyS', ctrlKey: true }] },
+  { keys: 'Ctrl+Shift+S', what: 'сохранить как новый референс', probe: [{ code: 'KeyS', ctrlKey: true, shiftKey: true }] },
+  { keys: 'Esc', what: 'снять выбор; второй раз — закрыть окно', probe: [{ code: 'Escape', key: 'Escape' }] },
+  { keys: '?', what: 'эта подсказка', probe: [{ code: 'Slash', key: '?', shiftKey: true }] },
+]
+
+/** Клавиши витрины. Перенос карточек — только мышью (владелец 26.09). */
+export const SHOWCASE_KEYS: readonly KeyRow[] = [
+  { keys: '← → ↑ ↓', what: 'по карточкам: вверх-вниз — в столбце, вбок — на соседний столбец' },
+  { keys: 'Enter', what: 'открыть карточку' },
+  { keys: 'Пробел', what: 'выделить карточку' },
+  { keys: 'Ctrl + щелчок', what: 'добавить к выделенным или убрать' },
+  { keys: 'Shift + щелчок', what: 'выделить от прошлой выделенной до этой' },
+  { keys: 'зажать карточку или ⠿', what: 'перетащить мышью на другое место — порядок «мой»' },
+  { keys: 'Ctrl+Z', what: 'вернуть прежний порядок' },
+  { keys: '?', what: 'эта подсказка' },
+]

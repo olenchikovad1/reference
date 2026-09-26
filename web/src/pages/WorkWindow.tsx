@@ -1,4 +1,4 @@
-import { Modal, TextInput, buttonClass } from '@platform/ui'
+import { TextInput, buttonClass } from '@platform/ui'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -63,7 +63,8 @@ import {
 import { CODE } from '../app/shell'
 import { useCan } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
-import { windowKey } from '../shared/keys'
+import { WINDOW_KEYS, windowKey } from '../shared/keys'
+import { HotkeysHint } from '../candidates/HotkeysHint'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
 import { useFrameAlpha } from '../shared/frameAlpha'
 import { declaredInks, FULL, mainColoursOf, type CropShape, type Ink } from '../shared/look'
@@ -120,22 +121,6 @@ type Overlay = 'none' | 'anchors' | 'zones' | 'all'
 /** Находка проверки со стороной, на которой она. */
 type SideFinding = Finding & { side: string }
 
-/** Шпаргалка «?»: всё, что окно умеет без мыши. */
-const KEYS: [string, string][] = [
-  ['Tab / Shift+Tab', 'по объектам на холсте'],
-  ['← → ↑ ↓', 'сдвинуть выбранное на 1 мм, с Shift — на 1 см'],
-  ['Delete', 'убрать выбранное'],
-  ['+ / −', 'приблизить, отдалить'],
-  ['0', 'вписать изделие в окно'],
-  ['1 / 2 / 3', 'перед, спина, бок'],
-  ['A / D', 'соседняя карточка витрины'],
-  ['Q / E', 'история: раньше, позже'],
-  ['Ctrl+Z / Ctrl+Y', 'отменить, вернуть'],
-  ['Ctrl+S', 'сохранить новой версией'],
-  ['Ctrl+Shift+S', 'сохранить как новый референс'],
-  ['Esc', 'снять выбор; второй раз — закрыть окно'],
-  ['?', 'эта шпаргалка'],
-]
 
 export function WorkWindow() {
   // Номер референса из адреса окна; new — новый (цветомодель — в ?colour_model);
@@ -1158,7 +1143,7 @@ export function WorkWindow() {
         return
       case 'help':
         e.preventDefault()
-        setHelpOpen(true)
+        setHelpOpen((o) => !o)
         return
       case 'escape':
         e.preventDefault()
@@ -1679,9 +1664,8 @@ export function WorkWindow() {
       >
         сравнить цвета
       </button>
-      <button className={small()} onClick={() => setHelpOpen(true)} title="Клавиши окна — ?" aria-label="шпаргалка по клавишам">
-        ?
-      </button>
+      {/* Клавишу «?» разбирает само окно — подсказка её не слушает. */}
+      <HotkeysHint rows={WINDOW_KEYS} label="Клавиши окна" open={helpOpen} onOpenChange={setHelpOpen} listen={false} />
       <button className={small()} onClick={close} title="Закрыть — Esc, когда ничего не выбрано" aria-label="закрыть окно">
         ×
       </button>
@@ -2668,21 +2652,6 @@ export function WorkWindow() {
         </aside>
       </WorkFrame>
 
-      <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Клавиши окна">
-        <table className="w-full text-sm">
-          <tbody>
-            {KEYS.map(([keys, what]) => (
-              <tr key={keys}>
-                <td className="whitespace-nowrap py-0.5 pr-4 font-mono text-xs">{keys}</td>
-                <td className="py-0.5">{what}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Клавиши работают в любой раскладке; в полях ввода буквы и цифры печатаются.
-        </p>
-      </Modal>
 
     </>
   )

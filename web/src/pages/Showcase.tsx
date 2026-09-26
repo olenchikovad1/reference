@@ -17,6 +17,8 @@ import { warmGarments } from '../candidates/GarmentCanvas'
 import { frameUrl, productQuery } from '../shared/api/products'
 import { DropFilterBar } from '../candidates/DropFilter'
 import { useFlip } from '../candidates/useFlip'
+import { HotkeysHint } from '../candidates/HotkeysHint'
+import { SHOWCASE_KEYS } from '../shared/keys'
 import { moveTo, ownOrder, placeOf, preview } from '../shared/order'
 import { passes, useDropFilter } from '../shared/filters'
 import { useCan } from '../shared/api/platform'
@@ -392,6 +394,8 @@ export function Showcase() {
             <Link to="/references/trash" className={buttonClass({ tone: 'neutral', variant: 'outline' })}>
               корзина
             </Link>
+            {/* Открыто окно — «?» его: у окна своя подсказка. */}
+            <HotkeysHint rows={SHOWCASE_KEYS} label="Клавиши витрины" listen={openRef === undefined} />
           </div>
         }
       />
