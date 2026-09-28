@@ -35,6 +35,7 @@ import {
   moveToDrop,
   setOrder,
   trashReference,
+  STATUS_NAMES,
   type Card,
 } from '../shared/api/references'
 import { fetchDrops } from '../shared/api/drops'
@@ -760,6 +761,9 @@ function ShowcaseCardView({
           {card.drops[0] ?? 'без дропа'} · {new Date(card.saved_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
           {card.forked_from_id && ` · от №${card.forked_from_id}`}
         </div>
+        {card.status && card.status !== 'draft' && (
+          <div className="truncate text-xs font-semibold">{STATUS_NAMES[card.status]}</div>
+        )}
         {card.executor && (
           <div className={`truncate ${card.executor.access ? 'text-muted-foreground' : 'text-warning'}`}>
             {card.executor.name}

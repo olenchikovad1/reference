@@ -19,6 +19,7 @@ import { Showcase } from '../pages/Showcase'
 import { Trash } from '../pages/Trash'
 import { NotFound, Placeholder } from '../pages/Placeholder'
 import { Dictionaries } from '../pages/Dictionaries'
+import { Tasks } from '../pages/Tasks'
 import { fetchPeople, installStandAs, ROLE_NAMES, setStandAs, standAs } from '../shared/api/people'
 import { useProfile, useSections, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { BASE, SECTIONS, type SectionPlace } from './sections'
@@ -41,6 +42,8 @@ const PAGES: Record<string, () => ReactElement> = {
   drops: () => <Drops />,
   products: () => <Products />,
   dictionaries: () => <Dictionaries />,
+  review: () => <Tasks />,
+  'review/my-tasks': () => <Tasks />,
 }
 
 /** Страница раздела, а поверх неё — окно (`overlay`), если оно открыто по

@@ -42,7 +42,7 @@ import {
   UploadRefused,
 } from '../shared/api/assets'
 import type { ReferenceMatch } from '../shared/api/references'
-import { passTo, type ReferenceFull as FullCard } from '../shared/api/references'
+import { passTo, step, STATUS_NAMES, STEP_NAMES, type ReferenceFull as FullCard, type Step } from '../shared/api/references'
 import { fetchPeople } from '../shared/api/people'
 import {
   dropDraft as discardDraft,
@@ -2518,6 +2518,18 @@ export function WorkWindow() {
           </Section>
 
           {current && (
+            <ReviewSection
+              card={current}
+              onChanged={(card) => {
+                setCurrent(card)
+                queries.setQueryData(cardKey(card.id), card)
+                void queries.invalidateQueries({ queryKey: ['references'] })
+                void queries.invalidateQueries({ queryKey: ['tasks'] })
+              }}
+            />
+          )}
+
+          {current && (
             <ExecutorSection
               card={current}
               onChanged={(card) => {
@@ -3084,6 +3096,74 @@ function ExecutorSection({ card, onChanged }: { card: FullCard; onChanged: (card
           <div key={i} className="text-muted-foreground">
             {when(t.at)}: {t.from_name ?? 'без исполнителя'} → {t.to_name}
             {t.by_name && t.by_name !== t.from_name ? ` · передал ${t.by_name}` : ''}
+          </div>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+/** Согласование (US-0510): статус, шаги, доступные смотрящему, и путь по
+ *  версиям. Вернуть можно только с замечанием. */
+function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: FullCard) => void }) {
+  const [comment, setComment] = useState('')
+  const [returning, setReturning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const status = card.status ?? 'draft'
+  const act = (what: Step) =>
+    void step(card.id, what, comment)
+      .then(() => openReference(card.id))
+      .then((fresh) => {
+        setComment('')
+        setReturning(false)
+        setError(null)
+        onChanged(fresh)
+      })
+      .catch((e: Error) => setError(e.message))
+  const when = (at: string) => new Date(at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return (
+    <Section title={`Согласование · ${STATUS_NAMES[status]}`}>
+      <div className="flex flex-col gap-1 text-xs">
+        <div className="flex flex-wrap gap-1">
+          {(card.can ?? []).map((what) =>
+            what === 'return' ? (
+              <button key={what} className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => setReturning((v) => !v)}>
+                {STEP_NAMES[what]}
+              </button>
+            ) : (
+              <button key={what} className={buttonClass({ tone: 'accent', variant: 'soft', small: true })} onClick={() => act(what)}>
+                {STEP_NAMES[what]}
+              </button>
+            ),
+          )}
+          {(card.can ?? []).length === 0 && <span className="text-muted-foreground">ваш шаг здесь сейчас не нужен</span>}
+        </div>
+        {returning && (
+          <div className="flex flex-col gap-1">
+            <TextInput
+              aria-label="замечание при возврате"
+              value={comment}
+              placeholder="что поправить — без замечания вернуть нельзя"
+              onChange={(e) => setComment(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Enter' && comment.trim()) act('return')
+              }}
+            />
+            <button
+              className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+              disabled={!comment.trim()}
+              onClick={() => act('return')}
+            >
+              вернуть с замечанием
+            </button>
+          </div>
+        )}
+        {error && <span className="text-destructive">{error}</span>}
+        {(card.status_events ?? []).map((e, i) => (
+          <div key={i} className="text-muted-foreground">
+            версия {e.number} · {when(e.at)} · {e.by_name ?? 'без входа'}: {STATUS_NAMES[e.to]}
+            {e.comment ? ` — «${e.comment}»` : ''}
           </div>
         ))}
       </div>

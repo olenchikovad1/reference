@@ -105,6 +105,62 @@ export interface Card extends Saver {
   executor?: Executor | null
   /** Смотрящий — исполнитель: фильтр «мои». */
   mine?: boolean
+  /** Статус согласования (US-0510). */
+  status?: Status
+}
+
+export type Status = 'draft' | 'review' | 'rework' | 'approved' | 'final'
+export type Step = 'submit' | 'return' | 'approve' | 'approve-final'
+
+export const STATUS_NAMES: Record<Status, string> = {
+  draft: 'черновик',
+  review: 'на согласовании',
+  rework: 'на доработке',
+  approved: 'согласован',
+  final: 'окончательно принят',
+}
+
+export const STEP_NAMES: Record<Step, string> = {
+  submit: 'отправить на согласование',
+  return: 'вернуть на доработку',
+  approve: 'принять',
+  'approve-final': 'принять окончательно',
+}
+
+/** Переход статуса: кто, когда, на какой версии, с каким замечанием. */
+export interface StatusEvent {
+  from: Status
+  to: Status
+  number: number
+  by_id: string | null
+  by_name: string | null
+  comment: string | null
+  at: string
+}
+
+/** Сделать шаг согласования; ответ — путь переходов. */
+export async function step(referenceId: number, what: Step, comment?: string): Promise<StatusEvent[]> {
+  const r = await fetch(`${BASE}references/${referenceId}/${what}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: what === 'return' ? JSON.stringify({ comment: comment ?? '' }) : undefined,
+  })
+  if (!r.ok) throw await refusal(r, 'шаг не сделан')
+  return r.json()
+}
+
+export interface Task {
+  id: number
+  name: string
+  status: Status
+  reason: string
+}
+
+/** «Мои задачи»: что ждёт меня и что я отдал (US-0510). */
+export async function fetchTasks(): Promise<{ mine: Task[]; waiting: Task[] }> {
+  const r = await fetch(`${BASE}tasks`)
+  if (!r.ok) throw new Error(`задачи не пришли: ${r.status}`)
+  return r.json()
 }
 
 /** Исполнитель референса: ФИО и есть ли у него доступ. */
@@ -221,6 +277,10 @@ export interface ReferenceFull {
   draft?: Draft | null
   executor?: Executor | null
   transfers?: Transfer[]
+  status?: Status
+  status_events?: StatusEvent[]
+  /** Шаги, доступные смотрящему сейчас. */
+  can?: Step[]
 }
 
 /** Свои теги референса и скрытые у него автотеги (US-0493). */

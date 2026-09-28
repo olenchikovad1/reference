@@ -103,6 +103,39 @@ class TransferOut(BaseModel):
     at: datetime
 
 
+class StatusEventOut(BaseModel):
+    """Переход статуса: кто, когда, на какой версии, с каким замечанием."""
+
+    from_: str = Field(alias="from")
+    to: str
+    number: int
+    by_id: str | None
+    by_name: str | None
+    comment: str | None
+    at: datetime
+
+    model_config = {"populate_by_name": True}
+
+
+class CommentIn(BaseModel):
+    comment: str = ""
+
+
+class TaskOut(BaseModel):
+    id: int
+    name: str
+    status: str
+    #: Почему это моя задача: «на согласовании», «вернули: «…»».
+    reason: str
+
+
+class TasksOut(BaseModel):
+    #: Что ждёт именно меня.
+    mine: list[TaskOut]
+    #: Что я отдал и жду от других.
+    waiting: list[TaskOut]
+
+
 class ExecutorIn(BaseModel):
     subject_id: str
 
@@ -120,6 +153,8 @@ class CardOut(Saver):
     executor: ExecutorOut | None = None
     #: Смотрящий — исполнитель: фильтр «мои» на витрине.
     mine: bool = False
+    #: Статус согласования (US-0510).
+    status: str = "draft"
     #: Цвет изделия (код палитры) и дропы, где цветомодель выходит; пусто —
     #: референс сохранён без цветомодели.
     colour_code: str | None = None
@@ -223,6 +258,11 @@ class ReferenceOut(BaseModel):
     executor: ExecutorOut | None = None
     #: Передачи работы, по порядку (US-0509).
     transfers: list[TransferOut] = []
+    #: Статус согласования и путь переходов по версиям (US-0510).
+    status: str = "draft"
+    status_events: list["StatusEventOut"] = []
+    #: Какие переходы смотрящему доступны сейчас — кнопки окна.
+    can: list[str] = []
 
 
 class VersionOut(VersionMetaOut):

@@ -123,6 +123,9 @@ async def add_version(
     if author_id:
         await repo.drop_draft(db, reference_id, author_id)
     version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views, auto_reason)
+    from reference_api.services import review
+
+    await review.after_new_version(db, reference_id, version.number, author_id)
     return Saved(card.id, version.number, found)
 
 

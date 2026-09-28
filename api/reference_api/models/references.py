@@ -50,6 +50,10 @@ class Reference(Base):
     #: Исполнитель (US-0509) — id субъекта платформы: кто делает работу и кому
     #: прилетает доработка. По умолчанию создатель; меняют передачей.
     executor_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Статус согласования (US-0510): draft, review, rework, approved, final.
+    #: Только у карточки, не у слоя (запрет 9). Чей ход — вычисляется из него и
+    #: ролей, полем не хранится (И-8).
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", server_default="draft")
 
     versions: Mapped[list["ReferenceVersion"]] = relationship(
         back_populates="reference",
@@ -278,4 +282,23 @@ class ReferenceTransfer(Base):
     to_id: Mapped[str] = mapped_column(String(64), nullable=False)
     #: Кто передал; пусто — без входа.
     by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ReferenceStatusEvent(Base):
+    """Переход статуса (US-0510): кто, когда, из какого в какой, на какой
+    версии и с каким замечанием. Только дописывается — путь согласования
+    виден целиком."""
+
+    __tablename__ = "reference_status_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reference_id: Mapped[int] = mapped_column(ForeignKey("reference_cards.id", ondelete="CASCADE"), nullable=False)
+    from_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    to_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: Номер версии, на которой переход.
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Замечание при возврате; у остальных переходов — пусто.
+    comment: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

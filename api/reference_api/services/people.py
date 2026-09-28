@@ -63,11 +63,16 @@ STAND_SUBJECT_NAME = "стенд без входа"
 
 
 async def names_of(db: AsyncSession, ids: list[str]) -> dict[str, str]:
-    """Имена для показа «кто сделал» — в том числе тех, у кого доступ забрали."""
+    """Имена для показа «кто сделал» — в том числе тех, у кого доступ забрали.
+    ФИО из таблицы ролей (решение 0016) — поверх имени из платформы: в
+    работе людей называют по ФИО, а не по нику."""
     wanted = {i for i in ids if i}
     names = await repo.names(db, sorted(wanted - {STAND_SUBJECT_ID}))
     if STAND_SUBJECT_ID in wanted:
         names[STAND_SUBJECT_ID] = STAND_SUBJECT_NAME
+    for p in await repo.app_people(db):
+        if p.subject_id in wanted:
+            names[p.subject_id] = p.full_name
     return names
 
 

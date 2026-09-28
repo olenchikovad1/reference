@@ -14,6 +14,10 @@ from reference_api.schemas.references import (
     ExecutorOut,
     OrderIn,
     TransferOut,
+    StatusEventOut,
+    CommentIn,
+    TaskOut,
+    TasksOut,
     TrashedOut,
     FoundReferenceOut,
     HiddenTagIn,
@@ -29,7 +33,7 @@ from reference_api.schemas.references import (
     VersionMetaOut,
     VersionOut,
 )
-from reference_api.services import drops, people
+from reference_api.services import drops, people, review
 from reference_api.services import references as service
 
 router = APIRouter(prefix="/references", tags=["references"])
@@ -201,6 +205,7 @@ async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[Card
             my_position=placed.get(c.id),
             executor=_executor(executors.get(c.executor_id or "")),
             mine=viewer is not None and c.executor_id == viewer,
+            status=c.status,
         ))
     return out
 
@@ -376,7 +381,57 @@ async def open_card(reference_id: int, request: Request, db: AsyncSession = Depe
         draft=_draft(await service.draft(db, card.id, author)) if (author := _author(request)) else None,
         executor=_executor((await people.members_of(db, [card.executor_id])).get(card.executor_id or "")),
         transfers=await _transfers(db, card.id),
+        status=card.status,
+        status_events=await _status_events(db, card.id),
+        can=await review.can(db, card, _author(request)),
     )
+
+
+async def _status_events(db: AsyncSession, reference_id: int) -> list[StatusEventOut]:
+    rows = await review.events(db, reference_id)
+    who = await people.members_of(db, sorted({e.by_id for e in rows if e.by_id}))
+    return [StatusEventOut(from_=e.from_status, to=e.to_status, number=e.number, by_id=e.by_id,
+                           by_name=who[e.by_id].name if e.by_id in who else None, comment=e.comment, at=e.at)
+            for e in rows]
+
+
+async def _step(reference_id: int, action: str, request: Request, db: AsyncSession, comment: str | None = None) -> list[StatusEventOut]:
+    try:
+        await review.step(db, reference_id, action, _author(request), comment)
+    except review.NoSuchReference as e:
+        raise HTTPException(404, str(e)) from None
+    except review.WrongStatus as e:
+        raise HTTPException(409, str(e)) from None
+    except review.NotYourStep as e:
+        raise HTTPException(403, str(e)) from None
+    except review.NoComment as e:
+        raise HTTPException(422, str(e)) from None
+    return await _status_events(db, reference_id)
+
+
+@router.post("/{reference_id}/submit", response_model=list[StatusEventOut], dependencies=[requires("references", Action.WRITE)])
+async def submit(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
+    """Отправить на согласование — исполнитель (US-0510)."""
+    return await _step(reference_id, "submit", request, db)
+
+
+@router.post("/{reference_id}/return", response_model=list[StatusEventOut], dependencies=[requires("review", Action.WRITE)])
+async def return_(reference_id: int, body: CommentIn, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
+    """Вернуть на доработку — редактор, только с замечанием (US-0510)."""
+    return await _step(reference_id, "return", request, db, body.comment)
+
+
+@router.post("/{reference_id}/approve", response_model=list[StatusEventOut], dependencies=[requires("review", Action.WRITE)])
+async def approve(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
+    """Принять — редактор (US-0510)."""
+    return await _step(reference_id, "approve", request, db)
+
+
+@router.post("/{reference_id}/approve-final", response_model=list[StatusEventOut],
+             dependencies=[requires_function("review", "approve-final")])
+async def approve_final(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
+    """Окончательно принять — главный редактор (US-0510)."""
+    return await _step(reference_id, "approve-final", request, db)
 
 
 async def _transfers(db: AsyncSession, reference_id: int) -> list[TransferOut]:
