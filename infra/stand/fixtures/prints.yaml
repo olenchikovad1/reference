@@ -498,6 +498,13 @@ tag_set:
     license: CC BY 2.0
     author: "Mike Ball"
     sha256: f29bcaceac4f77bcc9e03bc86071f50a992b64b654f2157ad6834878e1beac53
+  # Не в эталоне тегов: картинка для показа предупреждения о чужом персонаже
+  # (US-0626) — Касанэ Тэто, персонаж UTAU. Взята после записи эталона.
+  - name: anime-kasane-teto.png
+    source: https://commons.wikimedia.org/wiki/File:Kasane_Teto_in_BIRDBRAIN.png
+    license: CC BY 3.0
+    author: "Jamie Paige"
+    sha256: aaeb22e0949a5b640c771d563d7ab9b45e3dd11615f099d8ab02e560e1be2cb4
 
 probes:
   - {name: setka-20cm.png, width_cm: 20, subject: контрольная сетка 20x20 см,

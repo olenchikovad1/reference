@@ -13,10 +13,16 @@
       "revision": "d15189d7028b43f1d3e65039190477f6af591c2a",
       "license": "MIT (исходная openai/clip-vit-base-patch32)",
       "compressed": "int8: выбор 23.09.2026, причина не записана — пересматривается в US-0627",
-      "memory_mb": 177, "memory_peak_mb": 215, "measured": "2026-09-28, RBB-0001, процессор, 0.8 с загрузка и прогон",
+      "memory_mb": 177,
+      "memory_peak_mb": 215,
+      "measured": "2026-09-28, RBB-0001, процессор, 0.8 с загрузка и прогон",
       "files": [
-        {"path": "models/clip-vit-base-patch32/vision_model_quantized.onnx", "source": "onnx/vision_model_quantized.onnx",
-         "size": 89117001, "sha256": "583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299"}
+        {
+          "path": "models/clip-vit-base-patch32/vision_model_quantized.onnx",
+          "source": "onnx/vision_model_quantized.onnx",
+          "size": 89117001,
+          "sha256": "583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299"
+        }
       ]
     },
     {
@@ -28,10 +34,18 @@
       "compressed": "int8",
       "memory_mb": null,
       "files": [
-        {"path": "models/clip-vit-base-patch32/text_model_quantized.onnx", "source": "onnx/text_model_quantized.onnx",
-         "size": 64504507, "sha256": "73baab855d406190da9faa498cfedf65f15cf309f4cc7385b7b032e6d08e5c3a"},
-        {"path": "models/clip-vit-base-patch32/tokenizer.json", "source": "tokenizer.json",
-         "size": 2224119, "sha256": "f7f3b7af117d467b58374797691a6438d3e6b9e9cef800dfd5dced7f697a90cd"}
+        {
+          "path": "models/clip-vit-base-patch32/text_model_quantized.onnx",
+          "source": "onnx/text_model_quantized.onnx",
+          "size": 64504507,
+          "sha256": "73baab855d406190da9faa498cfedf65f15cf309f4cc7385b7b032e6d08e5c3a"
+        },
+        {
+          "path": "models/clip-vit-base-patch32/tokenizer.json",
+          "source": "tokenizer.json",
+          "size": 2224119,
+          "sha256": "f7f3b7af117d467b58374797691a6438d3e6b9e9cef800dfd5dced7f697a90cd"
+        }
       ]
     },
     {
@@ -41,14 +55,28 @@
       "revision": "58edf8cada9e398793dca955574a48cbb7f18be2",
       "license": "Apache-2.0",
       "compressed": "quint8 avx2: выбор 24.09.2026, причина не записана — пересматривается в US-0627",
-      "memory_mb": 189, "memory_peak_mb": 256, "measured": "2026-09-28, RBB-0001, процессор, 1.1 с загрузка и прогон",
+      "memory_mb": 189,
+      "memory_peak_mb": 256,
+      "measured": "2026-09-28, RBB-0001, процессор, 1.1 с загрузка и прогон",
       "files": [
-        {"path": "models/clip-vit-b32-multilingual/model_quint8_avx2.onnx", "source": "onnx/model_quint8_avx2.onnx",
-         "size": 135377779, "sha256": "fbc8fbeaa5237d96bd1bf430057c70d34de8334a463e933a5faa305f6caeed9c"},
-        {"path": "models/clip-vit-b32-multilingual/dense.safetensors", "source": "2_Dense/model.safetensors",
-         "size": 1572984, "sha256": "d12568dc7300970a4d3dbb49068ad16cd89b99840b74b026f8e48071e9414f74"},
-        {"path": "models/clip-vit-b32-multilingual/tokenizer.json", "source": "tokenizer.json",
-         "size": 1961847, "sha256": "5b4e1a8171c81dfd666ae40265b9530c6e0b3d53923fe8ac493dcc84229adf81"}
+        {
+          "path": "models/clip-vit-b32-multilingual/model_quint8_avx2.onnx",
+          "source": "onnx/model_quint8_avx2.onnx",
+          "size": 135377779,
+          "sha256": "fbc8fbeaa5237d96bd1bf430057c70d34de8334a463e933a5faa305f6caeed9c"
+        },
+        {
+          "path": "models/clip-vit-b32-multilingual/dense.safetensors",
+          "source": "2_Dense/model.safetensors",
+          "size": 1572984,
+          "sha256": "d12568dc7300970a4d3dbb49068ad16cd89b99840b74b026f8e48071e9414f74"
+        },
+        {
+          "path": "models/clip-vit-b32-multilingual/tokenizer.json",
+          "source": "tokenizer.json",
+          "size": 1961847,
+          "sha256": "5b4e1a8171c81dfd666ae40265b9530c6e0b3d53923fe8ac493dcc84229adf81"
+        }
       ]
     },
     {
@@ -58,8 +86,36 @@
       "license": "открытая публикация ИРЯ РАН, условия на сайте не указаны",
       "memory_mb": null,
       "files": [
-        {"path": "dictionaries/freq2011.zip", "size": 493491, "sha256": "1ae2950966c34c52355e4d5cb91f1cc715f1d50774af71cdf4319223130c7c6e"}
+        {
+          "path": "dictionaries/freq2011.zip",
+          "size": 493491,
+          "sha256": "1ae2950966c34c52355e4d5cb91f1cc715f1d50774af71cdf4319223130c7c6e"
+        }
       ]
+    },
+    {
+      "id": "wd-swinv2-tagger-v3",
+      "purpose": "Аниме-разметчик (US-0626): теги внешности, одежды, позы, фона — по-русски через anime_tags_ru.yaml; персонажи — предупреждение о правах; рейтинг — «взрослое». Выбран сравнением трёх кандидатов (tag_benchmark.yaml, measured_anime).",
+      "repo": "SmilingWolf/wd-swinv2-tagger-v3",
+      "revision": "627aef95638667ddcaa3ac8ae625e88ea5b02f51",
+      "license": "Apache-2.0",
+      "compressed": "нет, float32",
+      "memory_mb": 811,
+      "files": [
+        {
+          "path": "models/wd-swinv2-tagger-v3/model.onnx",
+          "source": "model.onnx",
+          "size": 467460978,
+          "sha256": "e6774bff34d43bd49f75a47db4ef217dce701c9847b546523eb85ff6dbba1db1"
+        },
+        {
+          "path": "models/wd-swinv2-tagger-v3/selected_tags.csv",
+          "source": "selected_tags.csv",
+          "size": 308468,
+          "sha256": "298633d94d0031d2081c0893f29c82eab7f0df00b08483ba8f29d1e979441217"
+        }
+      ],
+      "measured": "2026-09-28, RBB-0001, процессор, 1.9 с на картинку"
     }
   ]
 }

@@ -211,6 +211,11 @@ export function Prints() {
                       </span>
                     ))}
                 </div>
+                {item.warnings.map((w) => (
+                  <div key={w.kind + w.text} className="rounded bg-tone-amber-soft px-1.5 text-xs" role="note">
+                    {w.text}
+                  </div>
+                ))}
                 {item.kind && (
                   <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground">
                     <div className="w-40">

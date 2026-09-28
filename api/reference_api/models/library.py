@@ -110,6 +110,29 @@ class AssetKind(Base):
     )
 
 
+class AssetWarning(Base):
+    """Предупреждение о картинке от разметчика (US-0626): чужой персонаж —
+    проверить лицензию; взрослое — принты детские. Картинку не прячет:
+    решает человек. Хранится с моделью, как тег: сменилась модель —
+    предупреждения пересчитываются вместе с тегами."""
+
+    __tablename__ = "asset_warnings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    #: character — похоже на чужого персонажа; adult — взрослое.
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: Что увидела модель: имя персонажа, причины взрослого.
+    code: Mapped[str] = mapped_column(String(256), nullable=False)
+    text: Mapped[str] = mapped_column(String(512), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("kind in ('character','adult')", name="ck_asset_warnings_kind"),
+        Index("ix_asset_warnings_digest", "digest"),
+    )
+
+
 class AssetName(Base):
     """Что за изделие на картинке: «Т-72», «ИС-3».
 

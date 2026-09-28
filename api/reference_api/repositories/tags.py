@@ -3,7 +3,7 @@
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from reference_api.models.library import AssetEmbedding, AssetTag
+from reference_api.models.library import AssetEmbedding, AssetTag, AssetWarning
 
 
 async def replace(db: AsyncSession, digest: str, model: str, rows: list[tuple[str, str, float]]) -> None:
@@ -36,3 +36,23 @@ async def vector_of(db: AsyncSession, digest: str, model: str) -> list[float] | 
     )
     v = row.scalar_one_or_none()
     return None if v is None else list(v)
+
+
+async def replace_warnings(db: AsyncSession, digest: str, model: str, rows: list[tuple[str, str, str]]) -> None:
+    """Предупреждения модели заменяются целиком, как теги: снятое не должно
+    висеть навсегда."""
+    await db.execute(delete(AssetWarning).where(AssetWarning.digest == digest, AssetWarning.model == model))
+    db.add_all(AssetWarning(digest=digest, model=model, kind=k, code=c, text=t) for k, c, t in rows)
+    await db.commit()
+
+
+async def warnings_of(db: AsyncSession, digests: list[str], models: list[str]) -> dict[str, list[AssetWarning]]:
+    rows = await db.execute(
+        select(AssetWarning)
+        .where(AssetWarning.digest.in_(digests), AssetWarning.model.in_(models))
+        .order_by(AssetWarning.id)
+    )
+    out: dict[str, list[AssetWarning]] = {d: [] for d in digests}
+    for w in rows.scalars():
+        out[w.digest].append(w)
+    return out

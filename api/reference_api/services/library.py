@@ -5,7 +5,7 @@
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,8 @@ from reference_api.models.references import Reference
 from reference_api.repositories import library as repo
 from reference_api.repositories import references as cards
 from reference_api.repositories import tags as tag_repo
-from reference_api.services import embeddings, kinds, words
+from reference_api.services import anime, embeddings, kinds, words
+from reference_api.services import assets as files
 from reference_api.services import names as naming
 from reference_api.services import tags as tagging
 
@@ -133,23 +134,59 @@ class TagView:
 
 
 @dataclass(frozen=True)
+class Warning:
+    #: character — похоже на чужого персонажа; adult — взрослое.
+    kind: str
+    text: str
+
+
+@dataclass(frozen=True)
 class FileTags:
     digest: str
     tags: list[TagView]
     #: Что за изделие на картинке — из каталога или от той же картинки; нет —
     #: никто не знает.
     name: naming.Name | None
+    warnings: list[Warning] = field(default_factory=list)
 
 
-async def put_tags(db: AsyncSession, digest: str, vector) -> list:
-    """Теги картинки по её вектору — записать и вернуть. Модель второй раз не
-    нужна: картинку уже посмотрели, когда считали вектор.
+#: Тег вида у аниме-разметки: «аниме» ставит маршрутизатор, а не модель, но
+#: ищут по нему так же, как по тегу.
+_KIND_TAG = ("kind:anime", "аниме", 1.0)
 
-    Модель разметки выбирает вид (kinds.taggers). Пока модель одна — общая;
-    аниме-модель встаёт сюда же в US-0626, по тому же ответу маршрутизатора."""
-    found = tagging.tag(vector)
-    await tag_repo.replace(db, digest, tagging.model_name(), [(x.code, x.name, x.score) for x in found])
-    return found
+
+def _adult_text(reasons: list[str]) -> str:
+    return "похоже на взрослое или откровенное — принты детские, проверьте"
+
+
+async def _run_taggers(db: AsyncSession, digest: str, vector, verdict: kinds.Verdict) -> None:
+    """Разметка теми моделями, которые назвал маршрутизатор; модели, которых
+    он не назвал, свои теги у файла теряют — иначе поправка вида рукой
+    оставила бы старые теги рядом с новыми."""
+    use = kinds.taggers(verdict)
+    general = tagging.tag(vector) if "general" in use else []
+    await tag_repo.replace(db, digest, tagging.model_name(), [(x.code, x.name, x.score) for x in general])
+    rows: list[tuple[str, str, float]] = []
+    warnings: list[tuple[str, str, str]] = []
+    if "anime" in use:
+        content = files.original(digest)
+        if content is not None:
+            r = anime.tag(content)
+            rows = [_KIND_TAG, *[(t.code, t.name, t.score) for t in r.tags]]
+            warnings = [("character", c, anime.character_warning(c)) for c, _ in r.characters]
+            if r.adult:
+                warnings.append(("adult", ",".join(r.adult), _adult_text(r.adult)))
+    await tag_repo.replace(db, digest, anime.model_name(), rows)
+    await tag_repo.replace_warnings(db, digest, anime.model_name(), warnings)
+
+
+async def put_tags(db: AsyncSession, digest: str, vector) -> "FileTags":
+    """Теги картинки — записать и вернуть. Модель выбирает вид (kinds): аниме
+    — аниме-разметчик по самой картинке, остальное — общая модель по уже
+    посчитанному вектору; неуверенная — обе."""
+    verdict = (await kinds_of_files(db, [digest])).get(digest) or await put_kind(db, digest, vector)
+    await _run_taggers(db, digest, vector, verdict)
+    return (await tags_of_files(db, [digest]))[0]
 
 
 def _verdict(row) -> kinds.Verdict:
@@ -189,35 +226,40 @@ async def set_kind(db: AsyncSession, digest: str, kind: str, by: str | None) -> 
         return None
     await kinds_of_files(db, [digest])
     row = await repo.set_manual_kind(db, digest, kind, by)
-    await put_tags(db, digest, vec)
+    await _run_taggers(db, digest, vec, _verdict(row))
     return _verdict(row), (await tags_of_files(db, [digest]))[0]
 
 
 async def tags_of_files(db: AsyncSession, digests: list[str]) -> list[FileTags]:
-    """Теги файлов. Нет — досчитываются по уже лежащему вектору; нет и вектора
-    — у файла пусто, пока его не узнавали.
+    """Теги файлов — от тех моделей, что назвал маршрутизатор. Нет ни одного
+    тега — досчитываются по уже лежащему вектору; нет и вектора — у файла
+    пусто, пока его не узнавали.
 
-    Хранятся веса, а не пометка «сильный»: граница считается из весов тем же
-    правилом, что при постановке, и смена доли не требует пересчёта тегов.
+    Хранятся веса, а не пометка «сильный»: у общей модели граница считается
+    из весов тем же правилом, что при постановке; у аниме-модели хранятся
+    только теги выше её порога, и сильные — первые десять.
     """
-    model = tagging.model_name()
-    stored = await tag_repo.of(db, digests, model)
+    general_model, anime_model = tagging.model_name(), anime.model_name()
+    general = await tag_repo.of(db, digests, general_model)
+    anime_rows = await tag_repo.of(db, digests, anime_model)
+    warned = await tag_repo.warnings_of(db, digests, [anime_model])
     named = await naming.stored(db, digests)
+    verdicts = await kinds_of_files(db, digests)
     out: list[FileTags] = []
     for d in digests:
-        rows = stored.get(d, [])
-        if not rows:
+        if not general.get(d) and not anime_rows.get(d) and d in verdicts:
             vec = await tag_repo.vector_of(db, d, embeddings.MODEL_NAME)
             if vec is not None:
-                found = tagging.tag(vec)
-                await tag_repo.replace(db, d, model, [(x.code, x.name, x.score) for x in found])
-                rows = (await tag_repo.of(db, [d], model))[d]
-        strong = tagging.strong_of([r.score for r in rows])
-        out.append(FileTags(
-            d,
-            [TagView(r.code, r.name, r.score, st, r.model) for r, st in zip(rows, strong, strict=True)],
-            named.get(d),
-        ))
+                await _run_taggers(db, d, vec, verdicts[d])
+                general[d] = (await tag_repo.of(db, [d], general_model))[d]
+                anime_rows[d] = (await tag_repo.of(db, [d], anime_model))[d]
+                warned[d] = (await tag_repo.warnings_of(db, [d], [anime_model]))[d]
+        a = anime_rows.get(d, [])
+        g = general.get(d, [])
+        views = [TagView(r.code, r.name, r.score, i < tagging.STRONG_MAX, r.model) for i, r in enumerate(a)]
+        views += [TagView(r.code, r.name, r.score, st, r.model)
+                  for r, st in zip(g, tagging.strong_of([r.score for r in g]), strict=True)]
+        out.append(FileTags(d, views, named.get(d), [Warning(w.kind, w.text) for w in warned.get(d, [])]))
     return out
 
 

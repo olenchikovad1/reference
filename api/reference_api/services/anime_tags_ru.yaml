@@ -1,0 +1,380 @@
+# Перевод словаря аниме-разметчика (WD-tagger v3, Danbooru) на русский
+# (план 087, US-0626). Английский тег человеку не показывается никогда:
+# дизайнер ищет по-русски, и «blue_hair» в плашке — это шум.
+#
+# Переведены общие теги с частотой от 100 000 в Danbooru — 335 из 8106;
+# непереведённый тег не показывается и считается замером отдельно. Растёт по
+# мере надобности: строка на тег.
+#
+# Запись: «показ | слова» — показ идёт в плашку, слова в словарной форме —
+# в поиск и в сверку с эталоном (tag_benchmark.yaml). Без «|» слова — это
+# слова самого показа. Особые значения:
+#   ~  тег не показывается: служебный (solo, rating-подобные) или про тело;
+#   !  не показывается и даёт предупреждение «взрослое»: принты детские.
+# Запрет категорий (tags_excluded.yaml) применяется к словам перевода.
+
+1girl: девушка | девушка, девочка
+solo: "~"
+long_hair: длинные волосы | волосы
+breasts: "~"
+looking_at_viewer: "~"
+blush: румянец
+smile: улыбка
+open_mouth: открытый рот | рот
+short_hair: короткие волосы | волосы
+blue_eyes: голубые глаза | глаз
+simple_background: простой фон | фон
+shirt: рубашка
+large_breasts: "~"
+skirt: юбка
+blonde_hair: светлые волосы | волосы, блондинка
+multiple_girls: несколько девушек | девушка
+brown_hair: каштановые волосы | волосы
+black_hair: чёрные волосы | волосы
+long_sleeves: длинные рукава | рукав
+hair_ornament: украшение в волосах | украшение, волосы
+white_background: белый фон | фон
+1boy: парень | парень, мальчик
+gloves: перчатки | перчатка
+red_eyes: красные глаза | глаз
+dress: платье
+thighhighs: чулки | чулок
+hat: шляпа
+holding: "~"
+bow: бант
+navel: "~"
+animal_ears: звериные уши | ухо
+ribbon: лента
+hair_between_eyes: "~"
+closed_mouth: "~"
+2girls: две девушки | девушка
+cleavage: "!"
+jewelry: украшения | украшение
+bare_shoulders: "~"
+very_long_hair: очень длинные волосы | волосы
+sitting: сидит | сидеть
+twintails: два хвостика | хвостик, причёска
+medium_breasts: "~"
+brown_eyes: карие глаза | глаз
+standing: стоит | стоять
+nipples: "!"
+green_eyes: зелёные глаза | глаз
+underwear: "!"
+blue_hair: голубые волосы | волосы
+jacket: куртка
+school_uniform: школьная форма | форма, школа
+purple_eyes: фиолетовые глаза | глаз
+collarbone: "~"
+tail: хвост
+white_shirt: белая рубашка | рубашка
+full_body: во весь рост | рост
+upper_body: по пояс | портрет
+panties: "!"
+closed_eyes: закрытые глаза | глаз
+yellow_eyes: жёлтые глаза | глаз
+swimsuit: купальник
+white_hair: белые волосы | волосы
+pink_hair: розовые волосы | волосы
+monochrome: монохром | монохром
+grey_hair: седые волосы | волосы
+ahoge: хохолок | волосы
+braid: коса
+hair_ribbon: лента в волосах | лента, волосы
+purple_hair: фиолетовые волосы | волосы
+male_focus: "~"
+ponytail: хвост на голове | хвост, причёска
+ass: "!"
+flower: цветок
+weapon: оружие
+multicolored_hair: разноцветные волосы | волосы
+short_sleeves: короткие рукава | рукав
+sidelocks: "~"
+comic: комикс
+hetero: "!"
+heart: сердце
+thighs: "~"
+":d": широкая улыбка | улыбка
+hair_bow: бант в волосах | бант, волосы
+pantyhose: колготки
+outdoors: на улице | улица
+cowboy_shot: "~"
+earrings: серьги | серьга
+greyscale: чёрно-белое | рисунок
+bikini: "!"
+sweat: пот
+red_hair: рыжие волосы | волосы
+nude: "!"
+pleated_skirt: юбка в складку | юбка
+small_breasts: "~"
+frills: оборки | оборка
+hairband: ободок
+parted_lips: "~"
+censored: "!"
+boots: сапоги | сапог
+open_clothes: "~"
+lying: лежит | лежать
+horns: рога | рог
+teeth: зубы | зуб
+multiple_boys: несколько парней | парень
+wings: крылья | крыло
+food: еда
+necktie: галстук
+one_eye_closed: подмигивает | глаз
+detached_sleeves: отдельные рукава | рукав
+sky: небо
+penis: "!"
+shorts: шорты
+green_hair: зелёные волосы | волосы
+japanese_clothes: японская одежда | одежда, кимоно
+shoes: обувь | туфля
+sleeveless: без рукавов | рукав
+black_gloves: чёрные перчатки | перчатка
+alternate_costume: "~"
+collared_shirt: рубашка с воротником | рубашка
+choker: чокер | ошейник
+barefoot: босиком | нога
+pussy: "!"
+socks: носки | носок
+glasses: очки
+tongue: язык
+pointy_ears: острые уши | ухо, эльф
+solo_focus: "~"
+pants: брюки
+day: день
+virtual_youtuber: "~"
+serafuku: матроска | форма, школа
+indoors: в помещении | комната
+puffy_sleeves: пышные рукава | рукав
+artist_name: "~"
+hairclip: заколка
+medium_hair: волосы до плеч | волосы
+belt: ремень
+fang: клык
+black_thighhighs: чёрные чулки | чулок
+hand_up: "~"
+elbow_gloves: длинные перчатки | перчатка
+midriff: "~"
+looking_back: смотрит назад | взгляд
+cloud: облако
+white_gloves: белые перчатки | перчатка
+signature: "~"
+bowtie: галстук-бабочка | галстук, бабочка
+hood: капюшон
+sword: меч
+black_skirt: чёрная юбка | юбка
+dark_skin: смуглая кожа | кожа
+2boys: два парня | парень
+cat_ears: кошачьи уши | ухо, кошка
+blunt_bangs: прямая чёлка | чёлка, волосы
+hair_flower: цветок в волосах | цветок, волосы
+official_alternate_costume: "~"
+tongue_out: высунутый язык | язык
+sex: "!"
+spread_legs: "!"
+pink_eyes: розовые глаза | глаз
+sailor_collar: матросский воротник | воротник, форма
+wide_sleeves: широкие рукава | рукав
+miniskirt: мини-юбка | юбка
+stomach: "~"
+fingerless_gloves: перчатки без пальцев | перчатка
+cum: "!"
+on_back: "~"
+tears: слёзы | слеза
+black_footwear: чёрная обувь | туфля
+grey_background: серый фон | фон
+3girls: три девушки | девушка
+armpits: "~"
+twitter_username: "~"
+kimono: кимоно
+white_dress: белое платье | платье
+holding_weapon: с оружием | оружие
+off_shoulder: "~"
+necklace: ожерелье | украшение
+striped_clothes: полосатая одежда | полоска, одежда
+hair_bun: пучок | причёска
+nail_polish: лак на ногтях | ноготь
+from_behind: вид сзади | спина
+star_(symbol): звезда
+mole: родинка
+looking_at_another: "~"
+water: вода
+hair_over_one_eye: чёлка на глаз | чёлка, волосы
+bag: сумка
+rabbit_ears: заячьи уши | ухо, заяц
+chibi: чиби | чиби
+orange_hair: рыжие волосы | волосы
+blurry: размыто | фон
+grin: ухмылка | улыбка
+sweatdrop: капля пота | капля
+clothes_lift: "!"
+black_dress: чёрное платье | платье
+scarf: шарф
+cape: плащ
+white_thighhighs: белые чулки | чулок
+black_eyes: чёрные глаза | глаз
+two-tone_hair: двухцветные волосы | волосы
+english_text: надпись по-английски | надпись
+speech_bubble: облачко с репликой | реплика, комикс
+streaked_hair: пряди другого цвета | волосы
+bra: "!"
+yuri: "!"
+armor: доспехи | доспех
+huge_breasts: "!"
+vest: жилет
+open_jacket: расстёгнутая куртка | куртка
+halo: нимб
+from_side: вид сбоку | профиль
+apron: фартук
+mosaic_censoring: "!"
+feet: ступни | нога
+red_bow: красный бант | бант
+arm_up: рука вверх | рука
+white_panties: "!"
+leotard: "!"
+character_name: имя персонажа | надпись
+coat: пальто
+black_jacket: чёрная куртка | куртка
+vaginal: "!"
+high_heels: каблуки | каблук, туфля
+":o": удивление | удивление
+collar: ошейник
+arms_up: руки вверх | рука
+sweater: свитер
+bracelet: браслет
+blue_sky: голубое небо | небо
+flat_chest: "~"
+twin_braids: две косы | коса
+dated: "~"
+uniform: форма
+side_ponytail: хвост сбоку | хвост, причёска
+animal_ear_fluff: "~"
+red_ribbon: красная лента | лента
+crop_top: короткий топ | топ
+cup: чашка
+aqua_eyes: бирюзовые глаза | глаз
+dark-skinned_female: смуглая девушка | девушка
+black_shirt: чёрная рубашка | рубашка
+covered_nipples: "!"
+puffy_short_sleeves: пышные короткие рукава | рукав
+parted_bangs: чёлка на пробор | чёлка, волосы
+completely_nude: "!"
+blue_skirt: синяя юбка | юбка
+two_side_up: хвостики сбоку | хвостик, причёска
+fingernails: "~"
+black_pantyhose: чёрные колготки | колготки
+tree: дерево
+hands_up: руки вверх | рука
+looking_to_the_side: смотрит в сторону | взгляд
+v-shaped_eyebrows: нахмуренные брови | бровь
+grey_eyes: серые глаза | глаз
+orange_eyes: оранжевые глаза | глаз
+legs: "~"
+neckerchief: шейный платок | платок
+sleeves_past_wrists: длинные рукава | рукав
+sketch: набросок
+cat_tail: кошачий хвост | хвост, кошка
+groin: "!"
+symbol-shaped_pupils: зрачки-символы | глаз
+eyelashes: ресницы | ресница
+wet: мокрый | вода
+fur_trim: меховая отделка | мех
+see-through: "!"
+lips: губы | губа
+wrist_cuffs: манжеты | манжета
+hand_on_own_hip: рука на бедре | рука
+loli: "!"
+pillow: подушка
+head_tilt: наклон головы | голова
+gun: пистолет | оружие
+maid: горничная
+strapless: "~"
+zettai_ryouiki: "~"
+clothing_cutout: "~"
+black_headwear: чёрный головной убор | шапка
+plaid: клетка | клетка
+bar_censor: "!"
+torn_clothes: рваная одежда | одежда
+mole_under_eye: родинка под глазом | родинка
+fox_ears: лисьи уши | ухо, лиса
+toes: "~"
+multiple_views: несколько видов | вид
+one-piece_swimsuit: "!"
+book: книга
+sash: пояс
+maid_headdress: наколка горничной | горничная
+sleeveless_shirt: рубашка без рукавов | рубашка
+short_shorts: "~"
+bare_arms: "~"
+sleeveless_dress: платье без рукавов | платье
+feet_out_of_frame: "~"
+pubic_hair: "!"
+gradient_background: градиентный фон | фон
+ascot: шейный бант | бант
+shiny_skin: "~"
+v: знак мира | жест
+pokemon_(creature): покемон | покемон
+black_panties: "!"
+cosplay: косплей
+sparkle: блёстки | блеск
+no_humans: "~"
+fake_animal_ears: накладные уши | ухо
+muscular: мускулистый | мышца
+petals: лепестки | лепесток, цветок
+kneehighs: гольфы | гольф
+bare_legs: "~"
+window: окно
+uncensored: "!"
+thigh_strap: "~"
+black_bow: чёрный бант | бант
+single_braid: коса
+covered_navel: "~"
+hoodie: толстовка
+neck_ribbon: лента на шее | лента
+black_ribbon: чёрная лента | лента
+detached_collar: отдельный воротник | воротник
+gradient_hair: волосы с переходом цвета | волосы
+upper_teeth_only: "~"
+tattoo: татуировка
+dutch_angle: "~"
+black_choker: чёрный чокер | ошейник
+dress_shirt: рубашка
+buttons: пуговицы | пуговица
+double_bun: два пучка | причёска
+blurry_background: размытый фон | фон
+open_shirt: "~"
+profile: профиль
+sideboob: "!"
+kneeling: на коленях | колено
+makeup: макияж
+blood: кровь
+bell: колокольчик
+
+# Добавлено 28.09.2026 после первого замера кандидатов (US-0626): частые
+# понятия, которые модель ставила выше порога, а перевода не было. Числа
+# «до» и «после» добавки записаны раздельно (tag_benchmark.yaml,
+# measured_anime) — добавка подсмотрена на эталоне, и это видно.
+transparent_background: прозрачный фон | фон
+school_bag: школьная сумка | портфель, сумка
+briefcase: портфель
+holding_briefcase: с портфелем | портфель
+school_briefcase: школьный портфель | портфель
+holding_bag: с сумкой | сумка
+blazer: пиджак
+pointing: указывает пальцем | палец
+pointing_at_viewer: указывает на зрителя | палец
+cherry_blossoms: сакура | сакура, цветок
+flag: флаг
+duster: метёлка | метёлка, швабра
+green_skirt: зелёная юбка | юбка
+red_necktie: красный галстук | галстук
+red_neckerchief: красный платок | платок
+white_socks: белые носки | носок
+loafers: лоферы | туфля
+brown_footwear: коричневая обувь | туфля
+short_twintails: короткие хвостики | хвостик, причёска
+striped_thighhighs: полосатые чулки | чулок, полоска
+holding_sword: с мечом | меч
+heterochromia: разные глаза | глаз
+aqua_hair: бирюзовые волосы | волосы
+happy: радость | радость
+child: ребёнок

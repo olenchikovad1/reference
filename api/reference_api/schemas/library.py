@@ -43,6 +43,16 @@ class KindOut(BaseModel):
     manual: bool
 
 
+class WarningOut(BaseModel):
+    """Предупреждение разметчика (US-0626). Картинку не прячет — решает
+    человек."""
+
+    #: character — похоже на чужого персонажа; adult — взрослое. Незнакомое
+    #: клиент показывает как есть.
+    kind: str
+    text: str
+
+
 class KindIn(BaseModel):
     kind: Literal["anime", "illustration", "flat", "text", "photo"]
 
@@ -86,6 +96,7 @@ class RecognisedOut(BaseModel):
     #: Что за изделие на картинке. Нет — никто не знает; догадки не бывает.
     name: NameOut | None = None
     kind: KindOut | None = None
+    warnings: list[WarningOut] = []
     #: Забракована — эта картинка или та же в другом файле (US-0499).
     defect: "DefectOut | None" = None
 
@@ -145,6 +156,7 @@ class LibraryItemOut(BaseModel):
     tags: list[TagOut]
     name: NameOut | None = None
     kind: KindOut | None = None
+    warnings: list[WarningOut] = []
     #: «Где использован» — референсы с этой картинкой.
     references: list[FoundCardOut]
     drops: list[DropLinkOut] = []

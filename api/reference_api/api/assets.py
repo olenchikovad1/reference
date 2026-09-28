@@ -22,11 +22,11 @@ from reference_api.schemas.library import (
     NameOut,
     RecognisedOut,
     TagOut,
+    WarningOut,
 )
 from reference_api.services import assets as service
 from reference_api.services import kinds, library, people
 from reference_api.services import names as naming
-from reference_api.services import tags as tagging
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -131,8 +131,8 @@ async def recognise(
         seen, emb = await library.remember(db, digest, service.name_of(digest), content)
         # Теги — из того же вектора: картинку уже посмотрели, второй раз
         # модель не нужна.
-        found = await library.put_tags(db, digest, emb.vector)
         verdict = await library.put_kind(db, digest, emb.vector)
+        found = await library.put_tags(db, digest, emb.vector)
         named = await naming.name_of(db, digest, seen)
         # Забракованная — сразу видно: эта же или та же в другом файле (US-0499).
         defect = (await library.defect_of(db, [digest])).get(digest)
@@ -144,10 +144,8 @@ async def recognise(
                     MatchOut(digest=m.digest, name=m.name, similarity=m.similarity, level=m.level)
                     for m in seen
                 ],
-                tags=[
-                    TagOut(code=x.code, name=x.name, score=x.score, strong=x.strong, model=tagging.model_name())
-                    for x in found
-                ],
+                tags=[_tag_out(x) for x in found.tags],
+                warnings=[WarningOut(kind=w.kind, text=w.text) for w in found.warnings],
                 name=_name_out(named),
                 defect=_defect_out(defect, names),
                 kind=_kind_out(verdict),
@@ -231,6 +229,7 @@ async def catalogue(defects: bool = False, db: AsyncSession = Depends(session)) 
             categories=sorted(i.links.categories),
             defect=_defect_out(i.defect, names),
             kind=_kind_out(i.kind),
+            warnings=[WarningOut(kind=w.kind, text=w.text) for w in i.tags.warnings],
         )
         for i in items
     ]

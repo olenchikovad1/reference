@@ -91,6 +91,7 @@ export interface Recognised {
   /** Забракована — эта картинка или та же в другом файле (US-0499). */
   defect?: Defect | null
   kind?: Kind | null
+  warnings?: Warning[]
 }
 
 /** Брак картинки: почему, кто и когда. */
@@ -187,6 +188,12 @@ export async function searchAssets(q: string): Promise<Found[]> {
 }
 
 /** Картинка библиотеки на странице «Принты» (US-0495). */
+export interface Warning {
+  /** character — похоже на чужого персонажа; adult — взрослое. */
+  kind: string
+  text: string
+}
+
 /** Вид картинки — по нему выбирается модель разметки (US-0625). */
 export interface Kind {
   kind: string
@@ -231,6 +238,8 @@ export interface LibraryItem {
   defect: Defect | null
   /** Нет — файл ещё не узнавали. */
   kind: Kind | null
+  /** Чужой персонаж, взрослое (US-0626): картинку не прячут — решает человек. */
+  warnings: Warning[]
 }
 
 /** Связь с дропом: via пусто — назначен руками, номер — «через референс №…». */
