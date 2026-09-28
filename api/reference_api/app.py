@@ -21,7 +21,7 @@ from reference_api.config import settings
 from reference_api.schedulers import people as people_schedule
 from reference_api.schedulers import references as trash_schedule
 from reference_api.services import platform as publishing
-from reference_api.services import models
+from reference_api.services import models, retag
 from reference_api.services import people as people_service
 
 log = logging.getLogger("reference.platform")
@@ -41,6 +41,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Модели сверяются в фоне: сверка sha256 всего тома — около секунды, и
     # подъём ради неё не ждёт; нет модели — ошибка в журнале с командой.
     tasks.append(asyncio.create_task(asyncio.to_thread(models.report_at_start)))
+    # Прерванная переразметка библиотеки продолжается сама (US-0629).
+    tasks.append(asyncio.create_task(retag.resume_at_start()))
     cfg = settings()
     # Ключи ядра для токенов. Тест подставляет свои заранее — их не трогаем.
     if getattr(app.state, "keys", None) is None and cfg.platform_jwks_url:

@@ -10,6 +10,7 @@ from datetime import datetime
 from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
+from sqlalchemy.dialects.postgresql import JSONB
 
 from reference_api.models.base import Base
 from reference_api.services.embeddings import DIM
@@ -131,6 +132,29 @@ class AssetWarning(Base):
         CheckConstraint("kind in ('character','adult')", name="ck_asset_warnings_kind"),
         Index("ix_asset_warnings_digest", "digest"),
     )
+
+
+class RetagRun(Base):
+    """Проход переразметки библиотеки (US-0629): ход, неудачи с причиной,
+    «было и стало». Строка на запуск; незаконченный продолжается при старте
+    сервиса — что осталось, считается заново по устаревшим картинкам."""
+
+    __tablename__ = "retag_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    #: Пусто — проход идёт (или прерван и продолжится при старте).
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+    done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: [{digest, name, reason}] — что не удалось и почему.
+    failed: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    #: Сильных тегов в среднем по видам — до прохода и после.
+    before: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    after: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (CheckConstraint("done >= 0 and total >= 0", name="ck_retag_runs_counts"),)
 
 
 class AssetName(Base):

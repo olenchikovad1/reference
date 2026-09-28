@@ -215,6 +215,30 @@ export const KIND_OPTIONS = [
   { value: 'photo', label: 'фото' },
 ]
 
+/** Проход переразметки библиотеки (US-0629). */
+export interface Retag {
+  total: number
+  done: number
+  failed: { digest: string; name: string; reason: string }[]
+  /** Сильных тегов в среднем по видам — до и после. */
+  before: Record<string, { картинок: number; 'сильных тегов в среднем': number }>
+  after: Record<string, { картинок: number; 'сильных тегов в среднем': number }> | null
+  finished: boolean
+  started_at: string
+}
+
+export async function fetchRetag(): Promise<Retag | null> {
+  const r = await fetch(`${BASE}assets/retag`)
+  if (!r.ok) throw new Error(`ход переразметки не ответил: ${r.status}`)
+  return r.json()
+}
+
+export async function startRetag(): Promise<Retag> {
+  const r = await fetch(`${BASE}assets/retag`, { method: 'POST' })
+  if (!r.ok) throw new Error(`переразметка не запустилась: ${r.status}`)
+  return r.json()
+}
+
 /** Вид рукой: картинка переразмечается моделью этого вида. */
 export async function setKind(digest: string, kind: string): Promise<void> {
   const r = await fetch(`${BASE}assets/${digest}/kind`, {

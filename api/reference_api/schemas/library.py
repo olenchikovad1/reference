@@ -237,3 +237,22 @@ class DecisionIn(BaseModel):
     #: approved или rejected.
     status: str
     reason: str | None = None
+
+
+class RetagFailOut(BaseModel):
+    digest: str
+    name: str
+    reason: str
+
+
+class RetagOut(BaseModel):
+    """Проход переразметки библиотеки (US-0629): ход и итог."""
+
+    total: int
+    done: int
+    failed: list[RetagFailOut]
+    #: Сильных тегов в среднем по видам — до прохода и после.
+    before: dict
+    after: dict | None = None
+    finished: bool
+    started_at: datetime

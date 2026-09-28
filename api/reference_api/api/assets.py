@@ -11,6 +11,8 @@ from reference_api.schemas.library import (
     KindIn,
     KindOut,
     KindTagsOut,
+    RetagFailOut,
+    RetagOut,
     FoundCardOut,
     FoundOut,
     AudienceLinkOut,
@@ -25,7 +27,7 @@ from reference_api.schemas.library import (
     WarningOut,
 )
 from reference_api.services import assets as service
-from reference_api.services import kinds, library, people
+from reference_api.services import kinds, library, people, retag
 from reference_api.services import names as naming
 
 router = APIRouter(prefix="/assets", tags=["assets"])
@@ -167,6 +169,27 @@ async def file_tags(digests: list[str], db: AsyncSession = Depends(session)) -> 
         FileTagsOut(digest=f.digest, tags=[_tag_out(x) for x in f.tags], name=_name_out(f.name))
         for f in await library.tags_of_files(db, digests)
     ]
+
+
+def _retag_out(run) -> RetagOut:
+    return RetagOut(total=run.total, done=run.done, failed=[RetagFailOut(**f) for f in run.failed],
+                    before=run.before, after=run.after, finished=run.finished_at is not None,
+                    started_at=run.started_at)
+
+
+@router.post("/retag", response_model=RetagOut, dependencies=[requires("prints", Action.WRITE)])
+async def start_retag(request: Request, db: AsyncSession = Depends(session)) -> RetagOut:
+    """Переразметить библиотеку нынешними моделями в фоне (US-0629). Идёт уже
+    — отдаётся идущий, второй не запускается."""
+    subject = getattr(request.state, "subject", None)
+    return _retag_out(await retag.start(db, subject.id if subject else None))
+
+
+@router.get("/retag", response_model=RetagOut | None, dependencies=[requires("prints", Action.VIEW)])
+async def retag_status(db: AsyncSession = Depends(session)) -> RetagOut | None:
+    """Ход последнего прохода: сколько из скольких, что не удалось и почему."""
+    run = await retag.current(db)
+    return None if run is None else _retag_out(run)
 
 
 def _kind_out(v: kinds.Verdict | None) -> KindOut | None:

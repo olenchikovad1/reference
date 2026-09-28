@@ -4,6 +4,7 @@
 окно «совпадений нет» превращает подсказку в помеху, и его перестают читать.
 """
 
+import asyncio
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -176,14 +177,16 @@ async def _run_taggers(db: AsyncSession, digest: str, vector, verdict: kinds.Ver
     он не назвал, свои теги у файла теряют — иначе поправка вида рукой
     оставила бы старые теги рядом с новыми."""
     use = kinds.taggers(verdict)
-    general = tagging.tag(vector) if "general" in use else []
+    # Модели — в потоке: разметка аниме-моделью — секунды, и цикл событий за
+    # это время не должен вставать (переразметка идёт рядом с работой, US-0629).
+    general = await asyncio.to_thread(tagging.tag, vector) if "general" in use else []
     await tag_repo.replace(db, digest, tagging.model_name(), [(x.code, x.name, x.score) for x in general])
     rows: list[tuple[str, str, float]] = []
     warnings: list[tuple[str, str, str]] = []
     if "anime" in use:
         content = files.original(digest)
         if content is not None:
-            r = anime.tag(content)
+            r = await asyncio.to_thread(anime.tag, content)
             rows = [_KIND_TAG, *[(t.code, t.name, t.score) for t in r.tags]]
             warnings = [("character", c, anime.character_warning(c)) for c, _ in r.characters]
             if r.adult:
