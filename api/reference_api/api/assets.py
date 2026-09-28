@@ -8,6 +8,9 @@ from reference_api.db import session
 from reference_api.schemas.assets import AssetOut, DerivativeOut
 from reference_api.schemas.library import (
     FileTagsOut,
+    KindIn,
+    KindOut,
+    KindTagsOut,
     FoundCardOut,
     FoundOut,
     AudienceLinkOut,
@@ -21,7 +24,7 @@ from reference_api.schemas.library import (
     TagOut,
 )
 from reference_api.services import assets as service
-from reference_api.services import library, people
+from reference_api.services import kinds, library, people
 from reference_api.services import names as naming
 from reference_api.services import tags as tagging
 
@@ -129,6 +132,7 @@ async def recognise(
         # Теги — из того же вектора: картинку уже посмотрели, второй раз
         # модель не нужна.
         found = await library.put_tags(db, digest, emb.vector)
+        verdict = await library.put_kind(db, digest, emb.vector)
         named = await naming.name_of(db, digest, seen)
         # Забракованная — сразу видно: эта же или та же в другом файле (US-0499).
         defect = (await library.defect_of(db, [digest])).get(digest)
@@ -146,6 +150,7 @@ async def recognise(
                 ],
                 name=_name_out(named),
                 defect=_defect_out(defect, names),
+                kind=_kind_out(verdict),
             )
         )
     return out
@@ -164,6 +169,25 @@ async def file_tags(digests: list[str], db: AsyncSession = Depends(session)) -> 
         FileTagsOut(digest=f.digest, tags=[_tag_out(x) for x in f.tags], name=_name_out(f.name))
         for f in await library.tags_of_files(db, digests)
     ]
+
+
+def _kind_out(v: kinds.Verdict | None) -> KindOut | None:
+    if v is None:
+        return None
+    return KindOut(kind=v.shown, name=kinds.NAMES.get(v.shown, v.shown), second=v.second if v.both else None,
+                   both=v.both, manual=v.manual is not None)
+
+
+@router.put("/{digest}/kind", response_model=KindTagsOut, dependencies=[requires("prints", Action.WRITE)])
+async def set_kind(digest: str, body: KindIn, request: Request, db: AsyncSession = Depends(session)) -> KindTagsOut:
+    """Вид рукой: машина ошиблась — человек говорит, что на картинке, и она
+    переразмечается моделью этого вида (US-0625)."""
+    subject = getattr(request.state, "subject", None)
+    done = await library.set_kind(db, digest, body.kind, subject.id if subject else None)
+    if done is None:
+        raise HTTPException(404, "картинку ещё не узнавали — размечать нечем")
+    verdict, tags = done
+    return KindTagsOut(kind=_kind_out(verdict), tags=[_tag_out(x) for x in tags.tags])
 
 
 def _tag_out(x: library.TagView) -> TagOut:
@@ -206,6 +230,7 @@ async def catalogue(defects: bool = False, db: AsyncSession = Depends(session)) 
             audiences=[AudienceLinkOut(code=a, via=v) for a, v in i.links.audiences.items()],
             categories=sorted(i.links.categories),
             defect=_defect_out(i.defect, names),
+            kind=_kind_out(i.kind),
         )
         for i in items
     ]

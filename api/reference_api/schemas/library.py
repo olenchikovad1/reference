@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -25,6 +27,31 @@ class TagOut(BaseModel):
     #: Чем поставлен. Сменится модель, словарь или перечень исключённого —
     #: теги пересчитываются.
     model: str
+
+
+class KindOut(BaseModel):
+    """Вид картинки — по нему выбирается модель разметки (US-0625)."""
+
+    #: anime, illustration, flat, text, photo. Незнакомое клиент показывает
+    #: как есть.
+    kind: str
+    name: str
+    #: Второй вид — только у неуверенной: она размечена моделями обоих.
+    second: str | None = None
+    both: bool
+    #: Поставлен рукой.
+    manual: bool
+
+
+class KindIn(BaseModel):
+    kind: Literal["anime", "illustration", "flat", "text", "photo"]
+
+
+class KindTagsOut(BaseModel):
+    """Ответ на поправку вида: вид и теги после переразметки."""
+
+    kind: KindOut
+    tags: list[TagOut]
 
 
 class NameOut(BaseModel):
@@ -58,6 +85,7 @@ class RecognisedOut(BaseModel):
     tags: list[TagOut] = []
     #: Что за изделие на картинке. Нет — никто не знает; догадки не бывает.
     name: NameOut | None = None
+    kind: KindOut | None = None
     #: Забракована — эта картинка или та же в другом файле (US-0499).
     defect: "DefectOut | None" = None
 
@@ -116,6 +144,7 @@ class LibraryItemOut(BaseModel):
     file_name: str
     tags: list[TagOut]
     name: NameOut | None = None
+    kind: KindOut | None = None
     #: «Где использован» — референсы с этой картинкой.
     references: list[FoundCardOut]
     drops: list[DropLinkOut] = []

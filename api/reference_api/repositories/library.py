@@ -1,9 +1,16 @@
 """Векторы: как хранятся и как ищутся. Бизнес-смысла здесь нет."""
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from reference_api.models.library import AssetDefect, AssetEmbedding, LibraryAudience, LibraryDrop, LibraryText
+from reference_api.models.library import (
+    AssetDefect,
+    AssetEmbedding,
+    AssetKind,
+    LibraryAudience,
+    LibraryDrop,
+    LibraryText,
+)
 
 
 async def put(
@@ -205,3 +212,31 @@ async def forget_vectors(db: AsyncSession, digests: list[str], kind: str) -> Non
     if digests:
         await db.execute(delete(AssetEmbedding).where(AssetEmbedding.digest.in_(digests), AssetEmbedding.kind == kind))
         await db.commit()
+
+
+async def kinds_of(db: AsyncSession, digests: list[str]) -> dict[str, AssetKind]:
+    rows = await db.execute(select(AssetKind).where(AssetKind.digest.in_(digests)))
+    return {k.digest: k for k in rows.scalars()}
+
+
+async def put_kind(db: AsyncSession, digest: str, model: str, kind: str, second: str | None, gap: float) -> AssetKind:
+    """Решение маршрутизатора. Поправка рукой при пересчёте остаётся: она про
+    картинку, а не про модель, которая ошиблась."""
+    row = await db.get(AssetKind, digest)
+    if row is None:
+        row = AssetKind(digest=digest, model=model, kind=kind, second=second, gap=gap)
+        db.add(row)
+    else:
+        row.model, row.kind, row.second, row.gap = model, kind, second, gap
+    await db.commit()
+    return row
+
+
+async def set_manual_kind(db: AsyncSession, digest: str, manual: str, by: str | None) -> AssetKind | None:
+    row = await db.get(AssetKind, digest)
+    if row is None:
+        return None
+    row.manual, row.manual_by, row.manual_at = manual, by, func.now()
+    await db.commit()
+    await db.refresh(row)
+    return row

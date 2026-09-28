@@ -90,6 +90,7 @@ export interface Recognised {
   name: Named | null
   /** Забракована — эта картинка или та же в другом файле (US-0499). */
   defect?: Defect | null
+  kind?: Kind | null
 }
 
 /** Брак картинки: почему, кто и когда. */
@@ -186,6 +187,35 @@ export async function searchAssets(q: string): Promise<Found[]> {
 }
 
 /** Картинка библиотеки на странице «Принты» (US-0495). */
+/** Вид картинки — по нему выбирается модель разметки (US-0625). */
+export interface Kind {
+  kind: string
+  name: string
+  /** Второй вид — только у неуверенной: она размечена моделями обоих. */
+  second: string | null
+  both: boolean
+  /** Поставлен рукой. */
+  manual: boolean
+}
+
+export const KIND_OPTIONS = [
+  { value: 'anime', label: 'аниме' },
+  { value: 'illustration', label: 'иллюстрация' },
+  { value: 'flat', label: 'плоская графика' },
+  { value: 'text', label: 'надпись' },
+  { value: 'photo', label: 'фото' },
+]
+
+/** Вид рукой: картинка переразмечается моделью этого вида. */
+export async function setKind(digest: string, kind: string): Promise<void> {
+  const r = await fetch(`${BASE}assets/${digest}/kind`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind }),
+  })
+  if (!r.ok) throw new Error(r.status === 404 ? 'картинку ещё не узнавали' : `вид не записался: ${r.status}`)
+}
+
 export interface LibraryItem {
   digest: string
   /** Имя последнего загруженного файла с таким содержимым. */
@@ -199,6 +229,8 @@ export interface LibraryItem {
   audiences: { code: string; via: number | null }[]
   categories: string[]
   defect: Defect | null
+  /** Нет — файл ещё не узнавали. */
+  kind: Kind | null
 }
 
 /** Связь с дропом: via пусто — назначен руками, номер — «через референс №…». */

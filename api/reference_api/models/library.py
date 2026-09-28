@@ -78,6 +78,38 @@ class AssetTag(Base):
     )
 
 
+class AssetKind(Base):
+    """Вид картинки: аниме, иллюстрация, плоская графика, надпись, фото —
+    по нему выбирается модель разметки (US-0625).
+
+    Одна строка на файл. Решение маршрутизатора и поправка рукой хранятся
+    рядом, а не одна вместо другого: поправка переживает пересчёт вида новой
+    моделью, и видно, в чём машина ошиблась.
+    """
+
+    __tablename__ = "asset_kinds"
+
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    #: Чем определён вид. Сменились фразы или модель — вид пересчитывается.
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    second: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: Зазор первого и второго вида: мал — картинка идёт в обе модели.
+    gap: Mapped[float] = mapped_column(Float, nullable=False)
+    #: Поправка рукой. Пусто — человек вид не трогал.
+    manual: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    manual_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    manual_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("kind in ('anime','illustration','flat','text','photo')", name="ck_asset_kinds_kind"),
+        CheckConstraint("second is null or second in ('anime','illustration','flat','text','photo')",
+                        name="ck_asset_kinds_second"),
+        CheckConstraint("manual is null or manual in ('anime','illustration','flat','text','photo')",
+                        name="ck_asset_kinds_manual"),
+    )
+
+
 class AssetName(Base):
     """Что за изделие на картинке: «Т-72», «ИС-3».
 

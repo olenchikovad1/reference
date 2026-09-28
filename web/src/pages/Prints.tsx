@@ -4,7 +4,7 @@
 // русским словом (план 071). Файлы бросаются прямо на страницу: уходят в
 // библиотеку и сразу получают теги и название.
 
-import { Checkbox, EmptyState, PageHeader, TextInput, buttonClass } from '@platform/ui'
+import { Checkbox, EmptyState, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -22,7 +22,9 @@ import {
   unmarkDefect,
   recogniseAssets,
   searchAssets,
+  setKind,
   uploadAssets,
+  KIND_OPTIONS,
   UploadRefused,
   type LibraryItem,
 } from '../shared/api/assets'
@@ -34,6 +36,8 @@ export function Prints() {
   const [defects, setDefects] = useState(false)
   const library = useQuery({ queryKey: ['library', defects], queryFn: () => fetchLibrary(defects) })
   const canDefect = useCan(CODE, 'prints', 'mark-defect')
+  const canEdit = useCan(CODE, 'prints', 'write')
+  const [kindError, setKindError] = useState<string | null>(null)
   const [marking, setMarking] = useState<string | null>(null)
   const [markReason, setMarkReason] = useState('')
 
@@ -157,6 +161,7 @@ export function Prints() {
       <AssignBar selected={picked.size} onAssign={assign} onClear={() => setPicked(new Set())} />
       {busy && <p className="mb-2 text-sm text-muted-foreground">{busy}</p>}
       {(error || found.error) && <p className="mb-2 text-sm text-destructive">{error ?? found.error}</p>}
+      {kindError && <p className="mb-2 text-sm text-destructive">{kindError}</p>}
 
       {library.isError ? (
         <EmptyState
@@ -206,6 +211,33 @@ export function Prints() {
                       </span>
                     ))}
                 </div>
+                {item.kind && (
+                  <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground">
+                    <div className="w-40">
+                      <Select
+                        aria-label={`вид картинки ${item.name?.name ?? item.file_name}`}
+                        options={KIND_OPTIONS}
+                        value={item.kind.kind}
+                        disabled={!canEdit}
+                        onChange={(e) =>
+                          void setKind(item.digest, e.target.value)
+                            .then(() => {
+                              setKindError(null)
+                              return queries.invalidateQueries({ queryKey: ['library'] })
+                            })
+                            .catch((err: Error) => setKindError(err.message))
+                        }
+                      />
+                    </div>
+                    <span title="вид решает, какая модель ставит теги">
+                      {item.kind.manual
+                        ? 'поправлено рукой'
+                        : item.kind.both
+                          ? `не уверена: ещё ${KIND_OPTIONS.find((o) => o.value === item.kind?.second)?.label ?? item.kind.second} — размечена обеими`
+                          : 'определён сам'}
+                    </span>
+                  </div>
+                )}
                 {drop.filter.drop !== null &&
                   item.drops
                     .filter((d) => d.id === drop.filter.drop)

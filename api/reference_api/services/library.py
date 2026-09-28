@@ -17,7 +17,7 @@ from reference_api.models.references import Reference
 from reference_api.repositories import library as repo
 from reference_api.repositories import references as cards
 from reference_api.repositories import tags as tag_repo
-from reference_api.services import embeddings, words
+from reference_api.services import embeddings, kinds, words
 from reference_api.services import names as naming
 from reference_api.services import tags as tagging
 
@@ -143,10 +143,54 @@ class FileTags:
 
 async def put_tags(db: AsyncSession, digest: str, vector) -> list:
     """Теги картинки по её вектору — записать и вернуть. Модель второй раз не
-    нужна: картинку уже посмотрели, когда считали вектор."""
+    нужна: картинку уже посмотрели, когда считали вектор.
+
+    Модель разметки выбирает вид (kinds.taggers). Пока модель одна — общая;
+    аниме-модель встаёт сюда же в US-0626, по тому же ответу маршрутизатора."""
     found = tagging.tag(vector)
     await tag_repo.replace(db, digest, tagging.model_name(), [(x.code, x.name, x.score) for x in found])
     return found
+
+
+def _verdict(row) -> kinds.Verdict:
+    return kinds.Verdict(row.kind, row.second, row.gap, row.manual)
+
+
+async def put_kind(db: AsyncSession, digest: str, vector) -> kinds.Verdict:
+    """Вид картинки по её вектору — записать и вернуть. Поправка рукой, если
+    была, остаётся в силе."""
+    v = kinds.classify(vector)
+    row = await repo.put_kind(db, digest, kinds.ROUTER_NAME, v.kind, v.second, v.gap)
+    return _verdict(row)
+
+
+async def kinds_of_files(db: AsyncSession, digests: list[str]) -> dict[str, kinds.Verdict]:
+    """Вид файлов. Нет или посчитан прежним маршрутизатором — пересчёт по уже
+    лежащему вектору; нет и вектора — вида нет, пока файл не узнавали."""
+    stored = await repo.kinds_of(db, digests)
+    out: dict[str, kinds.Verdict] = {}
+    for d in digests:
+        row = stored.get(d)
+        if row is None or row.model != kinds.ROUTER_NAME:
+            vec = await tag_repo.vector_of(db, d, embeddings.MODEL_NAME)
+            if vec is None:
+                continue
+            out[d] = await put_kind(db, d, vec)
+        else:
+            out[d] = _verdict(row)
+    return out
+
+
+async def set_kind(db: AsyncSession, digest: str, kind: str, by: str | None) -> tuple[kinds.Verdict, FileTags] | None:
+    """Вид рукой — и переразметка моделью этого вида. Нет вектора — картинку
+    не узнавали, и размечать её нечем: None."""
+    vec = await tag_repo.vector_of(db, digest, embeddings.MODEL_NAME)
+    if vec is None:
+        return None
+    await kinds_of_files(db, [digest])
+    row = await repo.set_manual_kind(db, digest, kind, by)
+    await put_tags(db, digest, vec)
+    return _verdict(row), (await tags_of_files(db, [digest]))[0]
 
 
 async def tags_of_files(db: AsyncSession, digests: list[str]) -> list[FileTags]:
@@ -183,6 +227,8 @@ class LibraryItem:
     #: Имя последнего загруженного файла с таким содержимым.
     file_name: str
     tags: FileTags
+    #: Вид картинки; нет — файл не узнавали.
+    kind: "kinds.Verdict | None"
     #: Референсы, где картинка стоит, — «где использован». Удалённые в корзину
     #: сюда не попадают (решение 0014).
     references: list[Reference]
@@ -199,11 +245,12 @@ async def catalogue(db: AsyncSession, defects: bool = False) -> list[LibraryItem
     files = [(d, n) for d, n in files if (d in marked) == defects]
     digests = [d for d, _ in files]
     tags = {t.digest: t for t in await tags_of_files(db, digests)}
+    kind_of = await kinds_of_files(db, digests)
     used = await cards.by_image(db, digests, exclude=0)
     linked = await links(db, "image")
     return [
         LibraryItem(
-            d, n, tags[d], [c for c, images in used if d in images], linked.get(d) or Links({}, {}, set()),
+            d, n, tags[d], kind_of.get(d), [c for c, images in used if d in images], linked.get(d) or Links({}, {}, set()),
             Defect(marked[d].digest, marked[d].reason, marked[d].marked_by, marked[d].marked_at) if d in marked else None,
         )
         for d, n in files
