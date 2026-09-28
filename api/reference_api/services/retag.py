@@ -19,7 +19,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.config import settings
@@ -60,10 +60,16 @@ async def _strong_counts(db: AsyncSession) -> dict[str, int]:
     должен сам ничего досчитывать — иначе «было» окажется уже наполовину
     «стало», а упавшая модель уронит запуск."""
     digests = [d for d, _ in await repo.images(db, embeddings.MODEL_NAME)]
-    general = await tag_repo.of(db, digests, tagging.model_name())
-    anime_rows = await tag_repo.of(db, digests, anime.model_name())
-    return {d: sum(tagging.strong_of([t.score for t in general.get(d, [])]))
-            + min(len(anime_rows.get(d, [])), tagging.STRONG_MAX) for d in digests}
+    by_model = await tag_repo.all_models_of(db, digests)
+    am = anime.model_name()
+    out = {}
+    for d in digests:
+        # Общие теги — от любой модели, что лежит у файла: у старой картинки
+        # это прежняя модель, и «было» считается по ней, а не по пустоте.
+        general = [rows for m, rows in by_model[d].items() if m != am and not m.startswith("wd-")]
+        g = max(general, key=len, default=[])
+        out[d] = sum(tagging.strong_of([t.score for t in g])) + min(len(by_model[d].get(am, [])), tagging.STRONG_MAX)
+    return out
 
 
 async def _by_kind(db: AsyncSession, counts: dict[str, int]) -> dict:
@@ -86,9 +92,39 @@ async def _one(digest: str) -> None:
         await library._run_taggers(db, digest, vec, verdict)
 
 
-async def _run(run_id: int, todo: list[str] | None = None) -> None:
+#: Номер рекомендательной блокировки PostgreSQL на проход: вести его может
+#: только один процесс. 28.09.2026 проход, запущенный скриптом, подхватил ещё
+#: и перезапущенный сервис — два процесса шли по одним картинкам, «47 из 46».
+_LOCK = 870_629
+
+
+async def _run(run_id: int, todo: list[str] | None = None, resume: bool = False) -> None:
     """`todo` — посчитанный до снимка «было»: снимок сам досчитывает
-    устаревший вид, и после него устаревших оказалось бы меньше, чем в ходе."""
+    устаревший вид, и после него устаревших оказалось бы меньше, чем в ходе.
+
+    Проход держит блокировку базы от начала до конца; не взялась — проход
+    уже ведёт другой процесс, и этот не делает ничего."""
+    async with session_factory() as holder:
+        got = await holder.scalar(text("select pg_try_advisory_lock(:k)"), {"k": _LOCK})
+        if not got:
+            log.info("переразметка %d уже идёт в другом процессе — этот не вмешивается", run_id)
+            return
+        try:
+            if resume:
+                # Сколько осталось — только под блокировкой: иначе процесс,
+                # которому проход не достанется, успевал переписать «из скольких».
+                async with session_factory() as db:
+                    run = await db.get(RetagRun, run_id)
+                    left = len(await stale(db))
+                    run.total = run.done + left
+                    await db.commit()
+                log.info("переразметка %d продолжается: осталось %d", run_id, left)
+            await _pass(run_id, todo)
+        finally:
+            await holder.execute(text("select pg_advisory_unlock(:k)"), {"k": _LOCK})
+
+
+async def _pass(run_id: int, todo: list[str] | None) -> None:
     async with session_factory() as db:
         todo = todo if todo is not None else await stale(db)
         names = dict(await repo.images(db, embeddings.MODEL_NAME))
@@ -118,9 +154,9 @@ async def _run(run_id: int, todo: list[str] | None = None) -> None:
     log.info("переразметка %d закончена: %d из %d, не удалось %d", run_id, run.done, run.total, len(run.failed))
 
 
-def _spawn(run_id: int, todo: list[str] | None = None) -> None:
+def _spawn(run_id: int, todo: list[str] | None = None, resume: bool = False) -> None:
     global _task
-    _task = asyncio.create_task(_run(run_id, todo))
+    _task = asyncio.create_task(_run(run_id, todo, resume))
 
 
 async def start(db: AsyncSession, by: str | None) -> RetagRun:
@@ -155,11 +191,7 @@ async def resume_at_start() -> None:
         run = await current(db)
         if run is None or run.finished_at is not None:
             return
-        left = len(await stale(db))
-        run.total = run.done + left
-        await db.commit()
-    log.info("переразметка %d продолжается: осталось %d", run.id, left)
-    _spawn(run.id)
+    _spawn(run.id, resume=True)
 
 
 def running() -> bool:

@@ -69,3 +69,20 @@ async def tagged_with(db: AsyncSession, word: str, models: list[str]) -> dict[st
         if w in (code.lower().replace("ё", "е"), name.lower().replace("ё", "е")):
             out.setdefault(d, name)
     return out
+
+
+async def all_models_of(db: AsyncSession, digests: list[str]) -> dict[str, dict[str, list[AssetTag]]]:
+    """Теги файлов по всем моделям сразу: файл → модель → теги. Для «было»
+    переразметки — у старой картинки теги прежней модели."""
+    rows = await db.execute(select(AssetTag).where(AssetTag.digest.in_(digests)).order_by(AssetTag.score.desc()))
+    out: dict[str, dict[str, list[AssetTag]]] = {d: {} for d in digests}
+    for t in rows.scalars():
+        out[t.digest].setdefault(t.model, []).append(t)
+    return out
+
+
+async def drop_other_models(db: AsyncSession, digest: str, keep: list[str]) -> None:
+    """Теги прежних моделей у файла — вон: после переразметки они никому не
+    нужны, а копились бы с каждой сменой модели."""
+    await db.execute(delete(AssetTag).where(AssetTag.digest == digest, AssetTag.model.not_in(keep)))
+    await db.commit()

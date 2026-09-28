@@ -179,12 +179,12 @@ async def _run_taggers(db: AsyncSession, digest: str, vector, verdict: kinds.Ver
     use = kinds.taggers(verdict)
     # Модели — в потоке: разметка аниме-моделью — секунды, и цикл событий за
     # это время не должен вставать (переразметка идёт рядом с работой, US-0629).
-    general = await asyncio.to_thread(tagging.tag, vector) if "general" in use else []
+    content = files.original(digest) if "anime" in use or settings().general_tagger == "siglip2" else None
+    general = await asyncio.to_thread(tagging.tag_file, vector, content) if "general" in use else []
     await tag_repo.replace(db, digest, tagging.model_name(), [(x.code, x.name, x.score) for x in general])
     rows: list[tuple[str, str, float]] = []
     warnings: list[tuple[str, str, str]] = []
     if "anime" in use:
-        content = files.original(digest)
         if content is not None:
             r = await asyncio.to_thread(anime.tag, content)
             rows = [_KIND_TAG, *[(t.code, t.name, t.score) for t in r.tags]]
@@ -193,6 +193,7 @@ async def _run_taggers(db: AsyncSession, digest: str, vector, verdict: kinds.Ver
                 warnings.append(("adult", ",".join(r.adult), _adult_text(r.adult)))
     await tag_repo.replace(db, digest, anime.model_name(), rows)
     await tag_repo.replace_warnings(db, digest, anime.model_name(), warnings)
+    await tag_repo.drop_other_models(db, digest, [tagging.model_name(), anime.model_name()])
 
 
 async def put_tags(db: AsyncSession, digest: str, vector) -> "FileTags":

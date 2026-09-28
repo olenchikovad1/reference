@@ -56,7 +56,8 @@ def main() -> None:
     absent: set[str] = set()
     for img in images:
         exp = {norm(t) for t in img["tags"]}
-        got = tagging.tag(embed_image((FILES / img["name"]).read_bytes()).vector)
+        content = (FILES / img["name"]).read_bytes()
+        got = tagging.tag_file(embed_image(content).vector, content)
         strong = {norm(t.name) for t in got if t.strong}
         top = {norm(t.name) for t in got}
         not_in_vocab = exp - vocab

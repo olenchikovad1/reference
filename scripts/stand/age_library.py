@@ -18,6 +18,7 @@ import asyncio
 
 from sqlalchemy import text
 
+from reference_api.config import settings
 from reference_api.db import session_factory
 from reference_api.repositories import library as repo
 from reference_api.repositories import tags as tag_repo
@@ -26,6 +27,9 @@ from reference_api.services import tags as tagging
 
 
 async def main() -> None:
+    # «До плана 087» — это теги CLIP: разметчик переключается на него в этом
+    # процессе, какой бы ни стоял в настройке сервиса (US-0627 — SigLIP 2).
+    settings().general_tagger = "clip"
     async with session_factory() as db:
         images = await repo.images(db, embeddings.MODEL_NAME)
         for digest, _ in images:

@@ -34,7 +34,7 @@ import numpy as np
 import yaml
 
 from reference_api.config import settings
-from reference_api.services import words
+from reference_api.services import siglip, words
 
 #: Сколько тегов у картинки и сколько из них может быть сильных.
 TOP = 20
@@ -69,21 +69,35 @@ def model_name() -> str:
     имя не входит: сильные считаются из весов при каждом чтении."""
     cfg = settings()
     key = json.dumps([cfg.tag_template, cfg.tag_words, sorted(excluded())], ensure_ascii=False)
-    return f"{words.MODEL_NAME}/freq2011/{hashlib.sha256(key.encode()).hexdigest()[:8]}"
+    model = siglip.MODEL_NAME if cfg.general_tagger == "siglip2" else words.MODEL_NAME
+    return f"{model}/freq2011/{hashlib.sha256(key.encode()).hexdigest()[:8]}"
 
 
 @lru_cache
 def _vocabulary() -> tuple[list[str], np.ndarray]:
     """Слова словаря без исключённых и их векторы — раз на процесс."""
     cfg = settings()
-    vocab, vecs = words.vocabulary(cfg.tag_words, cfg.tag_template)
+    source = siglip.vocabulary if cfg.general_tagger == "siglip2" else words.vocabulary
+    vocab, vecs = source(cfg.tag_words, cfg.tag_template)
     drop = excluded()
     keep = [i for i, w in enumerate(vocab) if w not in drop]
     return [vocab[i] for i in keep], vecs[keep]
 
 
+def tag_file(vector: list[float], content: bytes | None) -> list[Tag]:
+    """Теги картинки разметчиком, выбранным в настройке (`general_tagger`):
+    CLIP — по уже посчитанному вектору узнавания; SigLIP 2 (US-0627) — по
+    самой картинке: её вектор в пространстве своей текстовой половины."""
+    if settings().general_tagger == "siglip2":
+        # Без самой картинки SigLIP разметить нечем, а вектор CLIP ему чужой
+        # (другое пространство и длина) — пусто, а не чушь.
+        return tag(siglip.embed_image(content).tolist()) if content is not None else []
+    return tag(vector)
+
+
 def tag(vector: list[float]) -> list[Tag]:
-    """Двадцать тегов картинки по убыванию веса, сильные помечены."""
+    """Двадцать тегов картинки по убыванию веса, сильные помечены. Вектор —
+    в пространстве того разметчика, что выбран в настройке."""
     vocab, vecs = _vocabulary()
     img = np.asarray(vector, dtype=np.float32)
     s = vecs @ (img / np.linalg.norm(img))
