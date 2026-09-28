@@ -2472,11 +2472,17 @@ export function WorkWindow() {
             {visible.elements.length === 0 && <p className="text-xs text-muted-foreground">на этой стороне пусто</p>}
             <div className="flex flex-col gap-1">
               {visible.elements.map((el) => (
-                <button
+                // Строка — не кнопка: у тегов свои кнопки, а кнопка в кнопке —
+                // недопустимая разметка (React ругался в консоли, 26.09.2026).
+                // Выбирает элемент кнопка с названием и значками, теги — рядом.
+                <div
                   key={el.id}
+                  className={`flex flex-wrap items-center gap-1 rounded border px-2 py-1 text-xs ${el.id === visible.selectedId ? 'border-primary bg-primary-soft' : 'border-line hover:bg-hover'}`}
+                >
+                <button
                   onClick={() => setComposition((c) => select(c, el.id))}
                   aria-pressed={el.id === visible.selectedId}
-                  className={`flex flex-wrap items-center gap-1 rounded border px-2 py-1 text-left text-xs ${el.id === visible.selectedId ? 'border-primary bg-primary-soft' : 'border-line hover:bg-hover'}`}
+                  className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-left"
                 >
                   <span className="min-w-0 flex-1 truncate" title={el.name}>
                     {el.kind === 'text' ? `«${el.text}»` : el.name}
@@ -2492,10 +2498,11 @@ export function WorkWindow() {
                     </span>
                   )}
                   {el.kind === 'image' && tagsOf[digestOf(el.src)]?.name && <NameChip named={tagsOf[digestOf(el.src)]!.name!} />}
+                </button>
                   {el.kind === 'image' && (tagsOf[digestOf(el.src)]?.tags ?? []).length > 0 && (
                     <TagChips tags={tagsOf[digestOf(el.src)]!.tags} />
                   )}
-                </button>
+                </div>
               ))}
             </div>
             {Object.keys(elsewhere).length > 0 && (
