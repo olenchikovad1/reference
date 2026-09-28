@@ -52,7 +52,6 @@ loaded = rss() - base
 SCENE = {'снег', 'зима', 'лес', 'гора', 'небо', 'дым', 'огонь', 'море'}
 rows = {}
 lines = []
-abs_rows = {}
 for i in imgs:
     s = W @ vec[i['name']]
     p = np.exp((s - s.max()) * 100); p /= p.sum()
@@ -66,13 +65,6 @@ for i in imgs:
     r['strong'] += len(strong); r['extra'] += len(strong - exp)
     r['scene'] += len(exp & SCENE & set(top)); r['scene_exp'] += len(exp & SCENE)
     lines.append(f"{i['kind']:12} {i['name'][:28]:28} " + ', '.join(('*' if t in strong else '') + t for t in top[:10]))
-    # Правило без соревнования: тег — слово, чьё сходство выше порога (у SigLIP
-    # сигмоида по каждому слову отдельно — порог по сходству ей равносилен).
-    for q in (0.5, 0.7, 0.9, 1.1):
-        thr = float(np.percentile(s, 100 - q))  # верхние q% словаря
-        pick = [vocab[k] for k in np.argsort(-s)[:10] if s[k] >= thr]
-        a = abs_rows.setdefault(q, dict(expected=0, hit=0, shown=0, scene=0))
-        a['expected'] += len(exp); a['hit'] += len(exp & set(pick)); a['shown'] += len(pick); a['scene'] += len(exp & SCENE & set(pick))
 same = []
 for b in ['td-rusty-print.png', 'rocket.png', 'photo-fruits.png']:
     src = (FILES / b).read_bytes(); v0 = vec[b] if b in vec else enc.image(src)
@@ -87,7 +79,7 @@ for e in prints['tuning_expectations']:
         va = va if va is not None else enc.image((FILES / a).read_bytes())
         vb = vb if vb is not None else enc.image((FILES / b).read_bytes())
         lv.setdefault(e['level'], []).append(float(va @ vb))
-print(json.dumps({'abs': {str(k): v for k, v in abs_rows.items()}, 'rows': rows, 'lines': lines, 'same': same, 'levels': lv, 'per_image': per_image,
+print(json.dumps({'rows': rows, 'lines': lines, 'same': same, 'levels': lv, 'per_image': per_image,
                   'text_s': text_s, 'memory_mb': loaded}, ensure_ascii=False))
 """
 
@@ -111,11 +103,6 @@ def main() -> None:
         print(f"  {n:18} " + " ".join(f"{f1(r['rows'][k]):6.2f}" for k in kinds) + f" {f1(tot):6.2f}"
               f" {tot['scene']:3}/{tot['scene_exp']:<3} {min(r['same']):6.3f} {max(lv.get('та же категория', [0])):6.3f}"
               f" {max(lv.get('чужое', [0])):6.3f} {r['per_image']:6.2f} {r['memory_mb']:6.0f}")
-    print("\nбез соревнования: тег — слово выше порога (верхние q% словаря у картинки), до десяти")
-    for n, r in res.items():
-        for q, a in r["abs"].items():
-            print(f"  {n:18} q={q:4}  попало {a['hit']:3}/{a['expected']}  показано {a['shown']:3}"
-                  f"  F1 {2 * a['hit'] / (a['shown'] + a['expected']):.2f}  сцена {a['scene']}/35")
     for n, r in res.items():
         print(f"\n== {n}")
         print("\n".join("  " + x for x in r["lines"]))
