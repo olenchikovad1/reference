@@ -18,6 +18,7 @@ import onnxruntime as ort
 from PIL import Image
 
 from reference_api.config import settings
+from reference_api.services import models
 
 #: Имя модели пишется рядом с каждым вектором. Сменится модель — сменится имя,
 #: и старые векторы не смешаются с новыми.
@@ -45,9 +46,7 @@ def session() -> ort.InferenceSession:
     global _session
     with _lock:
         if _session is None:
-            _session = ort.InferenceSession(
-                settings().embedding_model_path, providers=["CPUExecutionProvider"]
-            )
+            _session = models.session(settings().embedding_model_path)
         return _session
 
 

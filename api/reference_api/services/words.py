@@ -30,6 +30,7 @@ import onnxruntime as ort
 from tokenizers import Tokenizer
 
 from reference_api.config import settings
+from reference_api.services import models
 
 MODEL_NAME = "clip-vit-b32-multilingual/quint8"
 _lock = threading.Lock()
@@ -42,11 +43,11 @@ def _root() -> pathlib.Path:
 @lru_cache
 def _encoder() -> tuple[Tokenizer, ort.InferenceSession, np.ndarray]:
     base = _root() / "models/clip-vit-b32-multilingual"
-    tok = Tokenizer.from_file(str(base / "tokenizer.json"))
+    tok = Tokenizer.from_file(models.require(base / "tokenizer.json"))
     tok.enable_padding(pad_id=0, pad_token="[PAD]")
     tok.enable_truncation(max_length=32)
-    session = ort.InferenceSession(str(base / "model_quint8_avx2.onnx"), providers=["CPUExecutionProvider"])
-    return tok, session, _dense(base / "dense.safetensors")
+    session = models.session(base / "model_quint8_avx2.onnx")
+    return tok, session, _dense(pathlib.Path(models.require(base / "dense.safetensors")))
 
 
 def _dense(path: pathlib.Path) -> np.ndarray:

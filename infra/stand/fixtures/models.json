@@ -1,0 +1,65 @@
+{
+  "about": [
+    "Опись моделей и словарей стенда (план 087, US-0624). Сами файлы в git не кладутся никогда, даже маленькие: каждая замена модели осталась бы в истории навсегда. В git едет эта опись — откуда (ревизия закреплена, не 'main'), размер, sha256, лицензия, зачем.",
+    "Качает и сверяет scripts/stand/fetch_models.py, на том же описании стоят scripts/stand/verify_volume.py и отказ сервиса, когда файла нет. JSON, а не YAML: скачивание идёт на голой машине до подъёма стенда, где PyYAML может не быть.",
+    "memory_mb — прирост памяти процесса после загрузки модели и одного прогона (scripts/stand/measure_model_memory.py), а не вес файла. Бюджет всех моделей вместе — 2048 МБ оперативной памяти (владелец 26.09.2026)."
+  ],
+  "memory_budget_mb": 2048,
+  "models": [
+    {
+      "id": "clip-vit-b32-vision",
+      "purpose": "Вектор картинки: узнавание «такой принт уже был», похожие, автотеги (решение 0008).",
+      "repo": "Xenova/clip-vit-base-patch32",
+      "revision": "d15189d7028b43f1d3e65039190477f6af591c2a",
+      "license": "MIT (исходная openai/clip-vit-base-patch32)",
+      "compressed": "int8: выбор 23.09.2026, причина не записана — пересматривается в US-0627",
+      "memory_mb": 177, "memory_peak_mb": 215, "measured": "2026-09-28, RBB-0001, процессор, 0.8 с загрузка и прогон",
+      "files": [
+        {"path": "models/clip-vit-base-patch32/vision_model_quantized.onnx", "source": "onnx/vision_model_quantized.onnx",
+         "size": 89117001, "sha256": "583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299"}
+      ]
+    },
+    {
+      "id": "clip-vit-b32-text-en",
+      "purpose": "Английская текстовая половина CLIP — только замер scripts/embeddings/measure_names.py (US-0479), в работе сервиса не участвует.",
+      "repo": "Xenova/clip-vit-base-patch32",
+      "revision": "d15189d7028b43f1d3e65039190477f6af591c2a",
+      "license": "MIT (исходная openai/clip-vit-base-patch32)",
+      "compressed": "int8",
+      "memory_mb": null,
+      "files": [
+        {"path": "models/clip-vit-base-patch32/text_model_quantized.onnx", "source": "onnx/text_model_quantized.onnx",
+         "size": 64504507, "sha256": "73baab855d406190da9faa498cfedf65f15cf309f4cc7385b7b032e6d08e5c3a"},
+        {"path": "models/clip-vit-base-patch32/tokenizer.json", "source": "tokenizer.json",
+         "size": 2224119, "sha256": "f7f3b7af117d467b58374797691a6438d3e6b9e9cef800dfd5dced7f697a90cd"}
+      ]
+    },
+    {
+      "id": "clip-vit-b32-multilingual",
+      "purpose": "Русский текст в пространстве той же CLIP: слова тегов и запрос поиска сравниваются с картинкой без перевода (US-0480, US-0482).",
+      "repo": "sentence-transformers/clip-ViT-B-32-multilingual-v1",
+      "revision": "58edf8cada9e398793dca955574a48cbb7f18be2",
+      "license": "Apache-2.0",
+      "compressed": "quint8 avx2: выбор 24.09.2026, причина не записана — пересматривается в US-0627",
+      "memory_mb": 189, "memory_peak_mb": 256, "measured": "2026-09-28, RBB-0001, процессор, 1.1 с загрузка и прогон",
+      "files": [
+        {"path": "models/clip-vit-b32-multilingual/model_quint8_avx2.onnx", "source": "onnx/model_quint8_avx2.onnx",
+         "size": 135377779, "sha256": "fbc8fbeaa5237d96bd1bf430057c70d34de8334a463e933a5faa305f6caeed9c"},
+        {"path": "models/clip-vit-b32-multilingual/dense.safetensors", "source": "2_Dense/model.safetensors",
+         "size": 1572984, "sha256": "d12568dc7300970a4d3dbb49068ad16cd89b99840b74b026f8e48071e9414f74"},
+        {"path": "models/clip-vit-b32-multilingual/tokenizer.json", "source": "tokenizer.json",
+         "size": 1961847, "sha256": "5b4e1a8171c81dfd666ae40265b9530c6e0b3d53923fe8ac493dcc84229adf81"}
+      ]
+    },
+    {
+      "id": "freq2011",
+      "purpose": "Слова тегов: «Новый частотный словарь русской лексики» (Ляшевская, Шаров). Не список допустимых — существительные по частоте.",
+      "url": "http://dict.ruslang.ru/Freq2011.zip",
+      "license": "открытая публикация ИРЯ РАН, условия на сайте не указаны",
+      "memory_mb": null,
+      "files": [
+        {"path": "dictionaries/freq2011.zip", "size": 493491, "sha256": "1ae2950966c34c52355e4d5cb91f1cc715f1d50774af71cdf4319223130c7c6e"}
+      ]
+    }
+  ]
+}

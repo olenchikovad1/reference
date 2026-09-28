@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import JSONResponse
 from platform_client import verify_right_declarations
 from platform_client.subjects import install_subject_reading
 from platform_client.tokens import KeySet, Subject, Visibility
@@ -20,6 +21,7 @@ from reference_api.config import settings
 from reference_api.schedulers import people as people_schedule
 from reference_api.schedulers import references as trash_schedule
 from reference_api.services import platform as publishing
+from reference_api.services import models
 from reference_api.services import people as people_service
 
 log = logging.getLogger("reference.platform")
@@ -36,6 +38,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Публикация в фоне: недоступное ядро не должно держать подъём сервиса, а
     # стенд без платформы (решение 0006) поднимается вовсе без неё.
     tasks = [asyncio.create_task(_publish())]
+    # Модели сверяются в фоне: сверка sha256 всего тома — около секунды, и
+    # подъём ради неё не ждёт; нет модели — ошибка в журнале с командой.
+    tasks.append(asyncio.create_task(asyncio.to_thread(models.report_at_start)))
     cfg = settings()
     # Ключи ядра для токенов. Тест подставляет свои заранее — их не трогаем.
     if getattr(app.state, "keys", None) is None and cfg.platform_jwks_url:
@@ -119,6 +124,13 @@ def create_app(without_platform: bool | None = None) -> FastAPI:
     # Изменяющий маршрут без объявленного права — сервис не поднимается и
     # называет все такие маршруты сразу (И-4, US-0487).
     verify_right_declarations(app)
+
+    @app.exception_handler(models.ModelMissing)
+    async def _model_missing(_: Request, exc: models.ModelMissing) -> JSONResponse:
+        # Модели нет — стенд не готов размечать, а не код сломан: 503 и тот же
+        # текст, что в журнале при старте, с файлом и командой (US-0624).
+        return JSONResponse({"detail": str(exc)}, status_code=503)
+
     return app
 
 

@@ -33,7 +33,7 @@ FILES = ROOT / "infra/stand/files"
 FIXTURES = ROOT / "infra/stand/fixtures"
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from fetch_models import MODELS  # noqa: E402 — список моделей один, здесь не повторяется
+from fetch_models import inventory  # noqa: E402 — опись моделей одна (models.json), здесь не повторяется
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -80,7 +80,7 @@ def check_hashed(rel: str, want: str, required: bool, hint: str) -> None:
         report("совпал", rel)
     else:
         extra = png_facts(path) if path.suffix.lower() == ".png" else f"{path.stat().st_size} байт"
-        report("НЕ ТОТ", rel, f"sha256 {got[:12]}… вместо {want[:12]}…; {extra}")
+        report("НЕ ТОТ", rel, f"sha256 {got[:12]}… вместо {want[:12]}…; {extra}" + (f" — {hint}" if hint else ""))
 
 
 def products() -> None:
@@ -122,16 +122,10 @@ def prints() -> None:
 
 def models() -> None:
     print("модели:")
-    for m in MODELS:
-        rel = m["path"].removeprefix("files/")
-        path = FILES / rel
-        if not path.is_file():
-            report("НЕТ", rel, "py scripts/stand/fetch_models.py")
-        elif path.stat().st_size != m["size"]:
-            report("НЕ ТОТ", rel, f"{path.stat().st_size} байт вместо {m['size']} — перекачать")
-        else:
-            report("совпал", rel)
-
+    for m in inventory():
+        # Сверка по sha256, а не по размеру: подменённая модель того же
+        # размера размечает молча иначе (US-0624).
+        check_hashed(m["path"], m["sha256"], required=True, hint="py scripts/stand/fetch_models.py")
 
 if __name__ == "__main__":
     products()
