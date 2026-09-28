@@ -1,6 +1,6 @@
 """Собранный принт: вход по HTTP."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, UploadFile
 from platform_client import Action, requires, requires_function
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from reference_api.schemas.references import (
     RemarkMessageIn,
     RemarkMessageOut,
     RemarkOut,
+    RemarkTextIn,
     StatusEventOut,
     CommentIn,
     TaskOut,
@@ -484,7 +485,9 @@ async def _remarks(db: AsyncSession, reference_id: int, viewer: str | None = Non
                   messages=[RemarkMessageOut(kind=m.kind, text=m.text, author_id=m.author_id,
                                              author_name=who.get(m.author_id or ""), number=m.number, at=m.at)
                             for m in messages[r.id]],
-                  can=await review.can_say(db, card, r, viewer))
+                  can=await review.can_say(db, card, r, viewer), audio=bool(r.audio_digest),
+                  audio_seconds=r.audio_seconds, heard=r.heard, voice_status=r.voice_status,
+                  voice_error=r.voice_error, can_edit=viewer is not None and viewer == r.author_id)
         for r in rows
     ]
 
@@ -522,5 +525,46 @@ async def remark_message(reference_id: int, remark_id: int, body: RemarkMessageI
     try:
         await review.say(db, reference_id, remark_id, _author(request), body.kind, body.text)
     except (review.NoSuchReference, review.NotYourStep, review.BadRemark, review.WrongStatus) as e:
+        raise _refused(e) from None
+    return next(r for r in await _remarks(db, reference_id, _author(request)) if r.id == remark_id)
+
+
+
+@router.post("/{reference_id}/remarks/voice", response_model=RemarkOut, dependencies=[requires("review", Action.WRITE)])
+async def add_voice_remark(reference_id: int, request: Request, audio: UploadFile, side: str = Form(...),
+                           x: float = Form(...), y: float = Form(...), element_id: str | None = Form(None),
+                           db: AsyncSession = Depends(session)) -> RemarkOut:
+    """Замечание голосом (US-0512): запись сохраняется сразу, расшифровка —
+    в фоне; пока её нет — voice_status pending."""
+    content = await audio.read(review.MAX_AUDIO_BYTES + 1)
+    try:
+        row = await review.add_voice_remark(db, reference_id, _author(request), side, x, y, content,
+                                            audio.content_type, element_id or None)
+    except (review.NoSuchReference, review.NotYourStep, review.BadRemark) as e:
+        raise _refused(e) from None
+    return next(r for r in await _remarks(db, reference_id, _author(request)) if r.id == row.id)
+
+
+@router.get("/{reference_id}/remarks/{remark_id}/audio", dependencies=[requires("references", Action.VIEW)])
+async def remark_audio(reference_id: int, remark_id: int, db: AsyncSession = Depends(session)) -> Response:
+    """Запись замечания — первоисточник, слушается в окне."""
+    try:
+        content, kind = await review.audio_of(db, reference_id, remark_id)
+    except review.NoSuchReference as e:
+        raise _refused(e) from None
+    # Запись по хешу не меняется: правка текста её не трогает.
+    return Response(content, media_type=kind, headers={"Cache-Control": "private, max-age=86400"})
+
+
+# Право — просмотр согласования, как у ветки: править текст вправе только
+# автор замечания, и это решает сервис.
+@router.put("/{reference_id}/remarks/{remark_id}/text", response_model=RemarkOut,
+            dependencies=[requires("review", Action.VIEW)])
+async def remark_text(reference_id: int, remark_id: int, body: RemarkTextIn, request: Request,
+                      db: AsyncSession = Depends(session)) -> RemarkOut:
+    """Автор правит текст замечания; запись и «как услышано» прежние."""
+    try:
+        await review.edit_text(db, reference_id, remark_id, _author(request), body.text)
+    except (review.NoSuchReference, review.NotYourStep, review.BadRemark) as e:
         raise _refused(e) from None
     return next(r for r in await _remarks(db, reference_id, _author(request)) if r.id == remark_id)

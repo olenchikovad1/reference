@@ -398,7 +398,21 @@ export interface Remark {
   messages: { kind: RemarkSay; text: string | null; author_name: string | null; number: number; at: string }[]
   /** Что смотрящему можно сказать в ветке. */
   can: RemarkSay[]
+  /** Голос (US-0512): есть ли запись и где её расшифровка. */
+  audio: boolean
+  audio_seconds: number | null
+  /** Расшифровка как услышано — не правится; правится text. */
+  heard: string | null
+  voice_status: VoiceStatus | null
+  voice_error: string | null
+  /** Править текст может только автор. */
+  can_edit: boolean
 }
+
+export type VoiceStatus = 'pending' | 'working' | 'done' | 'failed'
+
+/** Расшифровка ещё идёт — окно переспрашивает, пока не закончится. */
+export const isHearing = (r: Remark) => r.voice_status === 'pending' || r.voice_status === 'working'
 
 export type RemarkSay = 'reply' | 'fixed' | 'accepted' | 'rejected'
 
@@ -435,5 +449,40 @@ export async function sayRemark(referenceId: number, remarkId: number, kind: Rem
     body: JSON.stringify({ kind, text: text ?? null }),
   })
   if (!r.ok) throw await refusal(r, 'не записалось')
+  return r.json()
+}
+
+/** Замечание голосом: запись уходит сразу, расшифровка — в фоне. */
+export async function addVoiceRemark(
+  referenceId: number,
+  where: { side: string; x: number; y: number; element_id?: string | null },
+  audio: Blob,
+): Promise<Remark> {
+  const form = new FormData()
+  form.append('audio', audio, 'remark.webm')
+  form.append('side', where.side)
+  form.append('x', String(where.x))
+  form.append('y', String(where.y))
+  if (where.element_id) form.append('element_id', where.element_id)
+  const r = await fetch(`${BASE}references/${referenceId}/remarks/voice`, { method: 'POST', body: form })
+  if (!r.ok) throw await refusal(r, 'запись не сохранилась')
+  return r.json()
+}
+
+/** Запись замечания — через fetch, а не src у <audio>: за платформой
+ *  запрос несёт вход, а голый адрес — нет. */
+export async function fetchRemarkAudio(referenceId: number, remarkId: number): Promise<Blob> {
+  const r = await fetch(`${BASE}references/${referenceId}/remarks/${remarkId}/audio`)
+  if (!r.ok) throw new Error(`запись не пришла: ${r.status}`)
+  return r.blob()
+}
+
+export async function setRemarkText(referenceId: number, remarkId: number, text: string): Promise<Remark> {
+  const r = await fetch(`${BASE}references/${referenceId}/remarks/${remarkId}/text`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!r.ok) throw await refusal(r, 'текст не поправился')
   return r.json()
 }

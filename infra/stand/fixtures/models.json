@@ -158,6 +158,43 @@
         }
       ],
       "measured": "2026-09-28, RBB-0001, процессор, в работе после загрузки и прогона; всё вместе — 1906 МБ"
+    },
+    {
+      "id": "faster-whisper-small",
+      "purpose": "Расшифровка голосовых замечаний (US-0512, решение 0017). Грузится на время расшифровки и выгружается: в покое памяти не занимает.",
+      "repo": "Systran/faster-whisper-small",
+      "revision": "536b0662742c02347bc0e980a01041f333bce120",
+      "license": "MIT (исходная openai/whisper-small)",
+      "compressed": "веса float16 в файле, в памяти — int8 (compute_type) ради бюджета",
+      "memory_mb": 73,
+      "files": [
+        {
+          "path": "models/faster-whisper-small/model.bin",
+          "source": "model.bin",
+          "size": 483546902,
+          "sha256": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671"
+        },
+        {
+          "path": "models/faster-whisper-small/config.json",
+          "source": "config.json",
+          "size": 2370,
+          "sha256": "b55496ac7940a7ae47d2c01eab40edfd8701feec1229d9cce3b40014383fb828"
+        },
+        {
+          "path": "models/faster-whisper-small/tokenizer.json",
+          "source": "tokenizer.json",
+          "size": 2203239,
+          "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab"
+        },
+        {
+          "path": "models/faster-whisper-small/vocabulary.txt",
+          "source": "vocabulary.txt",
+          "size": 459861,
+          "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913"
+        }
+      ],
+      "memory_peak_mb": 563,
+      "measured": "2026-09-28, RBB-0001, процессор: пик 563 МБ на расшифровке фразы, после выгрузки и malloc_trim остаётся 73 (библиотеки); в покое всё вместе 1908, в пике расшифровки 2471 из 2560"
     }
   ]
 }

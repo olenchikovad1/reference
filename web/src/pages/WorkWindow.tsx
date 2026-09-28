@@ -51,6 +51,10 @@ import {
   STATUS_NAMES,
   STEP_NAMES,
   SAY_NAMES,
+  addVoiceRemark,
+  fetchRemarkAudio,
+  isHearing,
+  setRemarkText,
   type Remark,
   type ReferenceFull as FullCard,
   type Step,
@@ -233,6 +237,8 @@ export function WorkWindow() {
     queryKey: ['remarks', current?.id ?? 0],
     queryFn: () => fetchRemarks(current!.id),
     enabled: !!current,
+    // Пока что-то расшифровывается — переспрашивать: текст появится сам.
+    refetchInterval: (q) => ((q.state.data ?? []).some(isHearing) ? 1500 : false),
   })
   const [placing, setPlacing] = useState(false)
   const [pendingRemark, setPendingRemark] = useState<PendingRemark | null>(null)
@@ -3333,6 +3339,18 @@ function RemarksSection(props: {
                 if (e.key === 'Escape') props.onPending(null)
               }}
             />
+            <VoiceButton
+              onRecorded={(audio) => {
+                const p = props.pending!
+                done(
+                  addVoiceRemark(card.id, { side: props.side, x: p.x, y: p.y, element_id: p.element_id }, audio).then(() => {
+                    setText('')
+                    props.onPending(null)
+                  }),
+                )
+              }}
+              onError={setError}
+            />
             <div className="flex gap-1">
               <button className={buttonClass({ tone: 'accent', variant: 'soft', small: true })} disabled={!text.trim()} onClick={put}>
                 поставить
@@ -3351,9 +3369,8 @@ function RemarksSection(props: {
             onClick={() => props.onFocus(r.id)}
             className={`rounded border px-1.5 py-1 ${props.focus === r.id ? 'border-primary' : 'border-line'} ${r.status === 'accepted' ? 'opacity-60' : ''}`}
           >
-            <div className="font-semibold">
-              {i + 1}. {r.text}
-            </div>
+            <RemarkText card={card} remark={r} n={i + 1} onChanged={props.onChanged} onError={setError} />
+            {r.audio && <RemarkAudio referenceId={card.id} remark={r} />}
             <div className="text-muted-foreground">
               {r.element_name ? `слой ${r.element_name}` : 'место изделия'} · {props.sideName(r.side).toLowerCase()} · {r.author_name ?? 'без входа'}
               {r.number < last ? ` · из версии ${r.number}` : ''}
@@ -3407,4 +3424,149 @@ function RemarksSection(props: {
       </div>
     </Section>
   )
+}
+
+/** Запись голоса: удерживать кнопку или клавишу V — идёт запись и секунды;
+ *  отпустили — запись уходит. Короче полсекунды — нажали случайно. */
+function VoiceButton(props: { onRecorded: (audio: Blob) => void; onError: (e: string) => void }) {
+  const [seconds, setSeconds] = useState<number | null>(null)
+  const rec = useRef<{ r: MediaRecorder; chunks: Blob[]; at: number; timer: number } | null>(null)
+  const start = async () => {
+    if (rec.current) return
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const r = new MediaRecorder(stream)
+      const chunks: Blob[] = []
+      r.ondataavailable = (e) => chunks.push(e.data)
+      const at = performance.now()
+      const timer = window.setInterval(() => setSeconds(Math.floor((performance.now() - at) / 1000)), 250)
+      rec.current = { r, chunks, at, timer }
+      setSeconds(0)
+      r.start()
+    } catch (e) {
+      props.onError(`микрофон недоступен: ${(e as Error).message}`)
+    }
+  }
+  const stop = () => {
+    const cur = rec.current
+    if (!cur) return
+    rec.current = null
+    window.clearInterval(cur.timer)
+    setSeconds(null)
+    cur.r.onstop = () => {
+      cur.r.stream.getTracks().forEach((t) => t.stop())
+      if (performance.now() - cur.at < 500) return
+      props.onRecorded(new Blob(cur.chunks, { type: cur.r.mimeType || 'audio/webm' }))
+    }
+    cur.r.stop()
+  }
+  useEffect(() => {
+    const typing = (e: KeyboardEvent) => e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyV' || e.repeat || typing(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      void start()
+    }
+    const up = (e: KeyboardEvent) => {
+      if (e.code === 'KeyV') stop()
+    }
+    window.addEventListener('keydown', down, true)
+    window.addEventListener('keyup', up, true)
+    return () => {
+      window.removeEventListener('keydown', down, true)
+      window.removeEventListener('keyup', up, true)
+    }
+  })
+  return (
+    <button
+      className={buttonClass({ tone: seconds === null ? 'neutral' : 'accent', variant: seconds === null ? 'outline' : 'soft', small: true })}
+      onPointerDown={() => void start()}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+    >
+      {seconds === null ? '● удерживайте — говорите (V)' : `● идёт запись · ${seconds} с`}
+    </button>
+  )
+}
+
+/** Текст замечания: у голосового — «расшифровывается», отказ с причиной,
+ *  «как услышано», если поправлено; автор правит на месте. */
+function RemarkText(props: { card: FullCard; remark: Remark; n: number; onChanged: () => void; onError: (e: string) => void }) {
+  const r = props.remark
+  const [editing, setEditing] = useState<string | null>(null)
+  const save = () => {
+    if (editing === null || !editing.trim()) return
+    void setRemarkText(props.card.id, r.id, editing)
+      .then(() => {
+        setEditing(null)
+        props.onChanged()
+      })
+      .catch((e: Error) => props.onError(e.message))
+  }
+  if (editing !== null)
+    return (
+      <TextInput
+        aria-label={`текст замечания ${props.n}`}
+        autoFocus
+        value={editing}
+        onChange={(e) => setEditing(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter') save()
+          if (e.key === 'Escape') setEditing(null)
+        }}
+        onBlur={save}
+      />
+    )
+  return (
+    <div>
+      <div className="font-semibold">
+        {props.n}.{' '}
+        {r.text ||
+          (isHearing(r) ? (
+            <span className="font-normal text-muted-foreground">расшифровывается…</span>
+          ) : (
+            <span className="font-normal text-muted-foreground">без текста</span>
+          ))}
+        {r.can_edit && r.text && (
+          <button className="ml-1 font-normal text-muted-foreground underline" onClick={() => setEditing(r.text)}>
+            править
+          </button>
+        )}
+      </div>
+      {r.voice_status === 'failed' && (
+        <div className="text-destructive">расшифровать не удалось: {r.voice_error} — запись сохранена, текст можно вписать</div>
+      )}
+      {r.voice_status === 'failed' && r.can_edit && !r.text && (
+        <button className="text-muted-foreground underline" onClick={() => setEditing('')}>
+          вписать текст
+        </button>
+      )}
+      {r.heard && r.heard !== r.text && <div className="text-muted-foreground">услышано: {r.heard}</div>}
+    </div>
+  )
+}
+
+/** Плеер записи. Запись приходит через fetch и живёт, пока виден плеер. */
+function RemarkAudio(props: { referenceId: number; remark: Remark }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let made: string | null = null
+    let alive = true
+    fetchRemarkAudio(props.referenceId, props.remark.id)
+      .then((b) => {
+        if (!alive) return
+        made = URL.createObjectURL(b)
+        setUrl(made)
+      })
+      .catch((e: Error) => setError(e.message))
+    return () => {
+      alive = false
+      if (made) URL.revokeObjectURL(made)
+    }
+  }, [props.referenceId, props.remark.id])
+  if (error) return <div className="text-destructive">{error}</div>
+  return url ? <audio controls src={url} className="h-7 w-full" aria-label={`запись замечания`} /> : null
 }

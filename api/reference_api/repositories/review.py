@@ -1,6 +1,6 @@
 """Согласование: как хранятся статус и путь переходов. Бизнес-смысла здесь нет."""
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.models.references import (
@@ -107,3 +107,52 @@ async def open_counts(db: AsyncSession, ids: list[int]) -> dict[int, int]:
                             .where(ReferenceRemark.reference_id.in_(ids), ReferenceRemark.status == "open")
                             .group_by(ReferenceRemark.reference_id))
     return dict(rows.all())
+
+
+# --- Голос (US-0512) -----------------------------------------------------
+
+
+async def claim_voice(db: AsyncSession, remark_id: int) -> tuple[str, int] | None:
+    """Взять расшифровку в работу: pending → working одним условным
+    обновлением. Повтор сообщения или вторая копия сервиса получают None —
+    второй раз не расшифровывается."""
+    row = (await db.execute(
+        update(ReferenceRemark)
+        .where(ReferenceRemark.id == remark_id, ReferenceRemark.voice_status == "pending")
+        .values(voice_status="working", voice_attempts=ReferenceRemark.voice_attempts + 1)
+        .returning(ReferenceRemark.audio_digest, ReferenceRemark.voice_attempts)
+    )).first()
+    await db.commit()
+    return (row[0], row[1]) if row else None
+
+
+async def voice_state(db: AsyncSession, remark_id: int, status: str, error: str | None = None) -> None:
+    await db.execute(update(ReferenceRemark).where(ReferenceRemark.id == remark_id)
+                     .values(voice_status=status, voice_error=error))
+    await db.commit()
+
+
+async def voice_done(db: AsyncSession, remark_id: int, heard: str, seconds: float) -> None:
+    """Расшифровка готова. Текст замечания становится расшифровкой, только
+    если его ещё никто не вписал руками."""
+    row = await db.get(ReferenceRemark, remark_id)
+    row.heard, row.audio_seconds, row.voice_status, row.voice_error = heard, seconds, "done", None
+    if not row.text:
+        row.text = heard
+    await db.commit()
+
+
+async def voice_waiting(db: AsyncSession) -> list[int]:
+    """Недошедшие до конца: ждут очереди или брошены умершим процессом —
+    те возвращаются в pending."""
+    await db.execute(update(ReferenceRemark).where(ReferenceRemark.voice_status == "working")
+                     .values(voice_status="pending"))
+    await db.commit()
+    rows = await db.execute(select(ReferenceRemark.id).where(ReferenceRemark.voice_status == "pending")
+                            .order_by(ReferenceRemark.id))
+    return list(rows.scalars())
+
+
+async def set_text(db: AsyncSession, remark_id: int, text: str) -> None:
+    await db.execute(update(ReferenceRemark).where(ReferenceRemark.id == remark_id).values(text=text))
+    await db.commit()

@@ -331,6 +331,17 @@ class ReferenceRemark(Base):
     #: Версия, в которой отмечено «исправлено»; пусто — не отмечено.
     fixed_in: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Голос (US-0512, решение 0017). Аудио — первоисточник: хеш содержимого в
+    # объектном хранилище. Пусто — замечание написано, а не сказано.
+    audio_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    audio_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    audio_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: Расшифровка как услышано — не правится; правится text.
+    heard: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    #: pending — ждёт очереди, working — расшифровывается, done, failed.
+    voice_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    voice_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    voice_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
 
 class ReferenceRemarkMessage(Base):

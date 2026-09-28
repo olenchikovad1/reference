@@ -88,6 +88,9 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       minio-init: {condition: service_completed_successfully}
+      # Очередь расшифровки голоса (US-0512). Без брокера сервис жив, но
+      # расшифровка ждёт до его подъёма.
+      rabbitmq: {condition: service_healthy}
     ports: ["${API_PORT}:8000"]
     volumes:
       # Файловое пространство: исходники изделий. Только чтение — сервис их

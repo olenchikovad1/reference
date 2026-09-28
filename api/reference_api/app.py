@@ -18,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from reference_api.api import assets, colours, drops, health, library, people, platform, prints, products, references, review
 from reference_api.config import settings
+from reference_api.consumers import review as review_consumer
 from reference_api.schedulers import people as people_schedule
 from reference_api.schedulers import references as trash_schedule
 from reference_api.services import platform as publishing
@@ -43,6 +44,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     tasks.append(asyncio.create_task(asyncio.to_thread(models.report_at_start)))
     # Прерванная переразметка библиотеки продолжается сама (US-0629).
     tasks.append(asyncio.create_task(retag.resume_at_start()))
+    # Расшифровка голосовых замечаний — вход из брокера (US-0512).
+    if settings().amqp_url:
+        tasks.append(asyncio.create_task(review_consumer.run()))
     cfg = settings()
     # Ключи ядра для токенов. Тест подставляет свои заранее — их не трогаем.
     if getattr(app.state, "keys", None) is None and cfg.platform_jwks_url:

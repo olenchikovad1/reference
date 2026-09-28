@@ -29,7 +29,15 @@ PROBES = {
         "from reference_api.services import siglip, tags; import pathlib;"
         " tags.tag(siglip.embed_image(pathlib.Path('/srv/reference/files/prints/rocket.png').read_bytes()).tolist())"
     ),
+    # Грузится на время расшифровки и выгружается (решение 0017): в покое её
+    # нет, в бюджет идёт пик.
+    "faster-whisper-small (на время расшифровки)": (
+        "from reference_api.services import voice; import pathlib;"
+        " voice.transcribe(pathlib.Path('/srv/reference/files/voice/synthetic/01.wav').read_bytes())"
+    ),
 }
+#: Модели, что держатся не постоянно: в сумму покоя не идут, идут пиком.
+ON_DEMAND = {"faster-whisper-small (на время расшифровки)"}
 
 CHILD = """
 import resource, time
@@ -49,15 +57,19 @@ print(f"{{rss() - base:.0f}} {{peak - base:.0f}} {{spent:.1f}} {{models.provider
 
 
 def main() -> None:
-    total = 0.0
+    total, on_demand = 0.0, 0.0
     print(f"  {'модель':46} {'в работе, МБ':>12} {'пик, МБ':>8} {'загрузка+прогон, с':>19}  на чём")
     for name, probe in PROBES.items():
         out = subprocess.run([sys.executable, "-c", CHILD.format(probe=probe)],
                              capture_output=True, text=True, check=True).stdout.split()
         work, peak, spent, device = float(out[0]), float(out[1]), out[2], out[3]
-        total += work
+        if name in ON_DEMAND:
+            on_demand = max(on_demand, peak)
+        else:
+            total += work
         print(f"  {name:46} {work:12.0f} {peak:8.0f} {spent:>19}  {device}")
-    print(f"  {'всего':46} {total:12.0f}   бюджет 2560")
+    print(f"  {'всего в покое':46} {total:12.0f}   бюджет 2560")
+    print(f"  {'всего в пике расшифровки':46} {total + on_demand:12.0f}   бюджет 2560")
 
 
 if __name__ == "__main__":

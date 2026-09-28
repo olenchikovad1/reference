@@ -316,3 +316,16 @@ class RemarkOut(BaseModel):
     messages: list[RemarkMessageOut]
     #: Что смотрящему можно сказать в ветке: reply, fixed, accepted, rejected.
     can: list[str] = []
+    #: Голос (US-0512): есть ли запись, её длина, расшифровка как услышано,
+    #: и где расшифровка: pending, working, done, failed; пусто — написано.
+    audio: bool = False
+    audio_seconds: float | None = None
+    heard: str | None = None
+    voice_status: str | None = None
+    voice_error: str | None = None
+    #: Может ли смотрящий править текст — только автор замечания.
+    can_edit: bool = False
+
+
+class RemarkTextIn(BaseModel):
+    text: str

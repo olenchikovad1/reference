@@ -11,10 +11,16 @@
 исполнителя; согласованный — у главных редакторов.
 """
 
+import asyncio
+import hashlib
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from reference_api import broker
+from reference_api.db import session_factory
+from reference_api.repositories import assets as asset_repo
 from reference_api.repositories import people as people_repo
 from reference_api.repositories import references as cards
 from reference_api.repositories import review as repo
@@ -162,13 +168,24 @@ async def add_remark(db: AsyncSession, reference_id: int, who: str | None, side:
                      text: str, element_id: str | None = None):
     """Замечание ставит редактор или главный редактор — нажатием на слой или
     на место изделия. Принадлежит последней версии."""
+    body = " ".join((text or "").split())
+    if not body:
+        raise BadRemark("нужен текст замечания и точка на изделии")
+    number, name = await _placed(db, reference_id, who, x, y, element_id)
+    return await repo.add_remark(db, reference_id=reference_id, number=number, side=side, element_id=element_id,
+                                 element_name=name, x=x, y=y, text=body, author_id=who, status="open")
+
+
+async def _placed(db: AsyncSession, reference_id: int, who: str | None, x: float, y: float,
+                  element_id: str | None) -> tuple[int, str | None]:
+    """Общее у написанного и сказанного замечания: кто вправе, где точка,
+    на какой версии и на каком слое."""
     card = await cards.get(db, reference_id)
     if card is None:
         raise NoSuchReference("референса с таким номером нет")
     if not (await _roles(db, card, who)) & {"editor", "chief"}:
         raise NotYourStep("замечания ставит редактор")
-    body = " ".join((text or "").split())
-    if not body or not (0 <= x <= 1 and 0 <= y <= 1):
+    if not (0 <= x <= 1 and 0 <= y <= 1):
         raise BadRemark("нужен текст замечания и точка на изделии")
     number = await repo.last_number(db, reference_id)
     name = None
@@ -179,8 +196,7 @@ async def add_remark(db: AsyncSession, reference_id: int, who: str | None, side:
         el = next((e for e in elements if e.get("id") == element_id), None)
         if el:
             name = el.get("name") or (f"«{el.get('text')}»" if el.get("text") else None)
-    return await repo.add_remark(db, reference_id=reference_id, number=number, side=side, element_id=element_id,
-                                 element_name=name, x=x, y=y, text=body, author_id=who, status="open")
+    return number, name
 
 
 async def say(db: AsyncSession, reference_id: int, remark_id: int, who: str | None, kind: str, text: str | None) -> None:
@@ -226,3 +242,107 @@ async def remarks(db: AsyncSession, reference_id: int):
 
 async def card_of(db: AsyncSession, reference_id: int):
     return await cards.get(db, reference_id)
+
+
+# --- Голос (US-0512, решение 0017) -----------------------------------------
+
+log = logging.getLogger("reference.voice")
+
+#: Очередь расшифровки. В сообщении — только номер замечания: состояние
+#: читается в момент работы, а не берётся копией из очереди.
+VOICE_QUEUE = "reference.remark-voice"
+#: Попыток на сбой среды (модель, хранилище); ошибка в самой записи не
+#: повторяется — от повтора она не исправится.
+VOICE_ATTEMPTS = 3
+#: Запись — минута-другая речи; 10 МБ webm/opus — это час.
+MAX_AUDIO_BYTES = 10 * 1024 * 1024
+AUDIO_TYPES = {"audio/webm", "audio/ogg", "audio/wav", "audio/x-wav", "audio/wave", "audio/mp4", "audio/mpeg"}
+
+
+async def add_voice_remark(db: AsyncSession, reference_id: int, who: str | None, side: str, x: float, y: float,
+                           audio: bytes, content_type: str | None, element_id: str | None = None):
+    """Замечание голосом: аудио сохраняется сразу и остаётся первоисточником,
+    расшифровка — в фоне. Не дошло до брокера — не беда: при старте
+    недошедшие ставятся заново, аудио уже лежит."""
+    number, name = await _placed(db, reference_id, who, x, y, element_id)
+    kind = (content_type or "").split(";")[0].strip().lower()
+    if not audio or kind not in AUDIO_TYPES:
+        raise BadRemark("нужна запись голоса: webm, ogg, wav, mp4 или mp3")
+    if len(audio) > MAX_AUDIO_BYTES:
+        raise BadRemark("запись больше 10 МБ — наговорите замечание короче или разбейте на два")
+    digest = hashlib.sha256(audio).hexdigest()
+    await asyncio.to_thread(asset_repo.put, digest, "audio", audio, kind, {})
+    row = await repo.add_remark(db, reference_id=reference_id, number=number, side=side, element_id=element_id,
+                                element_name=name, x=x, y=y, text="", author_id=who, status="open",
+                                audio_digest=digest, audio_type=kind, voice_status="pending")
+    await broker.publish(VOICE_QUEUE, {"remark_id": row.id})
+    return row
+
+
+async def hear(remark_id: int, transcribe=None) -> tuple[str, int]:
+    """Расшифровать одно замечание. Исход: done, failed, retry (сбой среды,
+    попытки ещё есть) или skip (уже взято или сделано). Сам ничего не
+    бросает: сообщение из очереди подтверждается после этой функции."""
+    from reference_api.services import voice
+
+    transcribe = transcribe or voice.transcribe
+    async with session_factory() as db:
+        claimed = await repo.claim_voice(db, remark_id)
+    if claimed is None:
+        return "skip", 0
+    digest, attempts = claimed
+    async with session_factory() as db:
+        try:
+            got = await asyncio.to_thread(asset_repo.get, digest, "audio")
+            if got is None:
+                raise voice.Unheard("записи нет в хранилище")
+            text, seconds = await asyncio.to_thread(transcribe, got[0])
+            if not text.strip():
+                raise voice.Unheard("в записи не расслышано ни слова")
+        except voice.Unheard as e:
+            await repo.voice_state(db, remark_id, "failed", str(e)[:500])
+            return "failed", attempts
+        except Exception as e:  # сбой среды: модель, хранилище, память
+            log.warning("расшифровка замечания %s, попытка %s: %s", remark_id, attempts, e)
+            if attempts >= VOICE_ATTEMPTS:
+                await repo.voice_state(db, remark_id, "failed", f"не удалось за {attempts} попытки: {e}"[:500])
+                return "failed", attempts
+            await repo.voice_state(db, remark_id, "pending", str(e)[:500])
+            return "retry", attempts
+        await repo.voice_done(db, remark_id, " ".join(text.split()), seconds)
+    return "done", attempts
+
+
+async def resume_voice() -> int:
+    """При старте: недошедшие расшифровки — снова в очередь."""
+    async with session_factory() as db:
+        ids = await repo.voice_waiting(db)
+    for i in ids:
+        await broker.publish(VOICE_QUEUE, {"remark_id": i})
+    if ids:
+        log.info("в очередь расшифровки заново: %s", len(ids))
+    return len(ids)
+
+
+async def audio_of(db: AsyncSession, reference_id: int, remark_id: int) -> tuple[bytes, str]:
+    row = await repo.remark(db, remark_id)
+    if row is None or row.reference_id != reference_id or not row.audio_digest:
+        raise NoSuchReference("записи у этого замечания нет")
+    got = await asyncio.to_thread(asset_repo.get, row.audio_digest, "audio")
+    if got is None:
+        raise NoSuchReference("записи нет в хранилище")
+    return got[0], row.audio_type or got[1]
+
+
+async def edit_text(db: AsyncSession, reference_id: int, remark_id: int, who: str | None, text: str) -> None:
+    """Автор правит текст своего замечания; аудио и расшифровка «как
+    услышано» не меняются."""
+    row = await repo.remark(db, remark_id)
+    if row is None or row.reference_id != reference_id:
+        raise NoSuchReference("такого замечания нет")
+    if who is None or who != row.author_id:
+        raise NotYourStep("текст замечания правит его автор")
+    body = " ".join((text or "").split())
+    if not body:
+        raise BadRemark("пустой текст")
+    await repo.set_text(db, remark_id, body)
