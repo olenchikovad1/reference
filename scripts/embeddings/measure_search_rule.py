@@ -52,7 +52,7 @@ def main() -> None:
     tv = dict(zip(vocab, e5.text(vocab), strict=True))
 
     rows: dict[float, list[tuple[int, int, int]]] = {}
-    for thr in (0.0, 0.84, 0.85, 0.86, 0.87, 0.88, 0.90):
+    for thr in (0.0,):
         for q, exp in queries.items():
             s = img @ words.embed([cfg.search_template.format(q)])[0]
             mean, spread = statistics.fmean(s.tolist()), statistics.pstdev(s.tolist())
@@ -76,6 +76,32 @@ def main() -> None:
             rows.setdefault(thr, []).append((sum(n in exp for n in top), len(top), sum(n not in exp for n in top)))
 
     want = sum(min(len(e), 10) for e in queries.values())
+    # Порог «нашлось» (search_min_weight, US-0480): ниже — находит больше, но
+    # на отсутствующее в библиотеке тоже что-то показывает. Отсутствующее —
+    # слова, которых на картинках эталона нет.
+    absent = ["поезд", "пальма", "жираф", "самолёт", "велосипед", "дельфин"]
+    print("\nпорог «нашлось» (без смысла тегов, точный тег наверху):")
+    print(f"  {'порог':6} {'нашлось':>9} {'показано':>8} {'чужих':>6}   на отсутствующее показано")
+    for mw in (2.2, 2.0, 1.8, 1.6, 1.5):
+        hit = shown_n = foreign = 0
+        absent_shown = []
+        for q, exp in [*queries.items(), *((a, []) for a in absent)]:
+            s = img @ words.embed([cfg.search_template.format(q)])[0]
+            mean, spread = statistics.fmean(s.tolist()), statistics.pstdev(s.tolist())
+            weighed = sorted(((n, n, float(x), (float(x) - mean) / spread) for n, x in zip(names, s, strict=True)),
+                             key=lambda r: -r[3])
+            exact = {n: t for n in names for t, ws, _ in tags[n] if norm(q) in {norm(w) for w in ws} or norm(q) == norm(t)}
+            found = weighed[0][3] >= mw
+            top = [r[0] for r in order(weighed, exact, {}, 9.0, cfg.search_show_weight, cfg.search_limit, found)][:10] \
+                if exact or found else []
+            if q in queries:
+                hit += sum(n in exp for n in top)
+                shown_n += len(top)
+                foreign += sum(n not in exp for n in top)
+            else:
+                absent_shown.append(f"{q} {len(top)}")
+        print(f"  {mw:6} {hit:4}/{want:<4} {shown_n:8} {foreign:6}   {', '.join(absent_shown)}")
+
     print(f"  {'порог тега':10} {'нашлось':>9} {'показано':>8} {'чужих':>6}   по запросам (нашлось/показано)")
     for thr, r in rows.items():
         per = ", ".join(f"{q} {h}/{s}" for q, (h, s, _) in zip(queries, r, strict=True))

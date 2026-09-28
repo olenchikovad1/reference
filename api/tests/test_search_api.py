@@ -70,8 +70,15 @@ async def test_any_word_form_finds_the_snowy(stand) -> None:
         assert found and found[0]["name"] in tanks, f"{q}: первым {found[0]['name'] if found else 'ничего'}"
 
 
-async def test_absent_thing_gives_nothing_not_a_weak_guess(stand) -> None:
+async def test_absent_thing_gives_nothing_not_a_weak_guess(stand, monkeypatch) -> None:
+    """Порог «нашлось» держит выдачу: ниже него — пусто, а не слабая догадка.
+    Какой он — решение владельца (28.09: 2.0, «лучше лишнее, чем ничего»),
+    поэтому проверяется механизм, а не число: при пороге выше любого веса
+    на «жираф» не показывается ничего."""
+    from reference_api.config import settings
+
     client, _ = stand
+    monkeypatch.setattr(settings(), "search_min_weight", 50.0)
     assert await search(client, "жираф") == []
 
 
