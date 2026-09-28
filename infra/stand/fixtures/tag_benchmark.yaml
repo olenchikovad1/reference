@@ -203,3 +203,30 @@ measured_general:
     этих трёх картинках не разделяется порогом ни у кого (обрезка ракеты
     опускает «ту же» ниже пар «той же категории») — порог 0.91 держался на
     одном танке.
+
+# Набор запросов поиска по смыслу (US-0628). Записан 28.09.2026 ДО любого
+# замера поиска на нём, по картинкам эталона (листы миниатюр), а не по
+# выдаче. Запросы трёх видов: слово, которого нет среди тегов, но смысл тот
+# же (синоним или более общее — «бронетехника», «транспорт»); английское
+# («cat», «kawaii»); точное слово тега («танк», «медведь») — оно обязано
+# остаться наверху. expected — картинки, которые обязаны быть в первой
+# десятке; мера — сколько их там (полнота) и сколько в десятке чужих.
+search_queries:
+  бронетехника: [td-rusty-print.png, td-winter-camo-print.png, is3-summer-print.png, is3-winter-print.png,
+                 conqueror-red-print.png, t14-armata-print.png, t72-winter-print.png]
+  военное: [td-rusty-print.png, td-winter-camo-print.png, is3-summer-print.png, is3-winter-print.png,
+            conqueror-red-print.png, t14-armata-print.png, t72-winter-print.png, mi8-cloud-sharp-clean-print.png,
+            ustinov-newyear-print.png]
+  транспорт: [car-blue-sports.png, car-red-sports.png, mi8-cloud-sharp-clean-print.png, ustinov-newyear-print.png, rocket.png]
+  зимнее: [photo-snowy-mountain-forest.png, photo-snowy-path.png, td-rusty-print.png, is3-winter-print.png,
+           t72-winter-print.png, ustinov-newyear-print.png]
+  еда: [pizza.png, ice-cream.png, photo-fruits.png]
+  школьница: [anime-wikipe-tan-kagome.png, anime-sailor-fuku.png, anime-red-suit.png]
+  kawaii: [robot-kawaii.png, anime-chibi-squirrel.png, anime-neko-wikipe-tan.png]
+  cat: [cat-felix.png, photo-black-cat.png]
+  надпись: [text-keep-calm.png, text-happy-birthday.png, text-clever-smart.png, text-cyrillic-shcha.png,
+            text-metal-lettering.png, text-sticker-public-domain.png, text-graffiti-orfn.png, photo-street-tiles.png]
+  танк: [td-rusty-print.png, td-winter-camo-print.png, is3-summer-print.png, is3-winter-print.png,
+         conqueror-red-print.png, t14-armata-print.png, t72-winter-print.png]
+  медведь: [teddy-bear-toy.png, teddy-bear-with-ball.png, teddy-bear-photo.png]
+  цветы: [rose-red.png, flower-ornament.png]
