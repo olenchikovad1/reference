@@ -58,6 +58,7 @@ def main() -> None:
     ap.add_argument("code", nargs="?", default="B-HDY-14")
     ap.add_argument("--out", type=pathlib.Path, default=pathlib.Path(tempfile.gettempdir()))
     args = ap.parse_args()
+    args.out.mkdir(parents=True, exist_ok=True)
     product = yaml.safe_load((FIXTURES / f"{args.code}.yaml").read_text(encoding="utf-8"))
 
     for st in product["states"]:
