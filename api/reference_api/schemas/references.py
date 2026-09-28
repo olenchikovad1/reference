@@ -267,3 +267,52 @@ class ReferenceOut(BaseModel):
 
 class VersionOut(VersionMetaOut):
     work: dict | None
+
+
+class RemarkIn(BaseModel):
+    """Замечание (US-0511): на слое (element_id) или на месте изделия."""
+
+    side: str
+    #: Точка метки — доли кадра стороны, 0…1.
+    x: float
+    y: float
+    text: str
+    element_id: str | None = None
+
+
+class RemarkMessageIn(BaseModel):
+    #: reply — ответ, fixed — исправлено, accepted — принято, rejected — нет, не то.
+    kind: str
+    text: str | None = None
+
+
+class RemarkMessageOut(BaseModel):
+    kind: str
+    text: str | None
+    author_id: str | None
+    author_name: str | None
+    #: Последняя версия в момент сообщения.
+    number: int
+    at: datetime
+
+
+class RemarkOut(BaseModel):
+    id: int
+    #: Версия, на которой поставлено: в следующих — «из версии N».
+    number: int
+    side: str
+    element_id: str | None
+    element_name: str | None
+    x: float
+    y: float
+    text: str
+    author_id: str | None
+    author_name: str | None
+    #: open, fixed, accepted.
+    status: str
+    #: Версия, где отмечено «исправлено».
+    fixed_in: int | None
+    created_at: datetime
+    messages: list[RemarkMessageOut]
+    #: Что смотрящему можно сказать в ветке: reply, fixed, accepted, rejected.
+    can: list[str] = []

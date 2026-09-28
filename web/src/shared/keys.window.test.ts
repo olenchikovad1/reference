@@ -46,4 +46,11 @@ describe('клавиши окна', () => {
     expect(windowKey(k('KeyZ', 'я', { ctrlKey: true }), false)).toEqual({ kind: 'undo' })
     expect(windowKey(k('Delete', 'Delete'), false)).toEqual({ kind: 'remove' })
   })
+
+  it('N, R, F — по замечаниям, а в поле ввода это просто буквы', () => {
+    expect(windowKey(k('KeyN', 'т'), false)).toEqual({ kind: 'remark', what: 'next' })
+    expect(windowKey(k('KeyR', 'к'), false)).toEqual({ kind: 'remark', what: 'reply' })
+    expect(windowKey(k('KeyF', 'а'), false)).toEqual({ kind: 'remark', what: 'fixed' })
+    expect(windowKey(k('KeyN', 'т'), true)).toBeNull()
+  })
 })

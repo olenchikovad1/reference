@@ -14,6 +14,10 @@ from reference_api.schemas.references import (
     ExecutorOut,
     OrderIn,
     TransferOut,
+    RemarkIn,
+    RemarkMessageIn,
+    RemarkMessageOut,
+    RemarkOut,
     StatusEventOut,
     CommentIn,
     TaskOut,
@@ -465,3 +469,58 @@ async def open_version(reference_id: int, number: int, db: AsyncSession = Depend
     names = await people.names_of(db, [v.author_id] if v.author_id else [])
     return VersionOut(number=v.number, saved_at=v.created_at, author_id=v.author_id,
                       author_name=names.get(v.author_id or ""), work=v.work)
+
+
+
+async def _remarks(db: AsyncSession, reference_id: int, viewer: str | None = None) -> list[RemarkOut]:
+    rows, messages = await review.remarks(db, reference_id)
+    card = await review.card_of(db, reference_id) if rows else None
+    ids = {r.author_id for r in rows} | {m.author_id for ms in messages.values() for m in ms}
+    who = await people.names_of(db, [i for i in ids if i])
+    return [
+        RemarkOut(id=r.id, number=r.number, side=r.side, element_id=r.element_id, element_name=r.element_name, x=r.x,
+                  y=r.y, text=r.text, author_id=r.author_id, author_name=who.get(r.author_id or ""), status=r.status,
+                  fixed_in=r.fixed_in, created_at=r.created_at,
+                  messages=[RemarkMessageOut(kind=m.kind, text=m.text, author_id=m.author_id,
+                                             author_name=who.get(m.author_id or ""), number=m.number, at=m.at)
+                            for m in messages[r.id]],
+                  can=await review.can_say(db, card, r, viewer))
+        for r in rows
+    ]
+
+
+def _refused(e: Exception) -> HTTPException:
+    codes = {review.NoSuchReference: 404, review.WrongStatus: 409, review.NotYourStep: 403, review.BadRemark: 422}
+    return HTTPException(codes[type(e)], str(e))
+
+
+@router.get("/{reference_id}/remarks", response_model=list[RemarkOut], dependencies=[requires("references", Action.VIEW)])
+async def remarks(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> list[RemarkOut]:
+    """Замечания референса — открытые первыми, с веткой (US-0511)."""
+    return await _remarks(db, reference_id, _author(request))
+
+
+@router.post("/{reference_id}/remarks", response_model=RemarkOut, dependencies=[requires("review", Action.WRITE)])
+async def add_remark(reference_id: int, body: RemarkIn, request: Request, db: AsyncSession = Depends(session)) -> RemarkOut:
+    """Поставить замечание — редактор, на слой или на место изделия (US-0511)."""
+    try:
+        row = await review.add_remark(db, reference_id, _author(request), body.side, body.x, body.y, body.text,
+                                      body.element_id)
+    except (review.NoSuchReference, review.NotYourStep, review.BadRemark) as e:
+        raise _refused(e) from None
+    return next(r for r in await _remarks(db, reference_id, _author(request)) if r.id == row.id)
+
+
+# Право — просмотр согласования, а не запись: в ветке говорят и дизайнер, и
+# редактор, а кто что вправе сказать («исправлено» — исполнитель, «принято» —
+# автор замечания), решают роли в согласовании (решение 0016) в сервисе.
+@router.post("/{reference_id}/remarks/{remark_id}/messages", response_model=RemarkOut,
+             dependencies=[requires("review", Action.VIEW)])
+async def remark_message(reference_id: int, remark_id: int, body: RemarkMessageIn, request: Request,
+                         db: AsyncSession = Depends(session)) -> RemarkOut:
+    """Сообщение в ветку замечания: ответ, «исправлено», «принято», «нет, не то»."""
+    try:
+        await review.say(db, reference_id, remark_id, _author(request), body.kind, body.text)
+    except (review.NoSuchReference, review.NotYourStep, review.BadRemark, review.WrongStatus) as e:
+        raise _refused(e) from None
+    return next(r for r in await _remarks(db, reference_id, _author(request)) if r.id == remark_id)

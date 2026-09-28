@@ -484,6 +484,7 @@ export function GarmentCanvas(props: CanvasProps) {
         <polygon
           points={points}
           fill="transparent"
+          data-element-id={el.id}
           style={{ cursor: 'move' }}
           onPointerDown={(e) => {
             e.stopPropagation()
@@ -586,6 +587,7 @@ export function GarmentCanvas(props: CanvasProps) {
                 width={w}
                 height={h}
                 fill="transparent"
+                data-element-id={el.id}
                 style={{ cursor: 'move' }}
                 onPointerDown={(e) => {
                   e.stopPropagation()

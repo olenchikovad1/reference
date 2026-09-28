@@ -10,7 +10,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -301,4 +301,50 @@ class ReferenceStatusEvent(Base):
     by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: Замечание при возврате; у остальных переходов — пусто.
     comment: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ReferenceRemark(Base):
+    """Замечание (US-0511): на слое — принте или надписи — или на месте
+    изделия, и на версии, где поставлено. Не удаляется: закрытое остаётся в
+    истории — вопрос «а почему так» задают потом."""
+
+    __tablename__ = "reference_remarks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reference_id: Mapped[int] = mapped_column(ForeignKey("reference_cards.id", ondelete="CASCADE"), nullable=False)
+    #: Номер версии, на которой поставлено: в следующих — «из версии N».
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    side: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: Слой — id элемента работы; пусто — замечание на месте изделия.
+    element_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Имя слоя на момент замечания — слой могут переименовать и удалить.
+    element_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    #: Точка метки — доли кадра стороны, 0…1: только показ, не размещение (И-1
+    #: про принт, а не про метку замечания).
+    x: Mapped[float] = mapped_column(Float, nullable=False)
+    y: Mapped[float] = mapped_column(Float, nullable=False)
+    text: Mapped[str] = mapped_column(String(2000), nullable=False)
+    author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: open — открыто, fixed — исправлено (ждёт автора), accepted — принято.
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    #: Версия, в которой отмечено «исправлено»; пусто — не отмечено.
+    fixed_in: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ReferenceRemarkMessage(Base):
+    """Сообщение ветки замечания: ответ, «исправлено», «принято», «нет, не
+    то». Только дописывается."""
+
+    __tablename__ = "reference_remark_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    remark_id: Mapped[int] = mapped_column(ForeignKey("reference_remarks.id", ondelete="CASCADE"), nullable=False)
+    #: reply, fixed, accepted, rejected.
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    text: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Номер последней версии в момент сообщения.
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

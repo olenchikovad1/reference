@@ -42,7 +42,19 @@ import {
   UploadRefused,
 } from '../shared/api/assets'
 import type { ReferenceMatch } from '../shared/api/references'
-import { passTo, step, STATUS_NAMES, STEP_NAMES, type ReferenceFull as FullCard, type Step } from '../shared/api/references'
+import {
+  addRemark,
+  fetchRemarks,
+  passTo,
+  sayRemark,
+  step as reviewStep,
+  STATUS_NAMES,
+  STEP_NAMES,
+  SAY_NAMES,
+  type Remark,
+  type ReferenceFull as FullCard,
+  type Step,
+} from '../shared/api/references'
 import { fetchPeople } from '../shared/api/people'
 import {
   dropDraft as discardDraft,
@@ -215,6 +227,16 @@ export function WorkWindow() {
   // Открытый референс и версия на экране (US-0490). null — работа ещё не
   // сохранялась ни разу: «Сохранить» заведёт новый референс.
   const [current, setCurrent] = useState<ReferenceFull | null>(null)
+  // Замечания (US-0511): список, режим «поставить», точка до текста и
+  // замечание, на котором стоит фокус клавиш N/R/F.
+  const remarks = useQuery({
+    queryKey: ['remarks', current?.id ?? 0],
+    queryFn: () => fetchRemarks(current!.id),
+    enabled: !!current,
+  })
+  const [placing, setPlacing] = useState(false)
+  const [pendingRemark, setPendingRemark] = useState<PendingRemark | null>(null)
+  const [focusRemark, setFocusRemark] = useState<number | null>(null)
   const [viewing, setViewing] = useState<number | null>(null)
   // Отпечаток открытой версии, с ним сравнивается экран. null — сравнивать не
   // с чем: несохранённое — всё, что есть на холсте.
@@ -1147,6 +1169,21 @@ export function WorkWindow() {
         e.preventDefault()
         setHelpOpen((o) => !o)
         return
+      case 'remark': {
+        const list = remarks.data ?? []
+        if (!list.length || !current) return
+        e.preventDefault()
+        const at = list.findIndex((r) => r.id === focusRemark)
+        if (a.what === 'next') {
+          setFocusRemark(list[(at + 1) % list.length].id)
+          return
+        }
+        const r = list[at] ?? list[0]
+        if (a.what === 'reply') document.getElementById(`remark-reply-${r.id}`)?.focus()
+        else if (r.can.includes('fixed'))
+          void sayRemark(current.id, r.id, 'fixed').then(() => queries.invalidateQueries({ queryKey: ['remarks', current.id] }))
+        return
+      }
       case 'escape':
         e.preventDefault()
         // Первый Esc снимает выбор (или уходит из поля), второй закрывает окно.
@@ -2280,6 +2317,44 @@ export function WorkWindow() {
                   clips={clips}
                   imagesVersion={imagesVersion}
                 />
+                {(remarks.data ?? []).map((r, i) =>
+                  r.side === stateCode && r.status !== 'accepted' ? (
+                    <span
+                      key={r.id}
+                      data-remark-pin={r.id}
+                      aria-label={`замечание ${i + 1}: ${r.text}`}
+                      className={`pointer-events-none absolute z-20 flex h-6 w-6 items-center justify-center rounded-full border-2 text-xs font-bold ${
+                        r.status === 'open' ? 'border-white bg-destructive text-white' : 'border-white bg-warning text-white'
+                      } ${focusRemark === r.id ? 'ring-2 ring-primary' : ''}`}
+                      style={{ left: `${r.x * 100}%`, top: `${r.y * 100}%`, transform: 'translate(-50%, -50%)' }}
+                    >
+                      {i + 1}
+                    </span>
+                  ) : null,
+                )}
+                {placing && (
+                  <div
+                    className="absolute inset-0 z-30"
+                    style={{ cursor: 'crosshair' }}
+                    aria-label="нажмите на принт, надпись или место изделия"
+                    onClick={(e) => {
+                      const layer = e.currentTarget
+                      const box = layer.getBoundingClientRect()
+                      const x = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width))
+                      const y = Math.min(1, Math.max(0, (e.clientY - box.top) / box.height))
+                      // Какой слой под точкой — у холста спросить нечем, а у
+                      // документа можно: слой накрытия на миг пропускает нажатие.
+                      layer.style.pointerEvents = 'none'
+                      const under = document.elementsFromPoint(e.clientX, e.clientY).find((n) => n.getAttribute('data-element-id'))
+                      layer.style.pointerEvents = ''
+                      const id = under?.getAttribute('data-element-id') ?? null
+                      const el = id ? sized.elements.find((x) => x.id === id) : undefined
+                      const name = el ? (el.kind === 'text' ? `«${el.text}»` : el.name) : null
+                      setPendingRemark({ x, y, element_id: id, element_name: name })
+                      setPlacing(false)
+                    }}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -2516,6 +2591,25 @@ export function WorkWindow() {
               </p>
             )}
           </Section>
+
+          {current && (
+            <RemarksSection
+              card={current}
+              side={stateCode}
+              sideName={(code) => product?.states.find((s) => s.code === code)?.display_name ?? code}
+              remarks={remarks.data ?? []}
+              focus={focusRemark}
+              onFocus={setFocusRemark}
+              placing={placing}
+              onPlacing={setPlacing}
+              pending={pendingRemark}
+              onPending={setPendingRemark}
+              onChanged={() => {
+                void queries.invalidateQueries({ queryKey: ['remarks', current.id] })
+                void queries.invalidateQueries({ queryKey: ['tasks'] })
+              }}
+            />
+          )}
 
           {current && (
             <ReviewSection
@@ -3111,7 +3205,7 @@ function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: 
   const [error, setError] = useState<string | null>(null)
   const status = card.status ?? 'draft'
   const act = (what: Step) =>
-    void step(card.id, what, comment)
+    void reviewStep(card.id, what, comment)
       .then(() => openReference(card.id))
       .then((fresh) => {
         setComment('')
@@ -3125,7 +3219,7 @@ function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: 
     <Section title={`Согласование · ${STATUS_NAMES[status]}`}>
       <div className="flex flex-col gap-1 text-xs">
         <div className="flex flex-wrap gap-1">
-          {(card.can ?? []).map((what) =>
+          {(card.can ?? []).filter((w): w is Step => w !== 'remark').map((what) =>
             what === 'return' ? (
               <button key={what} className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => setReturning((v) => !v)}>
                 {STEP_NAMES[what]}
@@ -3136,7 +3230,7 @@ function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: 
               </button>
             ),
           )}
-          {(card.can ?? []).length === 0 && <span className="text-muted-foreground">ваш шаг здесь сейчас не нужен</span>}
+          {(card.can ?? []).filter((w) => w !== 'remark').length === 0 && <span className="text-muted-foreground">ваш шаг здесь сейчас не нужен</span>}
         </div>
         {returning && (
           <div className="flex flex-col gap-1">
@@ -3164,6 +3258,150 @@ function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: 
           <div key={i} className="text-muted-foreground">
             версия {e.number} · {when(e.at)} · {e.by_name ?? 'без входа'}: {STATUS_NAMES[e.to]}
             {e.comment ? ` — «${e.comment}»` : ''}
+          </div>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+type PendingRemark = { x: number; y: number; element_id: string | null; element_name: string | null }
+
+/** Замечания (US-0511): на слое или месте изделия, на версии, с веткой.
+ *  Открытые первыми; закрытые не пропадают — остаются в истории. */
+function RemarksSection(props: {
+  card: FullCard
+  side: string
+  sideName: (code: string) => string
+  remarks: Remark[]
+  focus: number | null
+  onFocus: (id: number | null) => void
+  placing: boolean
+  onPlacing: (on: boolean) => void
+  pending: PendingRemark | null
+  onPending: (p: PendingRemark | null) => void
+  onChanged: () => void
+}) {
+  const { card, remarks } = props
+  const [text, setText] = useState('')
+  const [reply, setReply] = useState<Record<number, string>>({})
+  const [error, setError] = useState<string | null>(null)
+  const open = remarks.filter((r) => r.status === 'open').length
+  const last = card.number
+  const done = (p: Promise<unknown>) =>
+    void p
+      .then(() => {
+        setError(null)
+        props.onChanged()
+      })
+      .catch((e: Error) => setError(e.message))
+  const put = () => {
+    if (!props.pending || !text.trim()) return
+    const p = props.pending
+    done(
+      addRemark(card.id, { side: props.side, x: p.x, y: p.y, text, element_id: p.element_id }).then(() => {
+        setText('')
+        props.onPending(null)
+      }),
+    )
+  }
+  return (
+    <Section title={`Замечания · ${open} открыто`}>
+      <div className="flex flex-col gap-1 text-xs">
+        {(card.can ?? []).includes('remark') && !props.pending && (
+          <button
+            className={buttonClass({ tone: props.placing ? 'accent' : 'neutral', variant: props.placing ? 'soft' : 'outline', small: true })}
+            onClick={() => props.onPlacing(!props.placing)}
+          >
+            {props.placing ? 'нажмите на принт, надпись или место изделия…' : '+ замечание'}
+          </button>
+        )}
+        {props.pending && (
+          <div className="flex flex-col gap-1 rounded border border-line p-1">
+            <span className="text-muted-foreground">
+              {props.pending.element_name ? `на слое ${props.pending.element_name}` : 'на месте изделия'}
+            </span>
+            <TextInput
+              aria-label="текст замечания"
+              autoFocus
+              value={text}
+              placeholder="что поправить"
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Enter') put()
+                if (e.key === 'Escape') props.onPending(null)
+              }}
+            />
+            <div className="flex gap-1">
+              <button className={buttonClass({ tone: 'accent', variant: 'soft', small: true })} disabled={!text.trim()} onClick={put}>
+                поставить
+              </button>
+              <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => props.onPending(null)}>
+                отмена
+              </button>
+            </div>
+          </div>
+        )}
+        {error && <span className="text-destructive">{error}</span>}
+        {remarks.length === 0 && <span className="text-muted-foreground">замечаний нет</span>}
+        {remarks.map((r, i) => (
+          <div
+            key={r.id}
+            onClick={() => props.onFocus(r.id)}
+            className={`rounded border px-1.5 py-1 ${props.focus === r.id ? 'border-primary' : 'border-line'} ${r.status === 'accepted' ? 'opacity-60' : ''}`}
+          >
+            <div className="font-semibold">
+              {i + 1}. {r.text}
+            </div>
+            <div className="text-muted-foreground">
+              {r.element_name ? `слой ${r.element_name}` : 'место изделия'} · {props.sideName(r.side).toLowerCase()} · {r.author_name ?? 'без входа'}
+              {r.number < last ? ` · из версии ${r.number}` : ''}
+              {r.status === 'fixed' && r.fixed_in ? ` · исправлено в ${r.fixed_in}` : ''}
+              {r.status === 'accepted' ? ' · принято' : ''}
+            </div>
+            {r.messages.map((m, j) => (
+              <div key={j} className="pl-2">
+                {m.author_name ?? 'без входа'}: {SAY_NAMES[m.kind]}
+                {m.text ? ` — ${m.text}` : ''}
+              </div>
+            ))}
+            <div className="mt-0.5 flex flex-wrap gap-1">
+              {r.can.includes('reply') && (
+                <div className="w-full">
+                  <TextInput
+                    id={`remark-reply-${r.id}`}
+                    aria-label={`ответ на замечание ${i + 1}`}
+                    value={reply[r.id] ?? ''}
+                    placeholder="ответить (R)"
+                    onChange={(e) => setReply((x) => ({ ...x, [r.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      e.stopPropagation()
+                      if (e.key === 'Enter' && (reply[r.id] ?? '').trim())
+                        done(sayRemark(card.id, r.id, 'reply', reply[r.id]).then(() => setReply((x) => ({ ...x, [r.id]: '' }))))
+                    }}
+                  />
+                </div>
+              )}
+              {(['fixed', 'accepted', 'rejected'] as const)
+                .filter((k) => r.can.includes(k))
+                .map((k) => (
+                  <button
+                    key={k}
+                    className={buttonClass({ tone: k === 'rejected' ? 'neutral' : 'accent', variant: 'outline', small: true })}
+                    onClick={() =>
+                      done(
+                        sayRemark(card.id, r.id, k, k === 'rejected' ? reply[r.id] : undefined).then(() =>
+                          setReply((x) => ({ ...x, [r.id]: '' })),
+                        ),
+                      )
+                    }
+                  >
+                    {SAY_NAMES[k]}
+                    {k === 'fixed' ? ' (F)' : ''}
+                  </button>
+                ))}
+            </div>
           </div>
         ))}
       </div>

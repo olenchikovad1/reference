@@ -279,8 +279,8 @@ export interface ReferenceFull {
   transfers?: Transfer[]
   status?: Status
   status_events?: StatusEvent[]
-  /** Шаги, доступные смотрящему сейчас. */
-  can?: Step[]
+  /** Шаги, доступные смотрящему сейчас; «remark» — ставить замечания. */
+  can?: (Step | 'remark')[]
 }
 
 /** Свои теги референса и скрытые у него автотеги (US-0493). */
@@ -375,4 +375,65 @@ export async function setOrder(ids: number[]): Promise<void> {
     body: JSON.stringify({ ids }),
   })
   if (!r.ok) throw await refusal(r, 'Порядок')
+}
+
+
+/** Замечание (US-0511): на слое или на месте изделия, на версии. */
+export interface Remark {
+  id: number
+  /** Версия, на которой поставлено. */
+  number: number
+  side: string
+  element_id: string | null
+  element_name: string | null
+  /** Точка метки — доли кадра стороны. */
+  x: number
+  y: number
+  text: string
+  author_id: string | null
+  author_name: string | null
+  status: 'open' | 'fixed' | 'accepted'
+  fixed_in: number | null
+  created_at: string
+  messages: { kind: RemarkSay; text: string | null; author_name: string | null; number: number; at: string }[]
+  /** Что смотрящему можно сказать в ветке. */
+  can: RemarkSay[]
+}
+
+export type RemarkSay = 'reply' | 'fixed' | 'accepted' | 'rejected'
+
+export const SAY_NAMES: Record<RemarkSay, string> = {
+  reply: 'ответ',
+  fixed: 'исправлено',
+  accepted: 'принято',
+  rejected: 'нет, не то',
+}
+
+export async function fetchRemarks(referenceId: number): Promise<Remark[]> {
+  const r = await fetch(`${BASE}references/${referenceId}/remarks`)
+  if (!r.ok) throw new Error(`замечания не пришли: ${r.status}`)
+  return r.json()
+}
+
+export async function addRemark(
+  referenceId: number,
+  body: { side: string; x: number; y: number; text: string; element_id?: string | null },
+): Promise<Remark> {
+  const r = await fetch(`${BASE}references/${referenceId}/remarks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!r.ok) throw await refusal(r, 'замечание не поставилось')
+  return r.json()
+}
+
+export async function sayRemark(referenceId: number, remarkId: number, kind: RemarkSay, text?: string): Promise<Remark> {
+  const r = await fetch(`${BASE}references/${referenceId}/remarks/${remarkId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, text: text ?? null }),
+  })
+  if (!r.ok) throw await refusal(r, 'не записалось')
+  return r.json()
 }

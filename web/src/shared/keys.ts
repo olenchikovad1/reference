@@ -56,6 +56,7 @@ export type WindowAction =
   | { kind: 'nudge'; dxCm: number; dyCm: number }
   | { kind: 'remove' }
   | { kind: 'next'; back: boolean }
+  | { kind: 'remark'; what: 'next' | 'reply' | 'fixed' }
 
 const NUDGE: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
@@ -90,6 +91,10 @@ export function windowKey(e: KeyboardEvent, typing: boolean): WindowAction | nul
     return { kind: 'nudge', dxCm: x * step, dyCm: y * step }
   }
   if (e.code === 'Delete' || e.code === 'Backspace') return { kind: 'remove' }
+  // Замечания (US-0511): N — следующее, R — ответить, F — «исправлено».
+  if (!e.shiftKey && e.code === 'KeyN') return { kind: 'remark', what: 'next' }
+  if (!e.shiftKey && e.code === 'KeyR') return { kind: 'remark', what: 'reply' }
+  if (!e.shiftKey && e.code === 'KeyF') return { kind: 'remark', what: 'fixed' }
   if (e.code === 'Equal' || e.code === 'NumpadAdd') return { kind: 'zoom', by: 'in' }
   if (e.code === 'Minus' || e.code === 'NumpadSubtract') return { kind: 'zoom', by: 'out' }
   if (e.code === 'Digit0' || e.code === 'Numpad0') return { kind: 'zoom', by: 'fit' }
@@ -118,6 +123,7 @@ export const WINDOW_KEYS: readonly KeyRow[] = [
   { keys: '1 / 2 / 3', what: 'перед, спина, бок', probe: [{ code: 'Digit1' }, { code: 'Digit2' }, { code: 'Digit3' }] },
   { keys: 'A / D', what: 'соседняя карточка витрины', probe: [{ code: 'KeyA' }, { code: 'KeyD' }] },
   { keys: 'Q / E', what: 'история: раньше, позже', probe: [{ code: 'KeyQ' }, { code: 'KeyE' }] },
+  { keys: 'N / R / F', what: 'замечания: следующее, ответить, «исправлено»', probe: [{ code: 'KeyN' }, { code: 'KeyR' }, { code: 'KeyF' }] },
   { keys: 'Ctrl+Z / Ctrl+Y', what: 'отменить, вернуть', probe: [{ code: 'KeyZ', ctrlKey: true }, { code: 'KeyY', ctrlKey: true }] },
   { keys: 'Ctrl+S', what: 'сохранить новой версией', probe: [{ code: 'KeyS', ctrlKey: true }] },
   { keys: 'Ctrl+Shift+S', what: 'сохранить как новый референс', probe: [{ code: 'KeyS', ctrlKey: true, shiftKey: true }] },
