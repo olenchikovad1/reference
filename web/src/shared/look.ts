@@ -311,6 +311,10 @@ export function drawLooked(
   w: number,
   h: number,
 ): void {
+  // Незагрузившаяся картинка — complete, но без размеров: drawImage на ней
+  // бросает InvalidStateError, и падало всё окно, а не один элемент
+  // (28.09.2026, файл пропал из хранилища). Пропускаем — элемент пуст.
+  if (!img.naturalWidth || !img.naturalHeight) return
   const source = look && changesPixels(look) ? (looked(img, look) ?? img) : img
   const alpha = ctx.globalAlpha
   ctx.globalAlpha = alpha * Math.min(1, Math.max(0, look?.opacity ?? 1))

@@ -34,6 +34,9 @@ async def test_erase_forever_leaves_nothing_but_the_picture(stand) -> None:  # n
     assert ref not in [c["id"] for c in (await client.get("/reference/api/references/find", params={"q": "вертолёт"})).json()]
     item = next(i for i in (await client.get("/reference/api/assets/library")).json() if i["digest"] == heli)
     assert item["references"] == [], "связь с картинкой осталась"
+    # Картинка библиотеки остаётся и файлом (решение 0014): 28.09.2026 стирание
+    # пробных референсов, где она лежала листом, унесло её из хранилища.
+    assert (await client.get(f"/reference/api/assets/{heli}/thumb")).status_code == 200, "файл картинки стёрт"
 
 
 async def test_defect_hides_the_picture_and_is_recognised_when_uploaded_again(stand) -> None:  # noqa: F811

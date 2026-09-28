@@ -240,3 +240,12 @@ async def set_manual_kind(db: AsyncSession, digest: str, manual: str, by: str | 
     await db.commit()
     await db.refresh(row)
     return row
+
+
+async def library_digests(db: AsyncSession, digests: list[str]) -> set[str]:
+    """Какие из файлов — картинки библиотеки (у них есть вектор картинки)."""
+    if not digests:
+        return set()
+    rows = await db.execute(select(AssetEmbedding.digest).where(
+        AssetEmbedding.digest.in_(digests), AssetEmbedding.kind == "image"))
+    return set(rows.scalars())

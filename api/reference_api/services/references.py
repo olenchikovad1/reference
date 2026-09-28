@@ -489,7 +489,11 @@ async def erase_forever(db: AsyncSession, reference_id: int, reason: str, by: st
     name = card.name
     files = await repo.files_of(db, reference_id)
     await repo.erase(db, reference_id)
-    orphans = sorted(files - await repo.files_in_use(db, files))
+    # Картинки библиотеки не стираются никогда (решение 0014), даже если лежали
+    # в референсе листом или снимком: 28.09.2026 стирание пробных референсов,
+    # где принт библиотеки был записан листом, унесло его файл из хранилища.
+    library = await library_repo.library_digests(db, list(files))
+    orphans = sorted(files - await repo.files_in_use(db, files) - library)
     await library_repo.forget_vectors(db, orphans, kind=SHEET)
     for digest in orphans:
         storage.remove(digest)
