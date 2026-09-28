@@ -406,6 +406,99 @@ caveats:
 # Эталонные принты. Рисуются кодом, а не руками: размеры в них часть ответа, и
 # подогнанные на глаз они превращают измерительный инструмент во врущий.
 # Каждый подписан вопросом, на который отвечает, а не именем файла.
+# Добор к эталону тегов (план 087, US-0623): аниме, надписи и настоящие фото —
+# их в наборе было три, два и одно при восьми нужных. Отдельным разделом, а
+# не в tuning_set: по tuning_set считаются замеры US-0480 и US-0520, и новые
+# картинки поменяли бы их числа молча. Скачаны 28.09.2026 скриптом
+# scripts/prints/commons.py шириной 1024; вид и ожидаемые теги — в
+# tag_benchmark.yaml.
+tag_set:
+  - name: anime-sailor-fuku.png
+    source: https://commons.wikimedia.org/wiki/File:Moe_anime_girl_in_sailor_fuku.png
+    license: CC0
+    author: "Akane-K"
+    sha256: b5fee04f82aa58d4617d4a0e4846c2854731d9fa76fc58a22d0766be71739165
+  - name: anime-red-suit.png
+    source: https://commons.wikimedia.org/wiki/File:Red_suit_anime_girl.png
+    license: CC0
+    author: "jsks"
+    sha256: 146b8738f26bc07e45a88525d79b63ae8491bd761f51a8749435bf6bbdc43b8e
+  - name: anime-cyan-hair.png
+    source: https://commons.wikimedia.org/wiki/File:Gray_cyan_hair_anime_girl.png
+    license: CC BY-SA 4.0
+    author: "Ao hoshi 03"
+    sha256: ca0f36aca9b0efbb48dc644e463e2564f800b8e9f0a6510f4216d337f77a67ae
+  - name: anime-neko-wikipe-tan.png
+    source: https://commons.wikimedia.org/wiki/File:Neko_Wikipe-tan_crop.png
+    license: CC BY-SA 3.0
+    author: "w:User:Kasuga~enwiki"
+    sha256: 86a7d00b7bf4fd564ca7bb661b9a2e9350318a9bc4005bd377658d533dc6c6d6
+  - name: anime-school-boy.png
+    source: https://commons.wikimedia.org/wiki/File:Manga_school_boy.png
+    license: CC0
+    author: "JZA"
+    sha256: 0496e4943ac04c2f02cdb71c49ff5497c4cad45cbcc1a7081358dec8876a0e2b
+  - name: anime-chibi-squirrel.png
+    source: https://commons.wikimedia.org/wiki/File:Chibi_gijinka_Enterprise_the_Squirrel.png
+    license: CC BY-SA 4.0
+    author: "FibberPony"
+    sha256: 3acf1b1d13fe38478e2397195b9be6f5055e01eabb30f1452f4eb26bade12bd7
+  - name: text-metal-lettering.png
+    source: https://commons.wikimedia.org/wiki/File:Brushed_316_Stainless_Steel_Lettering.png
+    license: CC BY-SA 4.0
+    author: "Nauticalite"
+    sha256: 7d443e294c14f7d52f1e82595fe0363d7eaf8cde616736afdbb693f1e5e8ac07
+  - name: text-graffiti-nash.png
+    source: https://commons.wikimedia.org/wiki/File:Graffiti_NASH.png
+    license: CC BY 3.0
+    author: "NASH, Werner Zwakhalen"
+    sha256: ee5e2013dcd0fb1212d1d4e7e02db541b5c6033b05d6ef0bce453abd914e4aa1
+  - name: text-graffiti-orfn.png
+    source: https://commons.wikimedia.org/wiki/File:ORFN_graffiti_3.png
+    license: CC BY-SA 4.0
+    author: "89baybee89"
+    sha256: c1ef842e2c6d60eddfdcc5d707a694bb0cfc5a70b8bfaf46c8e4e5613c5e9180
+  - name: text-clever-smart.png
+    source: https://commons.wikimedia.org/wiki/File:CleverSmart.png
+    license: Public domain
+    author: "Carlsen Verlag"
+    sha256: 35576d185cc759205123ee886cb4aaea5c0a57f9effd7b891fe9e38b901a846c
+  - name: text-sticker-public-domain.png
+    source: https://commons.wikimedia.org/wiki/File:EN_Public_Domain_learning_circle_sticker_2.png
+    license: CC BY-SA 4.0
+    author: "YoulendreeAppasamy"
+    sha256: c5d3a3044605d620d53a244f45e9e72220326010afb31f45fb8c58f0f0822d5e
+  - name: text-cyrillic-shcha.png
+    source: https://commons.wikimedia.org/wiki/File:Щщ_poluustav.svg
+    license: CC0
+    author: "Chewzy"
+    sha256: e608114de43280de073638442dd4e49878b7ae576d4bddce87a795e1dbe166cb
+  - name: photo-snowy-mountain-forest.png
+    source: https://commons.wikimedia.org/wiki/File:Snowy_Mt._Hood,_Mt_Hood_National_Forest_(23577846912).png
+    license: Public domain
+    author: "U.S. Forest Service - Pacific Northwest Region"
+    sha256: 451e22ddcd980635df5e167436853b8d480b3bf9c2952392b41874385e282a1e
+  - name: photo-snowy-path.png
+    source: https://commons.wikimedia.org/wiki/File:Snowy_path_near_Lake_Joseph,_Muskoka_1.png
+    license: CC BY-SA 4.0
+    author: "Ajshul"
+    sha256: 89a4a00550b8415810e00e61905b08450c922ae00d56c28dd11b8263e16328c8
+  - name: photo-black-cat.png
+    source: https://commons.wikimedia.org/wiki/File:Black_cat_looking_upwards.png
+    license: CC BY-SA 4.0
+    author: "Lebernard"
+    sha256: fae26263905a1fff323fd4494a0c4c1eb43cd297d3b3162815b7aac573395316
+  - name: photo-fruits.png
+    source: https://commons.wikimedia.org/wiki/File:Mix_of_Fruits.png
+    license: CC BY-SA 4.0
+    author: "Smeghead"
+    sha256: bdb22c85854742d5cbfbb0ca875fcd83206e380c9725c4d454fc54c35e3ee7ec
+  - name: photo-street-tiles.png
+    source: https://commons.wikimedia.org/wiki/File:Ybor_City_street_tiles_-_N21st_Street.png
+    license: CC BY 2.0
+    author: "Mike Ball"
+    sha256: f29bcaceac4f77bcc9e03bc86071f50a992b64b654f2157ad6834878e1beac53
+
 probes:
   - {name: setka-20cm.png, width_cm: 20, subject: контрольная сетка 20x20 см,
      answers: искажение по складкам и правдоподобна ли калибровка}

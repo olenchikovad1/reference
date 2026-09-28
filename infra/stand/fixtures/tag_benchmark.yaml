@@ -1,0 +1,119 @@
+# Эталон тегов по видам картинок (план 087, US-0623).
+#
+# Зачем: сказать «новые модели размечают лучше» можно только против записанного
+# ожидания. Прежние ожидания (prints.yaml, tags_expected) — это семь танков в
+# снегу и по два-три слова на остальное; по ним не видно, что модель делает с
+# аниме, надписью или фото.
+#
+# Записано 28.09.2026 ДО любого замера автотегов на этом наборе — по листам
+# миниатюр (scripts/prints/contact_sheet.py), а не по именам файлов: имя
+# is3-summer врало дважды. Ожидания не правятся по результату замера: иначе
+# они становятся пересказом того, что модель выдала.
+#
+# Вид — то, по чему картинка пойдёт в свою модель (US-0625):
+#   anime        — аниме и манга: персонаж, нарисованный в этой манере;
+#   illustration — рисунок с объёмом, светотенью, фактурой;
+#   flat         — векторная и плоская графика: заливки, контур, клипарт;
+#   text         — надпись и типографика: главное на картинке — буквы;
+#   photo        — фото и фотореалистичный рендер (танки — кадры игры).
+# also — второй вид смешанной картинки: такая обязана уйти в обе модели.
+#
+# tags — ожидаемые теги в словарной форме: именительный падеж, единственное
+# число, как слово стоит в словаре (ё пишется, при сверке она равна е).
+# Слова, которых в словаре нынешней модели нет вовсе, замер считает отдельно:
+# их она не поставит ни при каком качестве.
+#
+# Сколько каждого вида (основной вид): аниме 9, иллюстрации 8, плоская 11,
+# надписи 8, фото 15 — из них 9 рендеров военной техники, настоящих фото 6.
+# Слабость набора: фото перекошены к танкам в снегу; снег без танка — две
+# картинки (гора Худ, тропа). Картинки с аниме-наклейкой на фото нет —
+# смешанное «аниме + фото» проверить не на чем (к US-0625).
+
+recorded: 2026-09-28
+kinds: [anime, illustration, flat, text, photo]
+
+images:
+  # --- аниме -------------------------------------------------------------
+  - {name: anime-girl.png,               kind: anime, tags: [девушка, аниме, ухо, волосы, платье, небо, цветок]}
+  - {name: anime-wikipe-tan-kagome.png,  kind: anime, tags: [девочка, аниме, портфель, форма, юбка, волосы]}
+  - {name: anime-wikipe-tan.png,         kind: anime, tags: [девочка, аниме, флаг, швабра, платье]}
+  - {name: anime-sailor-fuku.png,        kind: anime, tags: [девушка, аниме, форма, юбка, портфель, волосы]}
+  - {name: anime-red-suit.png,           kind: anime, tags: [девушка, аниме, пиджак, волосы, палец]}
+  - {name: anime-cyan-hair.png,          kind: anime, tags: [девушка, аниме, волосы, меч, чулки]}
+  - {name: anime-neko-wikipe-tan.png,    kind: anime, tags: [девочка, аниме, ухо, кошка, волосы, пазл]}
+  - {name: anime-school-boy.png,         kind: anime, tags: [мальчик, аниме, толстовка, шорты, волосы, самокат]}
+  - {name: anime-chibi-squirrel.png,     kind: anime, tags: [аниме, белка, хвост, ухо, жилет, галстук]}
+
+  # --- иллюстрации -------------------------------------------------------
+  - {name: car-blue-sports.png,          kind: illustration, tags: [автомобиль, машина]}
+  - {name: car-red-sports.png,           kind: illustration, tags: [автомобиль, машина]}
+  - {name: rose-red.png,                 kind: illustration, tags: [роза, цветок, лист]}
+  - {name: teddy-bear-with-ball.png,     kind: illustration, tags: [медведь, игрушка, мяч]}
+  - {name: teddy-bear-photo.png,         kind: illustration, tags: [медведь, игрушка]}
+  - {name: pumpkin-halloween.png,        kind: illustration, tags: [тыква, праздник]}
+  - {name: soccer-ball.png,              kind: illustration, tags: [мяч, футбол]}
+  - {name: ice-cream.png,                kind: illustration, tags: [мороженое, еда]}
+
+  # --- плоская и векторная графика ---------------------------------------
+  - {name: butterfly.png,                kind: flat, tags: [бабочка, насекомое]}
+  - {name: christmas-tree.png,           kind: flat, tags: [ёлка, праздник, звезда]}
+  - {name: flower-ornament.png,          kind: flat, tags: [цветок, узор]}
+  - {name: owl-cartoon.png,              kind: flat, tags: [сова, птица]}
+  - {name: pizza.png,                    kind: flat, tags: [пицца, еда]}
+  - {name: robot-kawaii.png,             kind: flat, tags: [робот, игрушка]}
+  - {name: rocket.png,                   kind: flat, tags: [ракета, космос]}
+  - {name: soccer-ball-flaming.png,      kind: flat, tags: [мяч, футбол, огонь]}
+  - {name: teddy-bear-toy.png,           kind: flat, tags: [медведь, игрушка, бант]}
+  - {name: unicorn-heraldic.png,         kind: flat, tags: [единорог, лошадь]}
+  - {name: cat-felix.png,                kind: flat, also: text, tags: [кот, надпись]}
+
+  # --- надписи -----------------------------------------------------------
+  - {name: text-keep-calm.png,           kind: text, tags: [надпись, плакат, корона]}
+  - {name: text-happy-birthday.png,      kind: text, tags: [надпись, буква, праздник]}
+  - {name: text-clever-smart.png,        kind: text, tags: [надпись, буква]}
+  - {name: text-cyrillic-shcha.png,      kind: text, tags: [буква, надпись]}
+  - {name: text-metal-lettering.png,     kind: text, tags: [буква, металл]}
+  - {name: text-sticker-public-domain.png, kind: text, tags: [надпись, наклейка, рука, кулак]}
+  - {name: text-graffiti-orfn.png,       kind: text, also: photo, tags: [граффити, надпись, стена, окно]}
+  - {name: photo-street-tiles.png,       kind: text, also: photo, tags: [надпись, плитка, узор, табличка]}
+
+  # --- фото и фотореалистичный рендер ------------------------------------
+  - {name: photo-black-cat.png,          kind: photo, tags: [кот, кошка, усы]}
+  - {name: photo-fruits.png,             kind: photo, tags: [фрукт, банан, яблоко, виноград, цветок]}
+  - {name: photo-snowy-mountain-forest.png, kind: photo, tags: [гора, снег, зима, лес, дерево, небо]}
+  - {name: photo-snowy-path.png,         kind: photo, tags: [снег, зима, лес, дерево, тропа]}
+  - {name: rubber-duck-photo.png,        kind: photo, tags: [утка, игрушка]}
+  - {name: text-graffiti-nash.png,       kind: photo, also: text, tags: [граффити, стена, здание, лицо, портрет]}
+  - {name: td-rusty-print.png,           kind: photo, tags: [танк, снег, зима, лес]}
+  - {name: td-winter-camo-print.png,     kind: photo, tags: [танк, снег, зима, камуфляж]}
+  - {name: is3-summer-print.png,         kind: photo, tags: [танк, снег, зима]}
+  - {name: is3-winter-print.png,         kind: photo, tags: [танк, снег, зима, лес]}
+  - {name: conqueror-red-print.png,      kind: photo, tags: [танк, снег, зима, гора, небо]}
+  - {name: t14-armata-print.png,         kind: photo, tags: [танк, снег, зима, небо]}
+  - {name: t72-winter-print.png,         kind: photo, tags: [танк, снег, зима]}
+  - {name: mi8-cloud-sharp-clean-print.png, kind: photo, tags: [вертолёт, лес, огонь, дым, снег, зима]}
+  - {name: ustinov-newyear-print.png,    kind: photo, tags: [крейсер, корабль, море, белка, шишка, хвоя, гирлянда, снег]}
+
+# Замеры — ниже, отдельными разделами: «было» у нынешней модели и каждое
+# следующее «стало». Пишутся выводом scripts/embeddings/measure_tag_benchmark.py.
+
+# «Было»: нынешняя модель, 28.09.2026, до любых изменений плана 087.
+# clip-vit-b32-multilingual/quint8/freq2011/d317ada3, 9860 слов, доля сильных
+# 0.2. Столбцы: картинок, ожидаемых тегов, из них слов нет в словаре, попало в
+# сильные, попало в двадцатку, сильных всего, сильных лишних, F1 по сильным.
+# Хуже всего аниме и надписи: сильные теги там почти целиком мимо
+# («самурай, кимоно, медсестра» у девушки в матроске; «логотип, эпиграмма» у
+# букв). Сцену у танков модель не ставит ни разу: у всех семи «нет: снег,
+# зима». Слов «аниме» и «волосы» в рабочем словаре нет вовсе.
+measured_before:
+  model: clip-vit-b32-multilingual/quint8/freq2011/d317ada3
+  date: 2026-09-28
+  by_kind:
+    #             [карт, ожид, нет слова, в сильных, в 20, сильных, лишних, F1]
+    anime:        [9,  52, 20,  3,  5, 82, 79, 0.04]
+    illustration: [8,  18,  0,  8, 14, 38, 30, 0.29]
+    flat:         [11, 25,  1, 10, 17, 76, 66, 0.20]
+    text:         [8,  24,  1,  1,  2, 50, 49, 0.03]
+    photo:        [15, 67,  2, 16, 21, 85, 69, 0.21]
+    total:        [51, 186, 24, 38, 59, 331, 293, 0.15]
+  not_in_vocabulary: [аниме, волосы, граффити, единорог, пазл, самокат, толстовка, усы, чулки]
