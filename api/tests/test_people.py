@@ -44,7 +44,7 @@ async def stand():
     app = create_app()
     async with app.router.lifespan_context(app):
         async with engine.begin() as conn:
-            await conn.execute(text("truncate table people, subject_names"))
+            await conn.execute(text("truncate table people, subject_names, app_people"))
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://stand") as c:
             yield c, session_factory
     await engine.dispose()

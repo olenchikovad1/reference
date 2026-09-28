@@ -87,7 +87,9 @@ async def create(
         await repo.drop_draft(db, None, author_id)
         if forked_from is not None:
             await repo.drop_draft(db, forked_from[0], author_id)
-    card = await repo.create(db, name, colour_model_id=colour_model_id, forked_from_version_id=parent_id)
+    # Исполнитель по умолчанию — тот, кто создал (US-0509).
+    card = await repo.create(db, name, colour_model_id=colour_model_id, forked_from_version_id=parent_id,
+                             executor_id=author_id)
     version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views)
     return Saved(card.id, version.number, found)
 
@@ -560,3 +562,24 @@ async def set_order(db: AsyncSession, author_id: str, reference_ids: list[int]) 
     if missing:
         raise BadOrder(f"таких карточек на витрине нет: {', '.join(map(str, missing))}")
     await repo.set_order(db, author_id, reference_ids)
+
+
+class NotADesigner(ValueError):
+    """Работу отдают только дизайнеру: у редактора очередь другая."""
+
+
+async def pass_to(db: AsyncSession, reference_id: int, to_id: str, by_id: str | None) -> None:
+    """Передать работу другому исполнителю (US-0509). Только человеку с ролью
+    «дизайнер» из таблицы ролей приложения (решение 0016)."""
+    from reference_api.repositories import people as people_repo
+
+    if await repo.get(db, reference_id) is None:
+        raise NoSuchReference("референса с таким номером нет")
+    person = await people_repo.app_person(db, to_id)
+    if person is None or person.role != "designer":
+        raise NotADesigner("работу передают только дизайнеру — у этого человека другая роль или её нет")
+    await repo.pass_to(db, reference_id, to_id, by_id)
+
+
+async def transfers(db: AsyncSession, reference_id: int):
+    return await repo.transfers(db, reference_id)

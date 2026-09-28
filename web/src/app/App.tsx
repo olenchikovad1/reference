@@ -6,7 +6,7 @@
 // пути», как и несуществующий: по ответу не узнать, что закрыто.
 
 import { readAppearance, type Appearance } from '@platform/shell'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { useState, type ReactElement, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 'react-router-dom'
 
@@ -18,11 +18,16 @@ import { Texts } from '../pages/Texts'
 import { Showcase } from '../pages/Showcase'
 import { Trash } from '../pages/Trash'
 import { NotFound, Placeholder } from '../pages/Placeholder'
+import { Dictionaries } from '../pages/Dictionaries'
+import { fetchPeople, installStandAs, ROLE_NAMES, setStandAs, standAs } from '../shared/api/people'
 import { useProfile, useSections, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { BASE, SECTIONS, type SectionPlace } from './sections'
 import { CODE, Shell } from './shell'
 
 const queries = new QueryClient()
+
+// Стенд без платформы: «я — …» уходит заголовком с каждым запросом (план 075).
+if (WITHOUT_PLATFORM) installStandAs()
 
 /** Где открывать «Референс» по-настоящему — для экрана «откройте через платформу». */
 const PLATFORM_URL = import.meta.env.VITE_PLATFORM_URL ?? 'http://localhost:8100'
@@ -35,6 +40,7 @@ const PAGES: Record<string, () => ReactElement> = {
   'references/trash': () => <Trash />,
   drops: () => <Drops />,
   products: () => <Products />,
+  dictionaries: () => <Dictionaries />,
 }
 
 /** Страница раздела, а поверх неё — окно (`overlay`), если оно открыто по
@@ -112,7 +118,8 @@ function Root() {
   return WITHOUT_PLATFORM ? (
     <>
       <div role="status" style={{ background: '#fef3c7', color: '#92400e', padding: '6px 12px', fontSize: 13 }}>
-        Работает без платформы: входа и прав нет, меню не показывается. Настройка VITE_WITHOUT_PLATFORM в web/.env.
+        Работает без платформы: входа и прав нет, меню не показывается. Настройка VITE_WITHOUT_PLATFORM в web/.env.{' '}
+        <StandAs />
       </div>
       <Pages />
     </>
@@ -134,5 +141,35 @@ export function App() {
     <QueryClientProvider client={queries}>
       <RouterProvider router={router} />
     </QueryClientProvider>
+  )
+}
+
+/** «Я — …» стенда: от чьего имени работать. Входа без платформы нет, а
+ *  согласование — работа двоих (план 075). */
+function StandAs() {
+  const people = useQuery({ queryKey: ['people'], queryFn: fetchPeople }, queries)
+  const [who, setWho] = useState(() => standAs() ?? '')
+  return (
+    <label>
+      я —{' '}
+      <select
+        aria-label="от чьего имени работать на стенде"
+        value={who}
+        onChange={(e) => {
+          setStandAs(e.target.value || null)
+          setWho(e.target.value)
+          void queries.invalidateQueries()
+        }}
+      >
+        <option value="">стенд без входа</option>
+        {people.data
+          ?.filter((p) => p.role)
+          .map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.display_name} · {ROLE_NAMES[p.role!]}
+            </option>
+          ))}
+      </select>
+    </label>
   )
 }

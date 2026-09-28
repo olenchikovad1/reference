@@ -60,13 +60,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         task.cancel()
 
 
-def _stand_subject() -> Subject:
+def _stand_subject(as_id: str | None = None) -> Subject:
     """Стендовый субъект: все гранты манифеста — каждое действие каждого
-    раздела и каждая функция. Только для стенда без платформы."""
+    раздела и каждая функция. Только для стенда без платформы.
+
+    `as_id` — «я — …» стенда (заголовок X-Stand-As): от имени другого
+    человека таблицы ролей, с теми же грантами. Без него работу двоих —
+    отправил дизайнер, вернул редактор — на стенде показать нечем (план 075).
+    За платформой заголовок не действует: посредник ставится только здесь."""
     m = publishing.manifest()
     granted = {f"{s['code']}:{a}" for s in m["sections"] for a in s.get("actions", ("view", "write", "delete"))}
     granted |= {f"{s['code']}:{f['code']}" for s in m["sections"] for f in s.get("functions", ())}
-    return Subject(id=people_service.STAND_SUBJECT_ID, organization_id="", visibility=Visibility.ALL,
+    return Subject(id=as_id or people_service.STAND_SUBJECT_ID, organization_id="", visibility=Visibility.ALL,
                    granted=frozenset(granted))
 
 
@@ -76,7 +81,7 @@ class _StandSubject(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[no-untyped-def]
         if getattr(request.state, "subject", None) is None:
-            request.state.subject = _stand_subject()
+            request.state.subject = _stand_subject(request.headers.get("x-stand-as") or None)
         return await call_next(request)
 
 

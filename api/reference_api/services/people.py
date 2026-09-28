@@ -8,6 +8,7 @@
 """
 
 import logging
+from dataclasses import dataclass
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,3 +73,68 @@ async def names_of(db: AsyncSession, ids: list[str]) -> dict[str, str]:
 
 async def name_of(db: AsyncSession, subject_id: str) -> str | None:
     return (await names_of(db, [subject_id])).get(subject_id)
+
+
+#: Роли в согласовании (решение 0016) — порядок показа в выборе.
+ROLES = {"designer": "дизайнер", "editor": "редактор", "chief": "главный редактор"}
+
+
+class BadPerson(ValueError):
+    """Роль не из списка или пустое ФИО — отказ, а не запись."""
+
+
+@dataclass(frozen=True)
+class Member:
+    """Человек приложения: снимок платформы и своя строка ролей вместе."""
+
+    id: str
+    #: ФИО из таблицы ролей; нет — имя из платформы.
+    name: str
+    full_name: str | None
+    role: str | None
+    #: Есть ли сейчас доступ к «Референсу» по снимку платформы. У стендового
+    #: субъекта и у людей, заведённых на стенде руками, — только на стенде.
+    access: bool
+
+
+def _has_access(sid: str, snapshot) -> bool:
+    """Доступ — по снимку платформы. На стенде без платформы доступ есть и у
+    стендового субъекта, и у людей, заведённых на стенде (id stand-…):
+    платформа их не знает, и «нет доступа» у каждого было бы шумом."""
+    if sid in snapshot or sid == STAND_SUBJECT_ID:
+        return True
+    return settings().without_platform and sid.startswith("stand-")
+
+
+async def everyone(db: AsyncSession) -> list[Member]:
+    """Все люди приложения — и с доступом, и с ролью: друг друга знают все
+    (решение 0016). По ФИО."""
+    with_role = {p.subject_id: p for p in await repo.app_people(db)}
+    snapshot = {p.id: p for p in await repo.listing(db)}
+    out = []
+    for sid in set(with_role) | set(snapshot):
+        r, s = with_role.get(sid), snapshot.get(sid)
+        out.append(Member(sid, r.full_name if r else s.display_name, r.full_name if r else None,
+                          r.role if r else None, _has_access(sid, snapshot)))
+    return sorted(out, key=lambda m: m.name.lower())
+
+
+async def set_role(db: AsyncSession, subject_id: str, full_name: str, role: str, by: str | None) -> Member:
+    name = " ".join(full_name.split())
+    if role not in ROLES:
+        raise BadPerson(f"роли «{role}» нет; есть: {', '.join(ROLES.values())}")
+    if not name:
+        raise BadPerson("нужно ФИО или ФИ")
+    await repo.put_app_person(db, subject_id, name, role, by)
+    return next(m for m in await everyone(db) if m.id == subject_id)
+
+
+async def members_of(db: AsyncSession, ids: list[str]) -> dict[str, Member]:
+    """Люди по id — для исполнителей на карточках. Кого нет ни в ролях, ни в
+    снимке — по последнему известному имени, без доступа."""
+    known = {m.id: m for m in await everyone(db)}
+    rest = [i for i in ids if i and i not in known]
+    names = await names_of(db, rest)
+    for i in rest:
+        known[i] = Member(i, names.get(i, i), None, None, _has_access(i, {}))
+    return {i: known[i] for i in ids if i}

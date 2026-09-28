@@ -101,6 +101,40 @@ export interface Card extends Saver {
   others_drafts?: string[]
   /** Место в своём порядке витрины (US-0601); нет — не расставлена. */
   my_position?: number | null
+  /** Исполнитель (US-0509); нет — сохранён до исполнителей. */
+  executor?: Executor | null
+  /** Смотрящий — исполнитель: фильтр «мои». */
+  mine?: boolean
+}
+
+/** Исполнитель референса: ФИО и есть ли у него доступ. */
+export interface Executor {
+  id: string
+  name: string
+  /** Нет доступа — работу надо передать. */
+  access: boolean
+}
+
+/** Передача работы (US-0509): кто, кому, когда. */
+export interface Transfer {
+  from_id: string | null
+  from_name: string | null
+  to_id: string
+  to_name: string
+  by_id: string | null
+  by_name: string | null
+  at: string
+}
+
+/** Передать работу дизайнеру; ответ — история передач. */
+export async function passTo(referenceId: number, subjectId: string): Promise<Transfer[]> {
+  const r = await fetch(`${BASE}references/${referenceId}/executor`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subject_id: subjectId }),
+  })
+  if (!r.ok) throw await refusal(r, 'не передалось')
+  return r.json()
 }
 
 /** Черновик между версиями (US-0598): работа целиком и версия, поверх
@@ -185,6 +219,8 @@ export interface ReferenceFull {
   tags: RefTags
   /** Свой черновик; пусто — правок поверх версий нет. */
   draft?: Draft | null
+  executor?: Executor | null
+  transfers?: Transfer[]
 }
 
 /** Свои теги референса и скрытые у него автотеги (US-0493). */

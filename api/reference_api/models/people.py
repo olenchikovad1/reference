@@ -13,7 +13,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import CheckConstraint, DateTime, String, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,3 +42,30 @@ class SubjectName(Base):
     display_name: Mapped[str] = mapped_column(String(300), nullable=False)
     #: Когда имя последний раз пришло от платформы — видно, насколько оно свежее.
     seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AppPerson(Base):
+    """Роль человека в согласовании и его ФИО — своя таблица приложения
+    (решение 0016). Не доступ: войти и сохранить разрешает платформа; роль
+    отвечает, чья очередь и кому можно отдать работу.
+
+    Ключ — id субъекта платформы. Строка не удаляется, когда у человека
+    забирают доступ: работа, где он исполнитель, видна с «нет доступа».
+    """
+
+    __tablename__ = "app_people"
+
+    subject_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    #: ФИО или ФИ, как пишут в работе: «Иванова Мария Петровна».
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    #: designer — дизайнер, editor — редактор, chief — главный редактор.
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    updated_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("role in ('designer','editor','chief')", name="ck_app_people_role"),
+        CheckConstraint("length(trim(full_name)) > 0", name="ck_app_people_full_name"),
+    )

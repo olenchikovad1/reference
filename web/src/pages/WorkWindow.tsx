@@ -42,6 +42,8 @@ import {
   UploadRefused,
 } from '../shared/api/assets'
 import type { ReferenceMatch } from '../shared/api/references'
+import { passTo, type ReferenceFull as FullCard } from '../shared/api/references'
+import { fetchPeople } from '../shared/api/people'
 import {
   dropDraft as discardDraft,
   newDraft,
@@ -2515,6 +2517,17 @@ export function WorkWindow() {
             )}
           </Section>
 
+          {current && (
+            <ExecutorSection
+              card={current}
+              onChanged={(card) => {
+                setCurrent(card)
+                queries.setQueryData(cardKey(card.id), card)
+                void queries.invalidateQueries({ queryKey: ['references'] })
+              }}
+            />
+          )}
+
           {current && viewing !== null && (
             <Section title={`История · ${current.versions.length}`}>
               <div className="flex flex-col gap-0.5">
@@ -3020,4 +3033,60 @@ const S: Record<string, React.CSSProperties> = {
   tagMore: { fontSize: 10, border: 'none', background: 'none', color: '#4f46e5', cursor: 'pointer', padding: '1px 3px' },
   warn: { color: '#b45309', fontSize: 13, lineHeight: 1.4, maxWidth: 620 },
   dim: { color: '#666', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4 },
+}
+
+/** Исполнитель референса (US-0509): кто делает работу — и передать её
+ *  дизайнеру, набрав часть ФИО. Передача видна строкой истории. */
+function ExecutorSection({ card, onChanged }: { card: FullCard; onChanged: (card: FullCard) => void }) {
+  const people = useQuery({ queryKey: ['people'], queryFn: fetchPeople })
+  const [query, setQuery] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const q = query.trim().toLowerCase()
+  const designers = (people.data ?? []).filter(
+    (p) => p.role === 'designer' && p.id !== card.executor?.id && p.display_name.toLowerCase().includes(q),
+  )
+  const when = (at: string) => new Date(at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return (
+    <Section title="Исполнитель">
+      <div className="flex flex-col gap-1 text-xs">
+        <div>
+          {card.executor ? card.executor.name : 'не назначен'}
+          {card.executor && !card.executor.access && <span className="ml-1 text-warning">· нет доступа — передайте работу</span>}
+        </div>
+        <TextInput
+          aria-label="передать работу: ФИО дизайнера"
+          value={query}
+          placeholder="передать: начните ФИО дизайнера"
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.stopPropagation()}
+        />
+        {q &&
+          designers.slice(0, 6).map((p) => (
+            <button
+              key={p.id}
+              className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+              onClick={() =>
+                void passTo(card.id, p.id)
+                  .then((transfers) => {
+                    setQuery('')
+                    setError(null)
+                    onChanged({ ...card, executor: { id: p.id, name: p.display_name, access: p.access }, transfers })
+                  })
+                  .catch((e: Error) => setError(e.message))
+              }
+            >
+              передать: {p.display_name}
+            </button>
+          ))}
+        {q && designers.length === 0 && <span className="text-muted-foreground">дизайнера с таким ФИО нет</span>}
+        {error && <span className="text-destructive">{error}</span>}
+        {(card.transfers ?? []).map((t, i) => (
+          <div key={i} className="text-muted-foreground">
+            {when(t.at)}: {t.from_name ?? 'без исполнителя'} → {t.to_name}
+            {t.by_name && t.by_name !== t.from_name ? ` · передал ${t.by_name}` : ''}
+          </div>
+        ))}
+      </div>
+    </Section>
+  )
 }

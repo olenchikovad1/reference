@@ -10,7 +10,10 @@ from reference_api.schemas.references import (
     CardOut,
     DraftIn,
     DraftOut,
+    ExecutorIn,
+    ExecutorOut,
     OrderIn,
+    TransferOut,
     TrashedOut,
     FoundReferenceOut,
     HiddenTagIn,
@@ -182,6 +185,7 @@ async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[Card
     )
     models = await drops.colour_models_of(db, [c.colour_model_id for c, _ in rows if c.colour_model_id])
     origins = await service.origins(db, [c for c, _ in rows])
+    executors = await people.members_of(db, [c.executor_id for c, _ in rows if c.executor_id])
     out = []
     for c, v in rows:
         cm = models.get(c.colour_model_id) if c.colour_model_id else None
@@ -195,8 +199,14 @@ async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[Card
             my_draft=viewer in drafting.get(c.id, []),
             others_drafts=[names.get(a, a) for a in drafting.get(c.id, []) if a != viewer],
             my_position=placed.get(c.id),
+            executor=_executor(executors.get(c.executor_id or "")),
+            mine=viewer is not None and c.executor_id == viewer,
         ))
     return out
+
+
+def _executor(m) -> ExecutorOut | None:
+    return None if m is None else ExecutorOut(id=m.id, name=m.name, access=m.access)
 
 
 @router.get("/trash", response_model=list[TrashedOut])
@@ -364,7 +374,31 @@ async def open_card(reference_id: int, request: Request, db: AsyncSession = Depe
         work=last.work,
         tags=_tags(await service.tags_of(db, card.id)),
         draft=_draft(await service.draft(db, card.id, author)) if (author := _author(request)) else None,
+        executor=_executor((await people.members_of(db, [card.executor_id])).get(card.executor_id or "")),
+        transfers=await _transfers(db, card.id),
     )
+
+
+async def _transfers(db: AsyncSession, reference_id: int) -> list[TransferOut]:
+    rows = await service.transfers(db, reference_id)
+    who = await people.members_of(db, sorted({x for t in rows for x in (t.from_id, t.to_id, t.by_id) if x}))
+    name = lambda i: who[i].name if i and i in who else None  # noqa: E731
+    return [TransferOut(from_id=t.from_id, from_name=name(t.from_id), to_id=t.to_id, to_name=name(t.to_id) or t.to_id,
+                        by_id=t.by_id, by_name=name(t.by_id), at=t.at) for t in rows]
+
+
+@router.post("/{reference_id}/executor", response_model=list[TransferOut],
+             dependencies=[requires("references", Action.WRITE)])
+async def pass_to(reference_id: int, body: ExecutorIn, request: Request, db: AsyncSession = Depends(session)) -> list[TransferOut]:
+    """Передать работу другому исполнителю — дизайнеру, выбранному по ФИО
+    (US-0509). Отдаёт историю передач."""
+    try:
+        await service.pass_to(db, reference_id, body.subject_id, _author(request))
+    except service.NoSuchReference as e:
+        raise HTTPException(404, str(e)) from None
+    except service.NotADesigner as e:
+        raise HTTPException(422, str(e)) from None
+    return await _transfers(db, reference_id)
 
 
 @router.get("/{reference_id}/versions/{number}", response_model=VersionOut)

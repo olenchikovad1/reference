@@ -81,6 +81,32 @@ class Saver(BaseModel):
     author_name: str | None = None
 
 
+class ExecutorOut(BaseModel):
+    """Исполнитель референса (US-0509): кто делает работу."""
+
+    id: str
+    #: ФИО из таблицы ролей; нет — имя из платформы.
+    name: str
+    #: Нет доступа к «Референсу» — работу надо передать.
+    access: bool
+
+
+class TransferOut(BaseModel):
+    """Передача работы: кто, кому, когда."""
+
+    from_id: str | None
+    from_name: str | None
+    to_id: str
+    to_name: str
+    by_id: str | None
+    by_name: str | None
+    at: datetime
+
+
+class ExecutorIn(BaseModel):
+    subject_id: str
+
+
 class CardOut(Saver):
     """Референс в списке: имя и последняя версия — кто и когда её сохранил."""
 
@@ -90,6 +116,10 @@ class CardOut(Saver):
     number: int
     #: Снимки последней версии по сторонам; пусто — сохранена до витрины.
     views: dict[str, str] = {}
+    #: Исполнитель (US-0509); нет — референс сохранён до исполнителей и без входа.
+    executor: ExecutorOut | None = None
+    #: Смотрящий — исполнитель: фильтр «мои» на витрине.
+    mine: bool = False
     #: Цвет изделия (код палитры) и дропы, где цветомодель выходит; пусто —
     #: референс сохранён без цветомодели.
     colour_code: str | None = None
@@ -190,6 +220,9 @@ class ReferenceOut(BaseModel):
     tags: TagsOut
     #: Свой черновик смотрящего; пусто — правок поверх версий нет.
     draft: DraftOut | None = None
+    executor: ExecutorOut | None = None
+    #: Передачи работы, по порядку (US-0509).
+    transfers: list[TransferOut] = []
 
 
 class VersionOut(VersionMetaOut):

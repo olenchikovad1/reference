@@ -47,6 +47,9 @@ class Reference(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: Кто положил в корзину — id субъекта платформы; пусто — без входа.
     deleted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Исполнитель (US-0509) — id субъекта платформы: кто делает работу и кому
+    #: прилетает доработка. По умолчанию создатель; меняют передачей.
+    executor_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     versions: Mapped[list["ReferenceVersion"]] = relationship(
         back_populates="reference",
@@ -261,3 +264,18 @@ class ReferencePosition(Base):
     )
     #: Чем меньше, тем ближе к началу витрины.
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class ReferenceTransfer(Base):
+    """Передача работы другому исполнителю (US-0509): кто, кому, когда.
+    Только дописывается — история передач не правится."""
+
+    __tablename__ = "reference_transfers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reference_id: Mapped[int] = mapped_column(ForeignKey("reference_cards.id", ondelete="CASCADE"), nullable=False)
+    from_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    to_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: Кто передал; пусто — без входа.
+    by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

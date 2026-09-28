@@ -154,9 +154,10 @@ export function Showcase() {
 
   // В поиске — порядок совпадения (свой тег первым), без него — свежие первыми.
   const shownRef = useRef<Card[] | undefined>(undefined)
+  const [onlyMine, setOnlyMine] = useState(false)
   const filtered = (
     found.ids === null ? cards.data : found.ids.flatMap((id) => cards.data?.find((c) => c.id === id) ?? [])
-  )?.filter((c) =>
+  )?.filter((c) => !onlyMine || c.mine).filter((c) =>
     passes(
       { drops: c.drop_ids, audiences: c.audience ? [c.audience] : [], categories: c.category ? [c.category] : [] },
       drop.filter,
@@ -407,6 +408,15 @@ export function Showcase() {
         </button>
         <button className={buttonClass({ tone: sortOwn ? 'accent' : 'neutral', variant: sortOwn ? 'soft' : 'outline', small: true })} aria-pressed={sortOwn} onClick={() => setSortOwn(true)}>
           мой
+        </button>
+        {/* «Мои» (US-0509) — где смотрящий исполнитель. */}
+        <button
+          className={buttonClass({ tone: onlyMine ? 'accent' : 'neutral', variant: onlyMine ? 'soft' : 'outline', small: true })}
+          aria-pressed={onlyMine}
+          onClick={() => setOnlyMine((v) => !v)}
+          title="Только референсы, где я исполнитель"
+        >
+          мои
         </button>
       </div>
       <div aria-live="polite" className="sr-only">
@@ -750,6 +760,12 @@ function ShowcaseCardView({
           {card.drops[0] ?? 'без дропа'} · {new Date(card.saved_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
           {card.forked_from_id && ` · от №${card.forked_from_id}`}
         </div>
+        {card.executor && (
+          <div className={`truncate ${card.executor.access ? 'text-muted-foreground' : 'text-warning'}`}>
+            {card.executor.name}
+            {!card.executor.access && ' · нет доступа'}
+          </div>
+        )}
         {/* Несохранённое поверх версий (US-0598): своё — «черновик», чужое —
             чьё, чтобы не удивляться, что у коллеги на экране другое. */}
         {(card.my_draft || (card.others_drafts?.length ?? 0) > 0) && (

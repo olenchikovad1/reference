@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.models.references import (
+    ReferenceTransfer,
     Reference,
     ReferenceDraft,
     ReferencePosition,
@@ -31,10 +32,12 @@ async def create(
     name: str,
     colour_model_id: int | None = None,
     forked_from_version_id: int | None = None,
+    executor_id: str | None = None,
 ) -> Reference:
     """Новая карточка без версий: первую кладёт ``add_version`` в той же
     транзакции — карточка без версии наружу не выходит."""
-    card = Reference(name=name, colour_model_id=colour_model_id, forked_from_version_id=forked_from_version_id)
+    card = Reference(name=name, colour_model_id=colour_model_id, forked_from_version_id=forked_from_version_id,
+                     executor_id=executor_id)
     db.add(card)
     await db.flush()
     return card
@@ -438,3 +441,17 @@ async def alive_ids(db: AsyncSession, card_ids: list[int]) -> set[int]:
     if not card_ids:
         return set()
     return set((await db.execute(select(Reference.id).where(Reference.id.in_(card_ids), ALIVE))).scalars())
+
+
+async def pass_to(db: AsyncSession, reference_id: int, to_id: str, by_id: str | None) -> None:
+    """Сменить исполнителя и записать передачу — одной транзакцией."""
+    card = await db.get(Reference, reference_id)
+    db.add(ReferenceTransfer(reference_id=reference_id, from_id=card.executor_id, to_id=to_id, by_id=by_id))
+    card.executor_id = to_id
+    await db.commit()
+
+
+async def transfers(db: AsyncSession, reference_id: int) -> list[ReferenceTransfer]:
+    rows = await db.execute(select(ReferenceTransfer).where(ReferenceTransfer.reference_id == reference_id)
+                            .order_by(ReferenceTransfer.at, ReferenceTransfer.id))
+    return list(rows.scalars())
