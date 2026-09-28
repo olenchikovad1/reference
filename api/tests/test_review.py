@@ -10,10 +10,12 @@ import io
 import pathlib
 
 import httpx
+import pytest
 import pytest_asyncio
 from sqlalchemy import text
 
 from reference_api.app import create_app
+from reference_api.services import bell
 
 PRINTS = pathlib.Path("/srv/reference/files/prints")
 IVANOVA, PETROV, SIDOROVA, CHIEF = "stand-ivanova", "stand-petrov", "stand-sidorova", "stand-chief"
@@ -123,3 +125,44 @@ async def test_editing_an_approved_reference_sends_it_back_to_draft(client) -> N
     card = (await client.get(f"{API}/references/{ref}")).json()
     assert card["status"] == "draft"
     assert card["status_events"][-1]["to"] == "draft" and card["status_events"][-1]["number"] == 2
+
+
+# --- Колокол платформы (US-0513) -------------------------------------------
+# Звонок подменён: что ушло бы в сервис уведомлений, собирается в список.
+@pytest.fixture
+def rung(monkeypatch) -> list[dict]:
+    got: list[dict] = []
+
+    async def deliver(payload: dict) -> None:
+        got.append(payload)
+
+    monkeypatch.setattr(bell, "deliver", deliver)
+    return got
+
+
+async def step(client, ref: int, what: str, who: str, **body) -> None:
+    r = await client.post(f"{API}/references/{ref}/{what}", headers=as_(who), json=body or None)
+    assert r.status_code == 200, r.text
+    await bell.drain()
+
+
+async def test_submit_rings_editors_and_return_rings_the_executor(client, rung) -> None:
+    ref = await new_reference(client)
+    await save_version(client, ref)
+    await bell.drain()
+    assert rung == [], "сохранение без смены статуса не звонит"
+
+    await step(client, ref, "submit", IVANOVA)
+    [sent] = rung
+    assert sent["recipients"] == sorted([PETROV, SIDOROVA, CHIEF]), "всем редакторам и главному, не себе"
+    assert sent["subject"] == f"Референс №{ref} ждёт согласования"
+    assert (sent["link"], sent["occasion"]) == (f"/reference/references/{ref}", f"reference:{ref}:review:v2")
+
+    await step(client, ref, "return", PETROV, comment="ракету левее на 2 см")
+    back = rung[1]
+    assert back["recipients"] == [IVANOVA], "вернули — исполнителю"
+    assert (back["subject"], back["body"]) == (f"Референс №{ref} вернули на доработку", "ракету левее на 2 см")
+
+    await step(client, ref, "submit", IVANOVA)
+    await step(client, ref, "approve", SIDOROVA)
+    assert len(rung) == 3, "принятие не звонит: ход ушёл главному, «Мои задачи» это покажут"

@@ -24,6 +24,7 @@ from reference_api.repositories import assets as asset_repo
 from reference_api.repositories import people as people_repo
 from reference_api.repositories import references as cards
 from reference_api.repositories import review as repo
+from reference_api.services import bell
 
 STATUS_NAMES = {
     "draft": "черновик",
@@ -101,7 +102,22 @@ async def step(db: AsyncSession, reference_id: int, action: str, who: str | None
     text = " ".join((comment or "").split()) or None
     if action == "return" and not text:
         raise NoComment("вернуть на доработку можно только с замечанием")
-    await repo.move(db, reference_id, to, await repo.last_number(db, reference_id), who, text)
+    number = await repo.last_number(db, reference_id)
+    await repo.move(db, reference_id, to, number, who, text)
+    await _ring(db, card, action, number, who, text)
+
+
+async def _ring(db: AsyncSession, card, action: str, number: int, who: str | None, comment: str | None) -> None:
+    """Колокол платформы (US-0513): пришло на согласование — редакторам,
+    вернули — исполнителю. Себе не звонят."""
+    link = f"/reference/references/{card.id}"
+    if action == "submit":
+        editors = [p.subject_id for p in await people_repo.app_people(db) if p.role in {"editor", "chief"}]
+        bell.ring([p for p in editors if p != who], f"reference:{card.id}:review:v{number}",
+                  f"Референс №{card.id} ждёт согласования", card.name, link)
+    elif action == "return" and card.executor_id and card.executor_id != who:
+        bell.ring([card.executor_id], f"reference:{card.id}:rework:v{number}",
+                  f"Референс №{card.id} вернули на доработку", comment or "", link)
 
 
 async def after_new_version(db: AsyncSession, reference_id: int, number: int, who: str | None) -> None:

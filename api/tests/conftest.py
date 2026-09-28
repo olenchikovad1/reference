@@ -27,6 +27,8 @@ os.environ["WITHOUT_PLATFORM"] = "true"
 # Задачи расшифровки тесты в брокер не ставят: у тестов своя база, а
 # сообщение забрал бы живой сервис стенда. Расшифровку тест зовёт сам.
 os.environ["AMQP_URL"] = ""
+# И в колокол платформы тесты не звонят: звонок подменяется в test_bell.
+os.environ["PLATFORM_NOTIFICATIONS_URL"] = ""
 
 
 def _switch_to_test_database() -> None:

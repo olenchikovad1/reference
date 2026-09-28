@@ -110,6 +110,9 @@ class Settings(BaseSettings):
     # объявлением права, они станут обязательными.
     platform_core_url: str | None = None
     platform_jwks_url: str | None = None
+    #: Сервис уведомлений платформы — колокол (US-0513). Нет адреса или
+    #: удостоверения — уведомления не шлются, согласование работает.
+    platform_notifications_url: str | None = None
     platform_app_code: str = "reference"
     #: Стенд без платформы (решение 0006): запрос без токена получает
     #: стендового субъекта со всеми грантами манифеста. Только явно — и с
