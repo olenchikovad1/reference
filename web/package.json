@@ -8,9 +8,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@platform/shell": "^1.14.0",
-    "@platform/tokens": "^1.26.0",
-    "@platform/ui": "^1.64.0",
+    "@platform/shell": "^1.19.0",
+    "@platform/tokens": "^1.29.0",
+    "@platform/ui": "^1.69.0",
     "@tanstack/react-query": "^5.62.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

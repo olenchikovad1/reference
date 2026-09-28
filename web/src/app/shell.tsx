@@ -5,7 +5,13 @@
 // значки разделов спрашиваются у её ядра, а не берутся из кода. Своего списка
 // разделов рамка не получает: что показать, решает платформа; здесь — адреса.
 
-import { AppShell, applyAppearance, saveAppearance, type Appearance } from '@platform/shell'
+import {
+  AppShell,
+  applyAppearance,
+  railApplications,
+  saveAppearance,
+  type Appearance,
+} from '@platform/shell'
 import { Icon } from '@platform/ui'
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -35,14 +41,10 @@ export function Shell({
   return (
     <AppShell
       current={CODE}
-      applications={(mine.data ?? []).map((one) => ({
-        code: one.code,
-        name: one.name,
-        // home — код первой страницы, а не адрес: путь собирает тот, кто ставит ссылку.
-        href: one.home ? `/${one.code}/${one.home}` : `/${one.code}/`,
-        icon: <Icon name={one.icon as never} />,
-        tone: one.tone,
-      }))}
+      // Ответ ядра в карточки рельсы перекладывает рамка: своя перекладка здесь
+      // отставала от неё на каждое новое поле — подпись под значком, правку
+      // значка, — и рельса в приложении оставалась старой.
+      applications={railApplications(mine.data)}
       home={{ href: '/platform/', name: 'Платформа', icon: <Icon name="layers" /> }}
       settings={{ href: '/platform/settings', name: 'Настройки', icon: <Icon name="settings" /> }}
       subject={{
