@@ -171,9 +171,12 @@ class FoundOut(BaseModel):
     digest: str
     name: str
     similarity: float
-    #: Вес относительно всей библиотеки на этот запрос — по нему порядок.
+    #: Вес относительно всей библиотеки на этот запрос — по нему порядок
+    #: внутри группы: сначала точный тег, потом найденные по картинке.
     weight: float
     references: list[FoundCardOut]
+    #: «тег «танк»» — найдена по точному тегу; нет — по самой картинке.
+    because: str | None = None
 
 
 class TextRowOut(BaseModel):

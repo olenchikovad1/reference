@@ -54,8 +54,11 @@ async def test_the_thing_itself_comes_first_and_its_weight_is_shown(stand) -> No
     client, digests = stand
     found = await search(client, "вертолёт")
     assert found and found[0]["digest"] == digests["mi8-cloud-sharp-clean-print.png"]
-    weights = [f["weight"] for f in found]
-    assert weights == sorted(weights, reverse=True), "выдача не по весу"
+    # По весу — внутри своей группы: точный тег наверху (US-0628), дальше —
+    # по картинке.
+    for group in (True, False):
+        weights = [f["weight"] for f in found if (f["because"] is not None) is group]
+        assert weights == sorted(weights, reverse=True), "выдача не по весу"
 
 
 async def test_any_word_form_finds_the_snowy(stand) -> None:
@@ -104,3 +107,17 @@ async def test_library_page_is_pictures_with_tags_names_and_where_used(stand) ->
     assert sorted(c["name"] for c in item["references"]) == ["вертолёт на груди", "вертолёт на спине"]
     assert any(t["strong"] for t in item["tags"]), "у картинки нет сильных тегов"
     assert item["name"] and item["name"]["name"] == "Ми-8", f"название не пришло: {item['name']}"
+
+
+async def test_exact_tag_comes_first_and_says_why(stand) -> None:
+    """«танк» — точное слово тега у танков: они выше любого похожего по
+    картинке, и у каждой находки видно, почему она найдена (US-0628)."""
+    client, digests = stand
+    found = await search(client, "танк")
+    reasons = [f["because"] for f in found]
+    assert reasons[0] == "тег «танк»"
+    split = reasons.index(None) if None in reasons else len(reasons)
+    assert all(r is not None for r in reasons[:split]) and all(r is None for r in reasons[split:])
+    tanks = {digests[n] for n in ("t72-winter-print.png", "is3-winter-print.png", "td-rusty-print.png")}
+    assert tanks <= {f["digest"] for f in found[:split]}
+

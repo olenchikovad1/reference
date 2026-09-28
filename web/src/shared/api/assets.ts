@@ -177,6 +177,8 @@ export interface Found {
   weight: number
   /** Карточки, где картинка стоит. */
   references: { id: number; name: string }[]
+  /** «тег «танк»» — найдена по точному тегу; нет — по самой картинке. */
+  because?: string | null
 }
 
 /** Поиск по смыслу слова (US-0480). Пустой ответ — «ничего не нашлось», а не

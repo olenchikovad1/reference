@@ -56,3 +56,16 @@ async def warnings_of(db: AsyncSession, digests: list[str], models: list[str]) -
     for w in rows.scalars():
         out[w.digest].append(w)
     return out
+
+
+async def tagged_with(db: AsyncSession, word: str, models: list[str]) -> dict[str, str]:
+    """Файлы, у которых слово — точно их тег: файл → показ тега. Сверка без
+    регистра и без различия «ё» и «е»: в словаре «вертолет», человек пишет
+    «вертолёт»."""
+    w = word.lower().replace("ё", "е")
+    rows = await db.execute(select(AssetTag.digest, AssetTag.code, AssetTag.name).where(AssetTag.model.in_(models)))
+    out: dict[str, str] = {}
+    for d, code, name in rows:
+        if w in (code.lower().replace("ё", "е"), name.lower().replace("ё", "е")):
+            out.setdefault(d, name)
+    return out

@@ -89,6 +89,9 @@ class Found:
     #: отклонениях от среднего по библиотеке. Его и видит человек.
     weight: float
     references: list[Reference]
+    #: Почему найдена: «тег «танк»» — слово запроса точно её тег; нет —
+    #: найдена по самой картинке, по смыслу слова.
+    because: str | None = None
 
 
 async def search(db: AsyncSession, query: str) -> list[Found]:
@@ -107,19 +110,28 @@ async def search(db: AsyncSession, query: str) -> list[Found]:
     if spread == 0:
         return []
     weighed = [(d, n, s, (s - mean) / spread) for d, n, s in rows]
-    if weighed[0][3] < cfg.search_min_weight:
-        return []
     # Забракованное в выдаче не показывается (US-0499): оно видно только
     # фильтром «брак» на странице принтов.
     marked = await repo.all_defects(db)
     weighed = [r for r in weighed if r[0] not in marked]
-    if not weighed or weighed[0][3] < cfg.search_min_weight:
+    # Точное слово тега — выше любого похожего по смыслу (US-0628): картинка с
+    # тегом «танк» на запрос «танк» идёт первой и показывается, даже если по
+    # самой картинке её вес ниже порогов: тег поставлен — значит, про неё.
+    exact = await tag_repo.tagged_with(db, query, [tagging.model_name(), anime.model_name()])
+    by_tag = [r for r in weighed if r[0] in exact]
+    # Порог «нашлось» — про выдачу по картинке. Не прошла она его — по
+    # картинке не показывается ничего, даже если нашёлся точный тег: иначе
+    # тег открывал бы дорогу слабым картинкам, которые порог и отсекал.
+    image_found = bool(weighed) and weighed[0][3] >= cfg.search_min_weight
+    if not by_tag and not image_found:
         return []
-    shown = [r for r in weighed if r[3] >= cfg.search_show_weight][: cfg.search_limit]
-    used = await cards.by_image(db, [d for d, *_ in shown], exclude=0)
+    rest = [r for r in weighed if image_found and r[0] not in exact and r[3] >= cfg.search_show_weight]
+    shown = [(r, f"тег «{exact[r[0]]}»") for r in by_tag] + [(r, None) for r in rest]
+    shown = shown[: max(cfg.search_limit, len(by_tag))]
+    used = await cards.by_image(db, [r[0] for r, _ in shown], exclude=0)
     return [
-        Found(d, n, s, w, [c for c, images in used if d in images])
-        for d, n, s, w in shown
+        Found(d, n, s, w, [c for c, images in used if d in images], why)
+        for (d, n, s, w), why in shown
     ]
 
 

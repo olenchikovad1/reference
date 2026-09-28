@@ -89,12 +89,12 @@ export function Prints() {
   // В поиске — порядок и вес поиска; без него — библиотека, свежие первыми.
   // Фильтр дропа поверх: картинка без дропа не пропадает — без фильтра она
   // среди всех и находится поиском.
-  const items: { item: LibraryItem; weight?: number }[] = (
+  const items: { item: LibraryItem; weight?: number; because?: string | null }[] = (
     found.rows === null
       ? (library.data ?? []).map((item) => ({ item }))
       : found.rows.flatMap((f) => {
           const item = library.data?.find((i) => i.digest === f.digest)
-          return item ? [{ item, weight: f.weight }] : []
+          return item ? [{ item, weight: f.weight, because: f.because }] : []
         })
   ).filter(({ item }) =>
     passes({ drops: item.drops.map((d) => d.id), audiences: item.audiences.map((a) => a.code), categories: item.categories }, drop.filter),
@@ -176,7 +176,7 @@ export function Prints() {
         <EmptyState title="Ничего не нашлось" description="Назовите предмет, а не настроение: «мяч», а не «весело»." />
       ) : (
         <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          {items.map(({ item, weight }) => (
+          {items.map(({ item, weight, because }) => (
             <article key={item.digest} className="pf-card flex flex-col overflow-hidden border border-line text-sm">
               <div className="relative aspect-square bg-muted">
                 <div className="absolute left-2 top-2 z-10">
@@ -189,8 +189,11 @@ export function Prints() {
                 </div>
                 <img src={assetUrl(item.digest, 'thumb')} alt={item.name?.name ?? item.file_name} className="h-full w-full object-contain" />
                 {weight !== undefined && (
-                  <span className="absolute right-1 top-1 rounded bg-card px-1 text-xs" title="насколько картинка про запрос относительно всей библиотеки">
-                    вес {weight.toFixed(1)}
+                  <span
+                    className="absolute right-1 top-1 rounded bg-card px-1 text-xs"
+                    title={because ? 'слово запроса — её тег' : 'насколько картинка про запрос относительно всей библиотеки'}
+                  >
+                    {because ?? `по картинке · вес ${weight.toFixed(1)}`}
                   </span>
                 )}
               </div>
@@ -317,8 +320,10 @@ export function Prints() {
 }
 
 /** Поиск по весам с задержкой: запрос на каждую букву ни к чему. */
-function useWeights(query: string): { rows: { digest: string; weight: number }[] | null; error: string | null } {
-  const [rows, setRows] = useState<{ digest: string; weight: number }[] | null>(null)
+type Hit = { digest: string; weight: number; because: string | null }
+
+function useWeights(query: string): { rows: Hit[] | null; error: string | null } {
+  const [rows, setRows] = useState<Hit[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     const q = query.trim()
@@ -332,7 +337,7 @@ function useWeights(query: string): { rows: { digest: string; weight: number }[]
       searchAssets(q)
         .then((found) => {
           if (stale) return
-          setRows(found.map((f) => ({ digest: f.digest, weight: f.weight })))
+          setRows(found.map((f) => ({ digest: f.digest, weight: f.weight, because: f.because ?? null })))
           setError(null)
         })
         .catch((e: Error) => !stale && setError(`Поиск не ответил: ${e.message}`))

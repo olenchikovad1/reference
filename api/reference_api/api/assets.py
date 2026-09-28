@@ -85,7 +85,7 @@ async def search(
     found = await library.search(db, query)
     return [
         FoundOut(digest=f.digest, name=f.name, similarity=round(f.similarity, 4), weight=round(f.weight, 2),
-                 references=[FoundCardOut(id=c.id, name=c.name) for c in f.references])
+                 references=[FoundCardOut(id=c.id, name=c.name) for c in f.references], because=f.because)
         for f in found
     ]
 
