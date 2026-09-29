@@ -2,7 +2,7 @@
 
 const BASE = import.meta.env.VITE_API_BASE ?? '/reference/api/'
 
-import type { DropLink, LinksBody } from './assets'
+import type { DropLink, LinksBody, Votes } from './assets'
 
 export interface TextRow {
   text: string
@@ -16,6 +16,7 @@ export interface TextRow {
   references: { id: number; name: string }[]
   /** Заведена заранее, в референсах её ещё нет. */
   planned: boolean
+  votes: Votes
   /** При поиске: same — дословно, words — все слова запроса, close — похоже. */
   match: 'same' | 'words' | 'close' | null
   similarity: number | null

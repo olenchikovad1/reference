@@ -27,6 +27,7 @@ from reference_api.schemas.library import (
     WarningOut,
 )
 from reference_api.services import assets as service
+from reference_api.api.library import votes_out
 from reference_api.services import kinds, library, people, retag
 from reference_api.services import names as naming
 
@@ -238,10 +239,12 @@ async def unmark_defect(digest: str, db: AsyncSession = Depends(session)) -> Non
 
 
 @router.get("/library", response_model=list[LibraryItemOut])
-async def catalogue(defects: bool = False, db: AsyncSession = Depends(session)) -> list[LibraryItemOut]:
+async def catalogue(request: Request, defects: bool = False, db: AsyncSession = Depends(session)) -> list[LibraryItemOut]:
     """Библиотека для страницы «Принты»: картинки, свежие первыми, с тегами,
     названием и «где использован». defects=true — только забракованные."""
     items = await library.catalogue(db, defects)
+    subject = getattr(request.state, "subject", None)
+    voted = await library.votes(db, "image", subject.id if subject else None)
     names = await people.names_of(db, [i.defect.marked_by for i in items if i.defect and i.defect.marked_by])
     return [
         LibraryItemOut(
@@ -253,6 +256,7 @@ async def catalogue(defects: bool = False, db: AsyncSession = Depends(session)) 
             defect=_defect_out(i.defect, names),
             kind=_kind_out(i.kind),
             warnings=[WarningOut(kind=w.kind, text=w.text) for w in i.tags.warnings],
+            votes=votes_out(voted.get(i.digest)),
         )
         for i in items
     ]

@@ -148,6 +148,21 @@ class ReasonIn(BaseModel):
     reason: str
 
 
+class VotesOut(BaseModel):
+    """«Нравится» и «не нравится» (US-0715): сколько тех и других и свой голос."""
+
+    up: int = 0
+    down: int = 0
+    #: +1, −1 или 0 — не голосовал.
+    mine: int = 0
+
+
+class VoteIn(BaseModel):
+    key: str
+    #: +1 — нравится, −1 — не нравится, 0 — снять голос.
+    value: Literal[-1, 0, 1]
+
+
 class LibraryItemOut(BaseModel):
     """Картинка библиотеки на странице «Принты»."""
 
@@ -163,6 +178,7 @@ class LibraryItemOut(BaseModel):
     audiences: list[AudienceLinkOut] = []
     categories: list[str] = []
     defect: DefectOut | None = None
+    votes: VotesOut = VotesOut()
 
 
 class FoundOut(BaseModel):
@@ -190,6 +206,7 @@ class TextRowOut(BaseModel):
     references: list[FoundCardOut]
     #: Заведена заранее, в референсах её ещё нет.
     planned: bool
+    votes: VotesOut = VotesOut()
     #: При поиске: same — дословно, words — все слова запроса, close — похоже.
     match: str | None = None
     similarity: float | None = None

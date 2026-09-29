@@ -10,6 +10,7 @@ from reference_api.models.library import (
     LibraryAudience,
     LibraryDrop,
     LibraryText,
+    LibraryVote,
 )
 
 
@@ -249,3 +250,22 @@ async def library_digests(db: AsyncSession, digests: list[str]) -> set[str]:
     rows = await db.execute(select(AssetEmbedding.digest).where(
         AssetEmbedding.digest.in_(digests), AssetEmbedding.kind == "image"))
     return set(rows.scalars())
+
+
+async def set_vote(db: AsyncSession, kind: str, key: str, voter_id: str, value: int) -> None:
+    """Голос человека: +1, −1 или 0 — снять."""
+    await db.execute(delete(LibraryVote).where(
+        LibraryVote.kind == kind, LibraryVote.key == key, LibraryVote.voter_id == voter_id))
+    if value:
+        db.add(LibraryVote(kind=kind, key=key, voter_id=voter_id, value=value))
+    await db.commit()
+
+
+async def votes(db: AsyncSession, kind: str, voter_id: str | None) -> dict[str, tuple[int, int, int]]:
+    """Ключ → (нравится, не нравится, свой голос) — по всем элементам вида разом."""
+    rows = await db.execute(select(LibraryVote.key, LibraryVote.voter_id, LibraryVote.value).where(LibraryVote.kind == kind))
+    out: dict[str, tuple[int, int, int]] = {}
+    for key, voter, value in rows:
+        up, down, mine = out.get(key, (0, 0, 0))
+        out[key] = (up + (value > 0), down + (value < 0), value if voter == voter_id else mine)
+    return out

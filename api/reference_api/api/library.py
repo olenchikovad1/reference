@@ -9,16 +9,20 @@ from platform_client import Action, requires
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
-from reference_api.schemas.library import AudienceLinkOut, DropLinkOut, FoundCardOut, LinksIn, TextIn, TextRowOut
+from reference_api.schemas.library import (
+    AudienceLinkOut, DropLinkOut, FoundCardOut, LinksIn, TextIn, TextRowOut, VoteIn, VotesOut,
+)
 from reference_api.services import library
 
 router = APIRouter(prefix="/library", tags=["library"])
 
 
 @router.get("/texts", response_model=list[TextRowOut])
-async def texts(q: str | None = None, db: AsyncSession = Depends(session)) -> list[TextRowOut]:
+async def texts(request: Request, q: str | None = None, db: AsyncSession = Depends(session)) -> list[TextRowOut]:
     """Надписи: из референсов и заведённые заранее. С запросом — поиск по
     словам: «ЛЕТО 2025» находит и «ЛЕТО 2024» — похожим, с отметкой."""
+    subject = getattr(request.state, "subject", None)
+    voted = await library.votes(db, "text", subject.id if subject else None)
     return [
         TextRowOut(
             text=r.text, key=r.normalised, fonts=sorted(r.fonts),
@@ -27,7 +31,7 @@ async def texts(q: str | None = None, db: AsyncSession = Depends(session)) -> li
             audiences=[AudienceLinkOut(code=a, via=v) for a, v in r.links.audiences.items()] if r.links else [],
             categories=sorted(r.links.categories) if r.links else [],
             references=[FoundCardOut(id=i, name=n) for i, n in sorted(r.references.items())],
-            planned=r.planned, match=r.match,
+            planned=r.planned, match=r.match, votes=votes_out(voted.get(r.normalised)),
             similarity=None if r.similarity is None else round(r.similarity, 3),
         )
         for r in await library.texts(db, q)
@@ -62,3 +66,28 @@ async def link_images(body: LinksIn, request: Request, db: AsyncSession = Depend
 async def link_texts(body: LinksIn, request: Request, db: AsyncSession = Depends(session)) -> None:
     """Назначить надписям дроп или адресат — нескольким разом (US-0497)."""
     await _link("text", body, request, db)
+
+
+def votes_out(v: tuple[int, int, int] | None) -> VotesOut:
+    return VotesOut(up=v[0], down=v[1], mine=v[2]) if v else VotesOut()
+
+
+async def _vote(kind: str, body: VoteIn, request: Request, db: AsyncSession) -> None:
+    subject = getattr(request.state, "subject", None)
+    if subject is None:
+        raise HTTPException(401, "голосовать можно только под своим именем")
+    await library.vote(db, kind, body.key, subject.id, body.value)
+
+
+# Голос — мнение, а не правка элемента: правом просмотра, как свой порядок
+# на витрине (PUT /references/order).
+@router.post("/images/votes", status_code=204, dependencies=[requires("prints", Action.VIEW)])
+async def vote_image(body: VoteIn, request: Request, db: AsyncSession = Depends(session)) -> None:
+    """«Нравится» или «не нравится» у картинки (US-0715); 0 — снять."""
+    await _vote("image", body, request, db)
+
+
+@router.post("/texts/votes", status_code=204, dependencies=[requires("texts", Action.VIEW)])
+async def vote_text(body: VoteIn, request: Request, db: AsyncSession = Depends(session)) -> None:
+    """«Нравится» или «не нравится» у надписи (US-0715); 0 — снять."""
+    await _vote("text", body, request, db)

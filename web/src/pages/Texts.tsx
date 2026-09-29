@@ -14,6 +14,9 @@ import { AssignBar, DropFilterBar } from '../candidates/DropFilter'
 import { passes, useDropFilter } from '../shared/filters'
 import { useCan } from '../shared/api/platform'
 import { fetchTexts, linkTexts, planText, type TextRow } from '../shared/api/texts'
+import { voteLibrary } from '../shared/api/assets'
+import { Viewer } from '../candidates/Viewer'
+import { Votes } from '../candidates/Votes'
 
 const MATCH: Record<string, string> = { same: 'дословно', words: 'все слова', close: 'похоже' }
 
@@ -31,6 +34,14 @@ export function Texts() {
   const shown = (texts.data ?? []).filter((r) =>
     passes({ drops: r.drops.map((d) => d.id), audiences: r.audiences.map((a) => a.code), categories: r.categories }, drop.filter),
   )
+
+  const [opened, setOpened] = useState<string | null>(null)
+  const openedAt = shown.findIndex((r) => r.key === opened)
+  function vote(key: string, value: -1 | 0 | 1) {
+    voteLibrary('texts', key, value)
+      .then(() => queries.invalidateQueries({ queryKey: ['texts'] }))
+      .catch((e: Error) => setError(`${e.message} — повторите.`))
+  }
 
   function assign(what: { drop_id?: number; audience?: string }) {
     linkTexts({ keys: [...picked], ...what })
@@ -87,9 +98,14 @@ export function Texts() {
       width: 'w-80',
       cell: (r) => (
         <span className="flex items-center gap-2">
-          <span className="font-semibold" style={r.fonts[0] ? { fontFamily: `"${r.fonts[0]}", sans-serif` } : undefined}>
+          <button
+            className="text-left font-semibold hover:underline"
+            style={r.fonts[0] ? { fontFamily: `"${r.fonts[0]}", sans-serif` } : undefined}
+            onClick={() => setOpened(r.key)}
+            title="Открыть крупно"
+          >
             {r.text}
-          </span>
+          </button>
           {r.match && (
             <span className="rounded bg-tone-amber-soft px-1.5 text-xs" title={r.similarity !== null ? `похожесть ${r.similarity}` : undefined}>
               {MATCH[r.match] ?? r.match}
@@ -111,6 +127,13 @@ export function Texts() {
       ),
     },
     { id: 'fonts', header: 'шрифты', cell: (r) => (r.fonts.length ? r.fonts.join(', ') : '—') },
+    {
+      id: 'votes',
+      header: 'оценка',
+      width: 'w-28',
+      sortable: false,
+      cell: (r) => <Votes votes={r.votes} onVote={(v) => vote(r.key, v)} />,
+    },
     {
       id: 'refs',
       header: 'референсов',
@@ -177,6 +200,91 @@ export function Texts() {
           }
         />
       )}
+      {openedAt >= 0 && (
+        <TextViewer
+          row={shown[openedAt]}
+          at={openedAt}
+          total={shown.length}
+          onMove={(to) => setOpened(shown[to].key)}
+          onVote={(v) => vote(shown[openedAt].key, v)}
+          onClose={() => setOpened(null)}
+        />
+      )}
     </main>
+  )
+}
+
+const DROP_STATUS: Record<string, string> = { proposed: 'предложена', approved: 'одобрена', rejected: 'не одобрена' }
+
+/** Надпись крупно (US-0715): каждым её шрифтом, где стоит, дропы, голоса. */
+function TextViewer({
+  row,
+  at,
+  total,
+  onMove,
+  onVote,
+  onClose,
+}: {
+  row: TextRow
+  at: number
+  total: number
+  onMove: (to: number) => void
+  onVote: (value: -1 | 0 | 1) => void
+  onClose: () => void
+}) {
+  const navigate = useNavigate()
+  const fonts = row.fonts.length ? row.fonts : [null]
+  return (
+    <Viewer
+      label={`надпись ${row.text}`}
+      title={row.text}
+      at={at}
+      total={total}
+      onMove={onMove}
+      onClose={onClose}
+      tools={<Votes votes={row.votes} onVote={onVote} large />}
+    >
+      <div className="flex min-h-0 w-full">
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-8 overflow-y-auto bg-muted p-6">
+          {fonts.map((f) => (
+            <figure key={f ?? 'none'} className="text-center">
+              <div className="break-words text-6xl font-semibold" style={f ? { fontFamily: `"${f}", sans-serif` } : undefined}>
+                {row.text}
+              </div>
+              <figcaption className="mt-2 text-xs text-muted-foreground">{f ?? 'шрифт ещё не выбран — надпись заведена заранее'}</figcaption>
+            </figure>
+          ))}
+        </div>
+        <div className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-line p-3 text-sm">
+          {row.planned && <div className="text-xs text-muted-foreground">заведена заранее, в референсах её ещё нет</div>}
+          <div className="text-xs">
+            <div className="text-muted-foreground">дропы:</div>
+            {row.drops.length === 0 && <div className="text-muted-foreground">ни в одном</div>}
+            {row.drops.map((d) => (
+              <div key={d.id}>
+                {d.name} — {d.via === null ? DROP_STATUS[d.status ?? 'proposed'] + (d.reason ? ` («${d.reason}»)` : '') : `через референс №${d.via}`}
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1 text-xs">
+            <span className="text-muted-foreground">где стоит:</span>
+            {row.references.length === 0 && <span className="text-muted-foreground">нигде</span>}
+            {row.references.map((c) => (
+              <button
+                key={c.id}
+                className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+                onClick={() => {
+                  onClose()
+                  navigate(`/references/${c.id}`, { state: { inApp: true } })
+                }}
+                title={c.name}
+              >
+                №{c.id}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Viewer>
   )
 }

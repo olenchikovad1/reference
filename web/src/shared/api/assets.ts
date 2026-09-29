@@ -249,8 +249,26 @@ export async function setKind(digest: string, kind: string): Promise<void> {
   if (!r.ok) throw new Error(r.status === 404 ? 'картинку ещё не узнавали' : `вид не записался: ${r.status}`)
 }
 
+/** «Нравится» и «не нравится» (US-0715); mine — свой голос: +1, −1 или 0. */
+export interface Votes {
+  up: number
+  down: number
+  mine: -1 | 0 | 1
+}
+
+/** Голос у принта или надписи; 0 — снять свой. */
+export async function voteLibrary(kind: 'images' | 'texts', key: string, value: -1 | 0 | 1): Promise<void> {
+  const r = await fetch(`${BASE}library/${kind}/votes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, value }),
+  })
+  if (!r.ok) throw new Error(`голос не принят: ${r.status}`)
+}
+
 export interface LibraryItem {
   digest: string
+  votes: Votes
   /** Имя последнего загруженного файла с таким содержимым. */
   file_name: string
   tags: Tag[]

@@ -4,7 +4,7 @@
 // русским словом (план 071). Файлы бросаются прямо на страницу: уходят в
 // библиотеку и сразу получают теги и название.
 
-import { Checkbox, EmptyState, Hint, IconButton, Modal, PageHeader, Select, TextInput, buttonClass, counted } from '@platform/ui'
+import { Checkbox, EmptyState, Hint, IconButton, PageHeader, Select, TextInput, buttonClass, counted } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -12,6 +12,8 @@ import { useNavigate } from 'react-router-dom'
 import { AssignBar, DropFilterBar } from '../candidates/DropFilter'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { Justified, JustifiedCell, useRatios } from '../candidates/Justified'
+import { Viewer } from '../candidates/Viewer'
+import { Votes } from '../candidates/Votes'
 import type { KeyRow } from '../shared/keys'
 import { passes, useDropFilter } from '../shared/filters'
 import { CODE } from '../app/shell'
@@ -28,6 +30,7 @@ import {
   setKind,
   fetchRetag,
   uploadAssets,
+  voteLibrary,
   KIND_OPTIONS,
   UploadRefused,
   type LibraryItem,
@@ -88,6 +91,11 @@ export function Prints() {
   const [openedToDefect, setOpenedToDefect] = useState(false)
   const openedItem = library.data?.find((i) => i.digest === opened) ?? null
   const [ratioOf, learnRatio] = useRatios()
+  function vote(digest: string, value: -1 | 0 | 1) {
+    voteLibrary('images', digest, value)
+      .then(() => queries.invalidateQueries({ queryKey: ['library'] }))
+      .catch((e: Error) => setError(`${e.message} — повторите.`))
+  }
   const queries = useQueryClient()
   // Ход переразметки (US-0629): пока идёт — перечитывается сам, закончилась —
   // библиотека перечитывается один раз, чтобы показать новые теги.
@@ -311,8 +319,11 @@ export function Prints() {
                 ratio={ratioOf(item.digest)}
                 caption={
                   <div className="px-0.5 pt-1 text-xs leading-tight">
-                    <div className="truncate font-medium" title={item.file_name}>
-                      {title}
+                    <div className="flex items-center gap-1">
+                      <span className="min-w-0 flex-1 truncate font-medium" title={item.file_name}>
+                        {title}
+                      </span>
+                      <Votes votes={item.votes} onVote={(v) => vote(item.digest, v)} />
                     </div>
                     <div className="mt-0.5 flex h-4 gap-1 overflow-hidden">
                       {item.tags
@@ -393,14 +404,45 @@ export function Prints() {
           })}
         </Justified>
       )}
-      {openedItem && <PrintDetails item={openedItem} defecting={openedToDefect} onClose={() => setOpened(null)} />}
+      {openedItem && (
+        <PrintDetails
+          key={openedItem.digest}
+          item={openedItem}
+          defecting={openedToDefect}
+          at={items.findIndex(({ item }) => item.digest === openedItem.digest)}
+          total={items.length}
+          onMove={(to) => {
+            setOpenedToDefect(false)
+            setOpened(items[to].item.digest)
+          }}
+          onVote={(v) => vote(openedItem.digest, v)}
+          onClose={() => setOpened(null)}
+        />
+      )}
     </main>
   )
 }
 
-/** Всё, что знаем о картинке, — в окне, а не на плитке: вид с поправкой,
- *  предупреждения, дропы, «где использован», брак. */
-function PrintDetails({ item, defecting, onClose }: { item: LibraryItem; defecting: boolean; onClose: () => void }) {
+/** Картинка крупно и всё, что о ней знаем (US-0715): вид с поправкой,
+ *  предупреждения, дропы, «где использован», брак, голоса; соседние —
+ *  стрелками. */
+function PrintDetails({
+  item,
+  defecting,
+  at,
+  total,
+  onMove,
+  onVote,
+  onClose,
+}: {
+  item: LibraryItem
+  defecting: boolean
+  at: number
+  total: number
+  onMove: (to: number) => void
+  onVote: (value: -1 | 0 | 1) => void
+  onClose: () => void
+}) {
   const canDefect = useCan(CODE, 'prints', 'mark-defect')
   const canEdit = useCan(CODE, 'prints', 'write')
   const queries = useQueryClient()
@@ -412,10 +454,20 @@ function PrintDetails({ item, defecting, onClose }: { item: LibraryItem; defecti
   const fail = (e: Error) => setError(`${e.message} — повторите.`)
   const title = item.name?.name ?? item.file_name
   return (
-    <Modal open onClose={onClose} title={title} size="wide">
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <img src={assetUrl(item.digest, 'preview')} alt={title} className="max-h-[60vh] min-w-0 flex-1 rounded bg-muted object-contain" />
-        <div className="flex w-full flex-col gap-2 text-sm sm:w-72">
+    <Viewer
+      label={`картинка ${title}`}
+      title={title}
+      at={Math.max(0, at)}
+      total={total}
+      onMove={onMove}
+      onClose={onClose}
+      tools={<Votes votes={item.votes} onVote={onVote} large />}
+    >
+      <div className="flex min-h-0 w-full">
+        <div className="flex min-w-0 flex-1 items-center justify-center bg-muted p-4">
+          <img src={assetUrl(item.digest, 'preview')} alt={title} className="max-h-full max-w-full object-contain" />
+        </div>
+        <div className="flex w-80 shrink-0 flex-col gap-2 overflow-y-auto border-l border-line p-3 text-sm">
           <div className="text-xs text-muted-foreground">
             {item.file_name} · {item.name ? (SOURCES[item.name.source] ?? item.name.source) : 'название неизвестно'}
           </div>
@@ -477,7 +529,10 @@ function PrintDetails({ item, defecting, onClose }: { item: LibraryItem; defecti
               <button
                 key={r.id}
                 className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
-                onClick={() => navigate(`/references/${r.id}`, { state: { inApp: true } })}
+                onClick={() => {
+                  onClose()
+                  navigate(`/references/${r.id}`, { state: { inApp: true } })
+                }}
                 title={r.name}
               >
                 №{r.id}
@@ -519,7 +574,7 @@ function PrintDetails({ item, defecting, onClose }: { item: LibraryItem; defecti
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
       </div>
-    </Modal>
+    </Viewer>
   )
 }
 

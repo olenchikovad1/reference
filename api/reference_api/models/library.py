@@ -269,3 +269,30 @@ class AssetDefect(Base):
     )
 
     __table_args__ = (CheckConstraint("trim(reason) <> ''", name="ck_asset_defects_reason"),)
+
+
+class LibraryVote(Base):
+    """«Нравится» или «не нравится» у принта или надписи (US-0715).
+
+    Голос у человека один на элемент — второе нажатие того же голоса его
+    снимает, другое меняет. Это мнение, а не решение: в дроп элемент берут
+    одобрением, а не числом лайков. `key` — как у `LibraryDrop`: хеш файла у
+    картинки, нормализованная надпись у текста.
+    """
+
+    __tablename__ = "library_votes"
+
+    kind: Mapped[str] = mapped_column(String(8), primary_key=True)
+    key: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    #: Кто голосовал — id субъекта платформы.
+    voter_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    #: +1 — нравится, −1 — не нравится; снятый голос — нет строки.
+    value: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("kind in ('image', 'text')", name="ck_library_votes_kind"),
+        CheckConstraint("value in (-1, 1)", name="ck_library_votes_value"),
+    )

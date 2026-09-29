@@ -595,3 +595,12 @@ async def mark_defect(db: AsyncSession, digest: str, reason: str, by: str | None
 
 async def unmark_defect(db: AsyncSession, digest: str) -> None:
     await repo.unmark_defect(db, digest)
+
+
+async def vote(db: AsyncSession, kind: str, key: str, voter_id: str, value: int) -> None:
+    """«Нравится» или «не нравится» (US-0715); 0 — снять свой голос."""
+    await repo.set_vote(db, kind, key, voter_id, value)
+
+
+async def votes(db: AsyncSession, kind: str, voter_id: str | None) -> dict[str, tuple[int, int, int]]:
+    return await repo.votes(db, kind, voter_id)
