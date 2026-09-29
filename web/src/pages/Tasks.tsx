@@ -3,39 +3,60 @@
 // «ответственный»: кто первым из редакторов решил — у остальных задача
 // пропадает сама.
 
-import { buttonClass, EmptyState, PageHeader } from '@platform/ui'
+import { buttonClass, EmptyState, PageHeader, Tabs } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { dropAccidental, dropDraft, fetchMyDrafts, fetchTasks, STATUS_NAMES, type MyDraft, type Task } from '../shared/api/references'
 import { rememberDraft } from '../shared/cardCache'
 import { forgetBuffer } from '../shared/draftWriter'
 
+type TabId = 'mine' | 'waiting' | 'drafts'
+
+/** «Согласование» — один раздел, внутри вкладки (US-0687): что ждёт меня,
+ *  что я отдал, где у меня несохранённое. Вкладка — в адресе (`?tab=`):
+ *  ссылка и возврат из окна приходят на неё же. Не выбрана — та, где что-то
+ *  ждёт меня, иначе первая. */
 export function Tasks() {
   const tasks = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks, refetchInterval: 15_000 })
+  const drafts = useQuery({ queryKey: ['my-drafts'], queryFn: fetchMyDrafts, refetchOnWindowFocus: true })
+  const [params, setParams] = useSearchParams()
+  const counts = { mine: tasks.data?.mine.length, waiting: tasks.data?.waiting.length, drafts: drafts.data?.length }
+  const asked = params.get('tab') as TabId | null
+  const tab: TabId =
+    asked && asked in counts ? asked : counts.mine ? 'mine' : counts.waiting ? 'waiting' : counts.drafts ? 'drafts' : 'mine'
   return (
     <div className="p-4">
-      <PageHeader title="Мои задачи" description="Что ждёт вас в согласовании, что вы отдали и где у вас несохранённое." />
+      <PageHeader title="Согласование" description="Что ждёт вас, что вы отдали и где у вас несохранённое." />
       {tasks.isError && <p className="text-sm text-destructive">{(tasks.error as Error).message}</p>}
-      {tasks.isPending && <p className="text-sm text-muted-foreground">Загружаю задачи…</p>}
-      {tasks.data && (
-        <div className="flex max-w-3xl flex-col gap-4">
-          <TaskList title="Ждёт меня" rows={tasks.data.mine} empty="Сейчас ваш ход нигде не нужен." />
-          <TaskList title="Отдал — жду" rows={tasks.data.waiting} empty="Ничего не ждёт решения других." />
-        </div>
-      )}
-      <MyDrafts />
+      <Tabs
+        label="Согласование"
+        current={tab}
+        onPick={(id) => setParams((p) => ({ ...Object.fromEntries(p), tab: id }), { replace: true })}
+        items={[
+          { id: 'mine', label: 'Ждёт меня', count: counts.mine },
+          { id: 'waiting', label: 'Отдал — жду', count: counts.waiting },
+          { id: 'drafts', label: 'Мои черновики', count: counts.drafts },
+        ]}
+      >
+        {tab === 'drafts' ? (
+          <MyDrafts />
+        ) : tasks.isPending ? (
+          <p className="text-sm text-muted-foreground">Загружаю задачи…</p>
+        ) : tab === 'mine' ? (
+          <TaskList rows={tasks.data?.mine ?? []} empty="Сейчас ваш ход нигде не нужен." />
+        ) : (
+          <TaskList rows={tasks.data?.waiting ?? []} empty="Ничего не ждёт решения других." />
+        )}
+      </Tabs>
     </div>
   )
 }
 
-function TaskList({ title, rows, empty }: { title: string; rows: Task[]; empty: string }) {
+function TaskList({ rows, empty }: { rows: Task[]; empty: string }) {
   return (
     <section>
-      <h2 className="mb-1 text-sm font-semibold">
-        {title} · {rows.length}
-      </h2>
       {rows.length === 0 && <EmptyState title="Пусто" description={empty} />}
       <div className="flex flex-col gap-1">
         {rows.map((t) => (
@@ -71,9 +92,8 @@ function MyDrafts() {
   const run = (p: Promise<unknown>) =>
     void p.then(() => setError(null)).catch((e: Error) => setError(`${e.message} — повторите.`))
   return (
-    <section className="mt-4 max-w-3xl">
+    <section>
       <div className="mb-1 flex items-center gap-2">
-        <h2 className="text-sm font-semibold">Мои черновики · {rows.length}</h2>
         {accidental.length > 0 && (
           <button
             className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}

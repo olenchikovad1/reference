@@ -43,7 +43,6 @@ const PAGES: Record<string, () => ReactElement> = {
   products: () => <Products />,
   dictionaries: () => <Dictionaries />,
   review: () => <Tasks />,
-  'review/my-tasks': () => <Tasks />,
 }
 
 /** Страница раздела, а поверх неё — окно (`overlay`), если оно открыто по

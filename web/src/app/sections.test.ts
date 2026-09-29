@@ -14,14 +14,14 @@ describe('разделы приложения', () => {
 
   it('адрес для рамки — с приставкой, для роутера — без', () => {
     expect(hrefOfCode('prints')).toBe('/reference/prints')
-    expect(hrefOfChild('review', 'my-tasks')).toBe('/reference/review/my-tasks')
+    expect(hrefOfChild('references', 'trash')).toBe('/reference/references/trash')
     expect(routerPath('/reference/prints')).toBe('/prints')
     expect(routerPath('/reference')).toBe('/')
     expect(hrefOfCode('library')).toBeNull()
   })
 
   it('подсвечивается раздел и подпункт, в котором человек', () => {
-    expect(activeMenu('/review/my-tasks')).toEqual({ section: 'review', child: 'my-tasks' })
+    expect(activeMenu('/review')).toEqual({ section: 'review', child: null })
     expect(activeMenu('/references/trash')).toEqual({ section: 'references', child: 'trash' })
     expect(activeMenu('/prints')).toEqual({ section: 'prints', child: null })
     expect(activeMenu('/')).toEqual({ section: null, child: null })

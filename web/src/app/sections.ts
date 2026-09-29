@@ -43,7 +43,7 @@ export const SECTIONS: SectionPlace[] = [
     about: 'Дропы и их ассортимент матрицей «модели × цвета».', children: [] },
   { code: 'review', title: 'Согласование', path: '/review', plan: 'план 075 (US-0510)',
     about: 'Согласование: чей ход, замечания на слоях и версиях, голосом тоже.',
-    children: [{ code: 'my-tasks', path: '/review/my-tasks' }] },
+    children: [] },
   { code: 'dictionaries', title: 'Справочники', path: '/dictionaries', plan: 'план 073',
     about: 'Справочники: товарная иерархия, адресаты, палитра.', children: [] },
   { code: 'archive', title: 'Архив', path: '/archive', plan: 'позже',

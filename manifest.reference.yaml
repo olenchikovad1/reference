@@ -85,8 +85,8 @@ sections:
     actions: [view, write]
     functions:
       - {code: approve-final, name: Окончательное принятие}
-    children:
-      - {code: my-tasks, name: Мои задачи, icon: clipboard-list}
+    # Подпунктов нет: «Мои задачи» — это и есть раздел, а «ждёт меня»,
+    # «отдал — жду», «мои черновики» — вкладки внутри (владелец 29.09).
   - code: dictionaries
     name: Справочники
     shareable: false
