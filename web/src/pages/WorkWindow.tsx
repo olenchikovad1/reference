@@ -244,6 +244,24 @@ export function WorkWindow() {
     refetchInterval: (q) => ((q.state.data ?? []).some(isHearing) ? 1500 : false),
   })
   const [placing, setPlacing] = useState(false)
+  // Панель обсуждения (US-0689): согласование, замечания, исполнитель — своей
+  // колонкой по круглой кнопке, а не в длинной полосе справа. Открыта или нет
+  // — помнит браузер; мой ход — открывается сама.
+  const [talkOpen, setTalkOpenRaw] = useState(() => {
+    try {
+      return localStorage.getItem(TALK_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const setTalkOpen = (on: boolean) => {
+    setTalkOpenRaw(on)
+    try {
+      localStorage.setItem(TALK_KEY, on ? '1' : '0')
+    } catch {
+      // хранилище запрещено — выбор проживёт до перезагрузки
+    }
+  }
   const [pendingRemark, setPendingRemark] = useState<PendingRemark | null>(null)
   const [focusRemark, setFocusRemark] = useState<number | null>(null)
   const [viewing, setViewing] = useState<number | null>(null)
@@ -1296,7 +1314,8 @@ export function WorkWindow() {
         else if (selectedId || garmentPicked) {
           setComposition((c) => select(c, null))
           setGarmentPicked(false)
-        } else close()
+        } else if (talkOpen && current) setTalkOpen(false)
+        else close()
         return
       case 'view': {
         const s = product?.states[a.index]
@@ -1462,6 +1481,12 @@ export function WorkWindow() {
 
   // Дропы референса — от цветомодели (US-0497): по ним выбор показывает
   // одобренное, а на изделии отмечено взятое не из одобренного.
+  const openRemarks = (remarks.data ?? []).filter((r) => r.status === 'open').length
+  const myTurn = turnOf(current)
+  useEffect(() => {
+    if (myTurn) setTalkOpenRaw(true)
+  }, [current?.id, myTurn])
+
   const catalogue = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue, staleTime: 60_000 })
   const cmId = current?.colour_model_id ?? colourModelId
   const refDropIds = useMemo(() => {
@@ -1805,6 +1830,24 @@ export function WorkWindow() {
       >
         сравнить цвета
       </button>
+      {current && (
+        <button
+          className={`relative flex h-8 w-8 items-center justify-center rounded-full border ${
+            talkOpen ? 'border-primary bg-primary text-primary-foreground' : 'border-line bg-background'
+          }`}
+          onClick={() => setTalkOpen(!talkOpen)}
+          aria-pressed={talkOpen}
+          aria-label={`обсуждение: ${openRemarks} открытых замечаний${myTurn ? ', ваш ход' : ''}`}
+          title="Согласование, замечания, исполнитель — открыть или скрыть (Esc скрывает)"
+        >
+          <span aria-hidden>💬</span>
+          {openRemarks + (myTurn ? 1 : 0) > 0 && (
+            <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-destructive px-1 text-[10px] font-bold leading-4 text-white">
+              {openRemarks + (myTurn ? 1 : 0)}
+            </span>
+          )}
+        </button>
+      )}
       {/* Клавишу «?» разбирает само окно — подсказка её не слушает. */}
       <HotkeysHint rows={WINDOW_KEYS} label="Клавиши окна" open={helpOpen} onOpenChange={setHelpOpen} listen={false} />
       <button className={small()} onClick={close} title="Закрыть — Esc, когда ничего не выбрано" aria-label="закрыть окно">
@@ -2582,7 +2625,65 @@ export function WorkWindow() {
           </div>
         </div>
 
-        <aside className="w-72 shrink-0 overflow-y-auto border-l border-line p-3 text-sm" aria-label="теги и история">
+        {current && talkOpen && (
+          <aside className="w-80 shrink-0 overflow-y-auto border-l border-line bg-background p-3 text-sm" aria-label="обсуждение">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Обсуждение</h2>
+              <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => setTalkOpen(false)} aria-label="скрыть обсуждение">
+                ×
+              </button>
+            </div>
+          {current && (
+            <ReviewSection
+              card={current}
+              onChanged={(card) => {
+                setCurrent(card)
+                queries.setQueryData(cardKey(card.id), card)
+                void queries.invalidateQueries({ queryKey: ['references'] })
+                void queries.invalidateQueries({ queryKey: ['tasks'] })
+              }}
+            />
+          )}
+
+          {current && (
+            <RemarksSection
+              card={current}
+              side={stateCode}
+              sideName={(code) => product?.states.find((s) => s.code === code)?.display_name ?? code}
+              remarks={remarks.data ?? []}
+              focus={focusRemark}
+              onFocus={setFocusRemark}
+              placing={placing}
+              onPlacing={setPlacing}
+              pending={pendingRemark}
+              onPending={setPendingRemark}
+              onChanged={() => {
+                void queries.invalidateQueries({ queryKey: ['remarks', current.id] })
+                void queries.invalidateQueries({ queryKey: ['tasks'] })
+              }}
+            />
+          )}
+
+          {current && (
+            <ExecutorSection
+              card={current}
+              onChanged={(card) => {
+                setCurrent(card)
+                queries.setQueryData(cardKey(card.id), card)
+                void queries.invalidateQueries({ queryKey: ['references'] })
+              }}
+            />
+          )}
+
+          </aside>
+        )}
+
+        {/* Обсуждение открыто — оно на месте полосы про принт, а не третьей
+            колонкой: холст не сжимается (владелец 29.09 — «не перегружай»). */}
+        <aside
+          className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 text-sm ${current && talkOpen ? 'hidden' : ''}`}
+          aria-label="теги и история"
+        >
           <Section title="Теги">
             {!current && <p className="text-xs text-muted-foreground">свои теги — после первого сохранения</p>}
             {current && refTags && (
@@ -2693,48 +2794,6 @@ export function WorkWindow() {
               </p>
             )}
           </Section>
-
-          {current && (
-            <RemarksSection
-              card={current}
-              side={stateCode}
-              sideName={(code) => product?.states.find((s) => s.code === code)?.display_name ?? code}
-              remarks={remarks.data ?? []}
-              focus={focusRemark}
-              onFocus={setFocusRemark}
-              placing={placing}
-              onPlacing={setPlacing}
-              pending={pendingRemark}
-              onPending={setPendingRemark}
-              onChanged={() => {
-                void queries.invalidateQueries({ queryKey: ['remarks', current.id] })
-                void queries.invalidateQueries({ queryKey: ['tasks'] })
-              }}
-            />
-          )}
-
-          {current && (
-            <ReviewSection
-              card={current}
-              onChanged={(card) => {
-                setCurrent(card)
-                queries.setQueryData(cardKey(card.id), card)
-                void queries.invalidateQueries({ queryKey: ['references'] })
-                void queries.invalidateQueries({ queryKey: ['tasks'] })
-              }}
-            />
-          )}
-
-          {current && (
-            <ExecutorSection
-              card={current}
-              onChanged={(card) => {
-                setCurrent(card)
-                queries.setQueryData(cardKey(card.id), card)
-                void queries.invalidateQueries({ queryKey: ['references'] })
-              }}
-            />
-          )}
 
           {current && viewing !== null && (
             <Section title={`История · ${current.versions.length}`}>
@@ -3306,6 +3365,7 @@ function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: 
   const [returning, setReturning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const status = card.status ?? 'draft'
+  const [wholePath, setWholePath] = useState(false)
   const act = (what: Step) =>
     void reviewStep(card.id, what, comment)
       .then(() => openReference(card.id))
@@ -3356,7 +3416,14 @@ function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: 
           </div>
         )}
         {error && <span className="text-destructive">{error}</span>}
-        {(card.status_events ?? []).map((e, i) => (
+        {/* Путь по версиям свёрнут до двух последних шагов: он растёт с каждым
+            кругом, а замечания под ним не должны уезжать вниз (US-0689). */}
+        {(card.status_events ?? []).length > 2 && (
+          <button className="self-start text-muted-foreground underline" onClick={() => setWholePath((v) => !v)}>
+            {wholePath ? 'свернуть путь' : `весь путь · ${(card.status_events ?? []).length}`}
+          </button>
+        )}
+        {(card.status_events ?? []).slice(wholePath ? 0 : -2).map((e, i) => (
           <div key={i} className="text-muted-foreground">
             версия {e.number} · {when(e.at)} · {e.by_name ?? 'без входа'}: {STATUS_NAMES[e.to]}
             {e.comment ? ` — «${e.comment}»` : ''}
@@ -3690,4 +3757,17 @@ function probeImage(src: string): Promise<{ aspect: number; hasAlpha: boolean }>
     img.onerror = () => reject(new Error(`картинка не загрузилась: ${src}`))
     img.src = src
   })
+}
+
+const TALK_KEY = 'reference.window.talk'
+
+/** Мой ли ход по этому референсу: редактору — на согласовании, исполнителю —
+ *  вернули на доработку. Черновик — не ход: панель по нему сама не
+ *  открывается, иначе она выезжала бы на каждой работе дизайнера. */
+function turnOf(card: FullCard | null): boolean {
+  const can = card?.can ?? []
+  if (card?.status === 'review') return can.includes('approve') || can.includes('return') || can.includes('approve-final')
+  if (card?.status === 'approved') return can.includes('approve-final')
+  if (card?.status === 'rework') return can.includes('submit')
+  return false
 }
