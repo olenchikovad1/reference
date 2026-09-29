@@ -12,6 +12,7 @@ from reference_api.schemas.library import BoardItemOut, BoardOut, DecisionIn, Vi
 from reference_api.services import library, people
 from reference_api.models.drops import GarmentModel, HierarchyNode
 from reference_api.schemas.drops import (
+    AssortmentIn,
     DropIn,
     DropOut,
     MatrixOut,
@@ -63,6 +64,24 @@ async def delete_drop(drop_id: int, db: AsyncSession = Depends(session)) -> None
     """Удалить заведённый по ошибке — только пустой; непустой — 409 с причиной."""
     try:
         await service.delete_drop(db, drop_id)
+    except service.DropRefused as e:
+        raise _refused(e) from None
+
+
+@router.post("/drops/{drop_id}/items", status_code=204, dependencies=[requires("drops", Action.WRITE)])
+async def add_item(drop_id: int, body: AssortmentIn, db: AsyncSession = Depends(session)) -> None:
+    """Цветомодель в ассортимент дропа (US-0720); повтор ничего не удваивает."""
+    try:
+        await service.add_to_assortment(db, drop_id, body.model_id, body.colour_code)
+    except service.DropRefused as e:
+        raise _refused(e) from None
+
+
+@router.delete("/drops/{drop_id}/items/{colour_model_id}", status_code=204, dependencies=[requires("drops", Action.WRITE)])
+async def remove_item(drop_id: int, colour_model_id: int, db: AsyncSession = Depends(session)) -> None:
+    """Убрать цветомодель из ассортимента — пока на ней нет референсов."""
+    try:
+        await service.remove_from_assortment(db, drop_id, colour_model_id)
     except service.DropRefused as e:
         raise _refused(e) from None
 

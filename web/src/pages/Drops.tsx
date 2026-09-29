@@ -3,7 +3,7 @@
 // из неё начинается референс на этой цветомодели. Модель без кадров видна, но
 // работу на ней не начать — и причина названа, а не спрятана.
 
-import { Checkbox, DataTable, Field, FormGrid, Modal, TextInput, buttonClass, type DataColumn } from '@platform/ui'
+import { Checkbox, DataTable, Field, FormGrid, Modal, Select, TextInput, buttonClass, type DataColumn } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -11,7 +11,21 @@ import { useNavigate } from 'react-router-dom'
 import { CODE } from '../app/shell'
 import { meaningClass } from '../candidates/meaning'
 import { useCan } from '../shared/api/platform'
-import { createDrop, deleteDrop, fetchDrops, fetchMatrix, updateDrop, type Drop, type DropFields, type Matrix } from '../shared/api/drops'
+import { fetchPalette } from '../shared/api/colours'
+import {
+  addToAssortment,
+  createDrop,
+  deleteDrop,
+  fetchCatalogue,
+  fetchDrops,
+  fetchMatrix,
+  removeFromAssortment,
+  updateDrop,
+  type Drop,
+  type DropFields,
+  type Matrix,
+  type TreeNode,
+} from '../shared/api/drops'
 import { DropBoard } from './DropBoard'
 
 const dateRu = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
@@ -56,6 +70,7 @@ export function Drops() {
         <DropMatrix
           dropId={current}
           drop={drops.data.find((d) => d.id === current)!}
+          canWrite={canWrite}
           onEdit={canWrite ? (d) => setEditing(d) : undefined}
           onDelete={canDelete ? (d) => setDeleting(d) : undefined}
         />
@@ -87,17 +102,21 @@ export function Drops() {
 function DropMatrix({
   dropId,
   drop,
+  canWrite,
   onEdit,
   onDelete,
 }: {
   dropId: number
   drop: Drop
+  canWrite: boolean
   onEdit?: (d: Drop) => void
   onDelete?: (d: Drop) => void
 }) {
   const m = useQuery({ queryKey: ['drops', dropId, 'matrix'], queryFn: () => fetchMatrix(dropId) })
   const navigate = useNavigate()
   const [refusal, setRefusal] = useState<string | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [removing, setRemoving] = useState<{ id: number; what: string } | null>(null)
 
   if (m.isError) return <section>Ассортимент не пришёл — обновите страницу.</section>
 
@@ -128,6 +147,7 @@ function DropMatrix({
         const cell = r.cells[c.code]
         if (!cell) return null
         return (
+          <span className="inline-flex items-center gap-1">
           <button
             style={S.cell}
             onClick={() => {
@@ -143,6 +163,17 @@ function DropMatrix({
           >
             {cell.references === 0 ? 'ещё не нарисовано' : `референсов: ${cell.references}`}
           </button>
+          {canWrite && cell.references === 0 && (
+            <button
+              className="rounded px-1 text-xs text-muted-foreground hover:bg-muted hover:text-destructive"
+              title="Убрать эту цветомодель из ассортимента дропа"
+              aria-label={`убрать ${r.model.name} · ${c.name} из ассортимента`}
+              onClick={() => setRemoving({ id: cell.colour_model_id, what: `${r.model.name} · ${c.name}` })}
+            >
+              ✕
+            </button>
+          )}
+          </span>
         )
       },
     })),
@@ -165,6 +196,19 @@ function DropMatrix({
         )}
       </div>
       <p style={S.dim}>{drop.theme || 'тема не записана'}</p>
+      {canWrite && (
+        <div className="mb-2">
+          <button
+            className={meaningClass('act', true)}
+            onClick={() => setAdding(true)}
+            title="В этом дропе будет ещё одна модель в цвете — появится клетка «ещё не нарисовано»"
+          >
+            + цветомодель
+          </button>
+        </div>
+      )}
+      {adding && <AddColourModel dropId={dropId} onClose={() => setAdding(false)} />}
+      {removing && <RemoveColourModel dropId={dropId} item={removing} onClose={() => setRemoving(null)} />}
       <DataTable
         rows={m.data?.rows ?? []}
         columns={columns}
@@ -294,6 +338,111 @@ function DeleteDrop({ drop, onClose, onDeleted }: { drop: Drop; onClose: () => v
         Удаляется только пустой дроп — без цветомоделей в ассортименте и без предложенных принтов и надписей. Вернуть его нельзя,
         завести заново — можно.
       </p>
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+    </Modal>
+  )
+}
+
+function modelsOf(nodes: TreeNode[]): TreeNode['models'] {
+  return nodes.flatMap((n) => [...n.models, ...modelsOf(n.children)])
+}
+
+/** «+ цветомодель» (US-0720): модель и цвет палитры — клетка в матрице. */
+function AddColourModel({ dropId, onClose }: { dropId: number; onClose: () => void }) {
+  const queries = useQueryClient()
+  const tree = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue })
+  const palette = useQuery({ queryKey: ['palette'], queryFn: fetchPalette, staleTime: Infinity })
+  const [model, setModel] = useState('')
+  const [colour, setColour] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const models = modelsOf(tree.data ?? [])
+  const picked = models.find((m) => String(m.id) === model)
+  const had = new Set(picked?.colour_models.filter((cm) => cm.drop_ids.includes(dropId)).map((cm) => cm.colour_code) ?? [])
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Цветомодель в ассортимент"
+      actions={
+        <>
+          <button className={meaningClass('quiet')} onClick={onClose}>
+            не надо
+          </button>
+          <button
+            className={meaningClass('agree')}
+            disabled={!model || !colour}
+            onClick={() =>
+              void addToAssortment(dropId, Number(model), colour)
+                .then(async () => {
+                  await queries.invalidateQueries({ queryKey: ['drops', dropId, 'matrix'] })
+                  await queries.invalidateQueries({ queryKey: ['catalogue'] })
+                  onClose()
+                })
+                .catch((e: Error) => setError(e.message))
+            }
+          >
+            добавить
+          </button>
+        </>
+      }
+    >
+      <FormGrid columns={1}>
+        <Field label="Модель" hint={picked && !picked.can_work ? `${picked.reason}: в ассортимент встанет, рисовать на ней пока нельзя` : undefined}>
+          <Select
+            aria-label="модель"
+            placeholder="модель…"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            options={models.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.code}` }))}
+          />
+        </Field>
+        <Field label="Цвет" hint="из палитры справочника; уже стоящие в дропе у этой модели не предлагаются">
+          <Select
+            aria-label="цвет"
+            placeholder="цвет…"
+            value={colour}
+            onChange={(e) => setColour(e.target.value)}
+            options={(palette.data?.colors ?? []).filter((c) => !had.has(c.code)).map((c) => ({ value: c.code, label: c.name === c.code ? `${c.group} · ${c.code}` : `${c.group} · ${c.name}` }))}
+          />
+        </Field>
+      </FormGrid>
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+    </Modal>
+  )
+}
+
+/** Убрать из ассортимента — только пустую клетку; сервис это же проверит. */
+function RemoveColourModel({ dropId, item, onClose }: { dropId: number; item: { id: number; what: string }; onClose: () => void }) {
+  const queries = useQueryClient()
+  const [error, setError] = useState<string | null>(null)
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Убрать «${item.what}» из ассортимента?`}
+      actions={
+        <>
+          <button className={meaningClass('quiet')} onClick={onClose}>
+            оставить
+          </button>
+          <button
+            className={meaningClass('withdraw')}
+            onClick={() =>
+              void removeFromAssortment(dropId, item.id)
+                .then(async () => {
+                  await queries.invalidateQueries({ queryKey: ['drops', dropId, 'matrix'] })
+                  await queries.invalidateQueries({ queryKey: ['catalogue'] })
+                  onClose()
+                })
+                .catch((e: Error) => setError(e.message))
+            }
+          >
+            убрать
+          </button>
+        </>
+      }
+    >
+      <p className="text-sm">Референсов на ней нет, так что ничего не пропадёт; вернуть можно тем же «+ цветомодель».</p>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
     </Modal>
   )

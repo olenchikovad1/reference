@@ -32,6 +32,13 @@ class DropIn(BaseModel):
     retired: bool = False
 
 
+class AssortmentIn(BaseModel):
+    """Цветомодель в ассортимент дропа (US-0720): модель и цвет палитры."""
+
+    model_id: int
+    colour_code: str
+
+
 class ModelOut(BaseModel):
     id: int
     code: str

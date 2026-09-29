@@ -356,3 +356,24 @@ async def delete_drop(db: AsyncSession, drop_id: int) -> None:
     if items or proposed:
         raise DropRefused(409, f"в дропе цветомоделей: {items}, предложенного: {proposed} — удалить нельзя, можно погасить")
     await repo.delete_drop(db, drop_id)
+
+
+async def add_to_assortment(db: AsyncSession, drop_id: int, model_id: int, colour_code: str) -> None:
+    """Цветомодель в ассортимент дропа (US-0720): «в этом дропе будет ещё и
+    чёрная худи». Цвет — из палитры; цветомодели нет — заводится."""
+    if await repo.drop(db, drop_id) is None:
+        raise DropRefused(404, "нет такого дропа")
+    if await repo.garment_model(db, model_id) is None:
+        raise DropRefused(422, "нет такой модели")
+    if colour_code not in _palette_by_code():
+        raise DropRefused(422, f"цвета {colour_code} нет в палитре")
+    await repo.add_item(db, drop_id, model_id, colour_code)
+
+
+async def remove_from_assortment(db: AsyncSession, drop_id: int, colour_model_id: int) -> None:
+    """Убрать цветомодель из ассортимента — пока на ней нет референсов: их
+    дроп берётся от цветомодели, и они молча ушли бы из дропа."""
+    n = (await repo.references_by_colour_model(db, [colour_model_id])).get(colour_model_id, 0)
+    if n:
+        raise DropRefused(409, f"на цветомодели референсов: {n} — они ушли бы из дропа; убрать нельзя")
+    await repo.remove_item(db, drop_id, colour_model_id)

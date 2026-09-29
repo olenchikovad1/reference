@@ -113,3 +113,10 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T>
 export const createDrop = (d: DropFields) => send<Drop>('POST', 'drops', d)
 export const updateDrop = (id: number, d: DropFields) => send<Drop>('PUT', `drops/${id}`, d)
 export const deleteDrop = (id: number) => send<void>('DELETE', `drops/${id}`)
+
+/** Цветомодель в ассортимент дропа; нет такой — заводится (US-0720). */
+export const addToAssortment = (dropId: number, modelId: number, colourCode: string) =>
+  send<void>('POST', `drops/${dropId}/items`, { model_id: modelId, colour_code: colourCode })
+/** Убрать из ассортимента — сервис откажет, если на ней есть референсы. */
+export const removeFromAssortment = (dropId: number, colourModelId: number) =>
+  send<void>('DELETE', `drops/${dropId}/items/${colourModelId}`)

@@ -6,7 +6,7 @@
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from reference_api.models.drops import ColourModel, Drop, DropItem, HierarchyNode
+from reference_api.models.drops import ColourModel, Drop, DropItem, GarmentModel, HierarchyNode
 from reference_api.models.library import LibraryDrop
 from reference_api.models.references import Reference
 
@@ -80,4 +80,30 @@ async def drop_use(db: AsyncSession, drop_id: int) -> tuple[int, int]:
 
 async def delete_drop(db: AsyncSession, drop_id: int) -> None:
     await db.execute(delete(Drop).where(Drop.id == drop_id))
+    await db.commit()
+
+
+async def garment_model(db: AsyncSession, model_id: int) -> GarmentModel | None:
+    return await db.get(GarmentModel, model_id)
+
+
+async def colour_model_of(db: AsyncSession, model_id: int, colour_code: str) -> ColourModel | None:
+    return await db.scalar(select(ColourModel).where(ColourModel.model_id == model_id, ColourModel.colour_code == colour_code))
+
+
+async def add_item(db: AsyncSession, drop_id: int, model_id: int, colour_code: str) -> None:
+    """Цветомодель в ассортимент: нет такой — заводится; уже в дропе — ничего."""
+    cm = await colour_model_of(db, model_id, colour_code)
+    if cm is None:
+        cm = ColourModel(model_id=model_id, colour_code=colour_code)
+        db.add(cm)
+        await db.flush()
+    exists = await db.scalar(select(DropItem).where(DropItem.drop_id == drop_id, DropItem.colour_model_id == cm.id))
+    if exists is None:
+        db.add(DropItem(drop_id=drop_id, colour_model_id=cm.id))
+    await db.commit()
+
+
+async def remove_item(db: AsyncSession, drop_id: int, colour_model_id: int) -> None:
+    await db.execute(delete(DropItem).where(DropItem.drop_id == drop_id, DropItem.colour_model_id == colour_model_id))
     await db.commit()
