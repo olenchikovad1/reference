@@ -357,3 +357,42 @@ class AgendaReasonOut(BaseModel):
 
 class ProposeIn(BaseModel):
     reason: str
+
+
+class AgendaEventOut(BaseModel):
+    """Решение из пути по версиям — для повестки (план 097)."""
+
+    reference_id: int
+    from_: str = Field(alias="from")
+    to: str
+    number: int
+    by_name: str | None
+    comment: str | None
+    at: datetime
+
+    model_config = {"populate_by_name": True}
+
+
+class AgendaProposedOut(BaseModel):
+    reference_id: int
+    reasons: list[AgendaReasonOut]
+
+
+class MeetingOut(BaseModel):
+    id: int
+    held_at: datetime
+    by_name: str | None
+
+
+class AgendaOut(BaseModel):
+    """Повестка (план 097): с прошлой встречи или как было на встрече."""
+
+    meeting: MeetingOut | None
+    since: datetime | None
+    until: datetime | None
+    proposed: list[AgendaProposedOut]
+    approved: list[AgendaEventOut]
+    rework: list[AgendaEventOut]
+    rejected: list[AgendaEventOut]
+    undone: list[AgendaEventOut]
+    meetings: list[MeetingOut]

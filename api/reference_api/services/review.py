@@ -418,3 +418,70 @@ async def unpropose(db: AsyncSession, reference_id: int, who: str | None) -> Non
 
 async def agenda_of(db: AsyncSession, ids: list[int] | None = None):
     return await repo.open_agenda(db, ids)
+
+
+# --- Повестка встречи (план 097) ------------------------------------------
+
+
+def _kind(e) -> str | None:
+    """Что это решение значит для повестки."""
+    if e.to_status in {"approved", "final"}:
+        return "approved"
+    if e.to_status == "rework":
+        return "rework"
+    if e.to_status == "rejected":
+        return "rejected"
+    # Отозвано (review → draft), отменено согласование (approved → review),
+    # возвращено в работу (rejected → draft).
+    if (e.from_status, e.to_status) in {("review", "draft"), ("approved", "review"), ("rejected", "draft")}:
+        return "undone"
+    return None
+
+
+@dataclass(frozen=True)
+class Agenda:
+    meeting: object | None
+    since: object | None
+    until: object | None
+    proposed: dict
+    decided: dict
+
+
+async def agenda(db: AsyncSession, meeting_id: int | None = None) -> Agenda:
+    """Повестка: что выдвинуто и что решено с прошлой встречи; с meeting_id —
+    как было на той встрече (между ней и предыдущей)."""
+    ms = await repo.meetings(db)
+    if meeting_id is None:
+        since = ms[0].held_at if ms else None
+        until, meeting = None, None
+        proposed = await repo.open_agenda(db)
+    else:
+        at = next((i for i, m in enumerate(ms) if m.id == meeting_id), None)
+        if at is None:
+            raise NoSuchReference("такой встречи нет")
+        meeting = ms[at]
+        since = ms[at + 1].held_at if at + 1 < len(ms) else None
+        until = meeting.held_at
+        proposed = await repo.items_of_meeting(db, meeting_id)
+    decided: dict[str, list] = {"approved": [], "rework": [], "rejected": [], "undone": []}
+    seen: set[tuple[str, int]] = set()
+    # Референс в разделе один раз — последним решением: «согласован», а затем
+    # «окончательно принят» — одна карточка, а не две.
+    for e in await repo.events_between(db, since, until):
+        k = _kind(e)
+        if k and (k, e.reference_id) not in seen:
+            seen.add((k, e.reference_id))
+            decided[k].append(e)
+    return Agenda(meeting, since, until, proposed, decided)
+
+
+async def meetings(db: AsyncSession):
+    return await repo.meetings(db)
+
+
+async def close_meeting(db: AsyncSession, who: str | None):
+    """«Встреча прошла» — редактор или главный."""
+    person = await people_repo.app_person(db, who) if who else None
+    if not person or person.role not in {"editor", "chief"}:
+        raise NotYourStep("встречу закрывает редактор или главный редактор")
+    return await repo.close_meeting(db, who)

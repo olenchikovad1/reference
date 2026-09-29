@@ -125,6 +125,7 @@ def create_app(without_platform: bool | None = None) -> FastAPI:
     root.include_router(drops.router)
     root.include_router(library.router)
     root.include_router(review.router)
+    root.include_router(review.agenda_router)
     app.include_router(root)
     if stand:
         # Добавлен раньше посредника платформы — значит, исполняется после него.
