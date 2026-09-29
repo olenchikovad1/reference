@@ -3,12 +3,13 @@
 // «ответственный»: кто первым из редакторов решил — у остальных задача
 // пропадает сама.
 
-import { buttonClass, EmptyState, PageHeader, Tabs } from '@platform/ui'
+import { EmptyState, PageHeader, Tabs } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { ReferenceCard } from '../candidates/ReferenceCard'
+import { meaningClass } from '../candidates/meaning'
 import {
   dropAccidental,
   dropDraft,
@@ -142,9 +143,7 @@ function MyDrafts() {
     <section>
       <div className="mb-1 flex items-center gap-2">
         {accidental.length > 0 && (
-          <button
-            className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
-            onClick={() => run(dropAccidental().then(forget))}
+          <button className={meaningClass('withdraw', true)} onClick={() => run(dropAccidental().then(forget))}
           >
             выбросить похожие на случайное · {accidental.length}
           </button>
@@ -188,7 +187,7 @@ function DraftCard({ d, card, onOpen, onDrop }: { d: MyDraft; card?: Card; onOpe
           </div>
         ))}
       </button>
-      <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={onDrop}>
+      <button className={meaningClass('withdraw', true)} onClick={onDrop}>
         выбросить
       </button>
     </div>

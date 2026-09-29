@@ -17,6 +17,7 @@ import { warmGarments } from '../candidates/GarmentCanvas'
 import { frameUrl, productQuery } from '../shared/api/products'
 import { DropFilterBar } from '../candidates/DropFilter'
 import { useFlip } from '../candidates/useFlip'
+import { meaningClass } from '../candidates/meaning'
 import { ReferenceCard as ShowcaseCard } from '../candidates/ReferenceCard'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { SHOWCASE_KEYS } from '../shared/keys'
@@ -490,7 +491,7 @@ export function Showcase() {
             скопировать в дроп
           </button>
           {canTrash && (
-            <button className={buttonClass({ tone: 'danger', variant: 'outline', small: true })} disabled={bulkBusy} onClick={() => setBulkTrash(true)}>
+            <button className={meaningClass('withdraw', true)} disabled={bulkBusy} onClick={() => setBulkTrash(true)}>
               удалить {selected.size}
             </button>
           )}
@@ -599,7 +600,7 @@ export function Showcase() {
               оставить
             </button>
             <button
-              className={buttonClass({ tone: 'danger', variant: 'solid' })}
+              className={meaningClass('withdraw')}
               onClick={() => {
                 const c = trashing
                 setTrashing(null)
@@ -625,7 +626,7 @@ export function Showcase() {
               оставить
             </button>
             <button
-              className={buttonClass({ tone: 'danger', variant: 'solid' })}
+              className={meaningClass('withdraw')}
               onClick={() => {
                 setBulkTrash(false)
                 const ids = [...selected]

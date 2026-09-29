@@ -1,0 +1,11 @@
+/* Положительный тон кнопки (US-0690): «принять», «согласовать», «отправить на
+   согласование». У @platform/ui тонов четыре — accent, attention, danger,
+   neutral, — положительного нет, хотя токен --success у платформы есть.
+   Кандидат в платформу (решение 0005): та же схема переменных, что у
+   pf-btn--*, — громкость (solid/soft/outline) даёт вариант платформы. */
+.pf-btn--positive {
+  --btn-fill: var(--success);
+  --btn-on-fill: #ffffff;
+  --btn-tint: var(--success-soft);
+  --btn-ink: var(--success);
+}

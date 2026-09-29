@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import { CODE } from '../app/shell'
+import { meaningClass } from '../candidates/meaning'
 import { useCan } from '../shared/api/platform'
 import { eraseReference, listTrash, restoreReference, type Trashed } from '../shared/api/references'
 
@@ -61,11 +62,11 @@ export function Trash() {
       width: 'w-64',
       cell: (r) => (
         <span className="flex gap-2">
-          <button className={buttonClass({ tone: 'accent', variant: 'outline', small: true })} onClick={() => void act(() => restoreReference(r.id))}>
+          <button className={meaningClass('agree', true)} onClick={() => void act(() => restoreReference(r.id))}>
             восстановить
           </button>
           {canErase && (
-            <button className={buttonClass({ tone: 'danger', variant: 'outline', small: true })} onClick={() => setErasing(r)}>
+            <button className={meaningClass('destroy', true)} onClick={() => setErasing(r)}>
               удалить насовсем
             </button>
           )}

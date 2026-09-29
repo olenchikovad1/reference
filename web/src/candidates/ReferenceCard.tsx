@@ -5,6 +5,7 @@
 import { buttonClass } from '@platform/ui'
 import { memo, type PointerEvent as ReactPointerEvent, useState } from 'react'
 
+import { meaningClass } from './meaning'
 import { assetUrl } from '../shared/api/assets'
 import { STATUS_NAMES, type Card } from '../shared/api/references'
 
@@ -207,17 +208,17 @@ function ReferenceCardView({
             </button>
           )}
           {onTrash && (
-            <button className={corner} onClick={onTrash} title="В корзину: 30 дней можно вернуть">
+            <button className={meaningClass('withdraw', true)} onClick={onTrash} title="В корзину: 30 дней можно вернуть">
               удалить
             </button>
           )}
           {onDiscard && (
-            <button className={corner} onClick={onDiscard} title="Выбросить черновик: работа снова как в версии, версия не меняется">
+            <button className={meaningClass('withdraw', true)} onClick={onDiscard} title="Выбросить черновик: работа снова как в версии, версия не меняется">
               выбросить
             </button>
           )}
           {onErase && (
-            <button className={corner} onClick={onErase} title="Зашквар: насовсем сразу, мимо корзины, с причиной">
+            <button className={meaningClass('destroy', true)} onClick={onErase} title="Зашквар: насовсем сразу, мимо корзины, с причиной">
               насовсем
             </button>
           )}

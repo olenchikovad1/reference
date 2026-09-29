@@ -84,6 +84,7 @@ import { useCan, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
 import { WINDOW_KEYS, windowKey } from '../shared/keys'
 import { HotkeysHint } from '../candidates/HotkeysHint'
+import { meaningClass } from '../candidates/meaning'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
 import { useFrameAlpha } from '../shared/frameAlpha'
 import { declaredInks, FULL, mainColoursOf, type CropShape, type Ink } from '../shared/look'
@@ -2810,11 +2811,7 @@ export function WorkWindow() {
                       несохранённые изменения
                       {draftHeld.base_number ? ` · поверх версии ${draftHeld.base_number}` : ''}
                     </button>
-                    <button
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={() => void discard()}
-                      title="Отбросить черновик — останутся версии"
-                    >
+                    <button className={meaningClass('withdraw', true)} onClick={() => void discard()} title="Отбросить черновик — останутся версии">
                       отбросить
                     </button>
                   </div>
@@ -3310,7 +3307,8 @@ function ExecutorSection({ card, onChanged }: { card: FullCard; onChanged: (card
   const [error, setError] = useState<string | null>(null)
   const q = query.trim().toLowerCase()
   const designers = (people.data ?? []).filter(
-    (p) => p.role === 'designer' && p.id !== card.executor?.id && p.display_name.toLowerCase().includes(q),
+    // Без доступа к приложению не предлагается: работу он не откроет.
+    (p) => p.role === 'designer' && p.access && p.id !== card.executor?.id && p.display_name.toLowerCase().includes(q),
   )
   const when = (at: string) => new Date(at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
   return (
@@ -3331,7 +3329,7 @@ function ExecutorSection({ card, onChanged }: { card: FullCard; onChanged: (card
           designers.slice(0, 6).map((p) => (
             <button
               key={p.id}
-              className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+              className={meaningClass('act', true)}
               onClick={() =>
                 void passTo(card.id, p.id)
                   .then((transfers) => {
@@ -3345,7 +3343,11 @@ function ExecutorSection({ card, onChanged }: { card: FullCard; onChanged: (card
               передать: {p.display_name}
             </button>
           ))}
-        {q && designers.length === 0 && <span className="text-muted-foreground">дизайнера с таким ФИО нет</span>}
+        {q && designers.length === 0 && (
+          <span className="text-muted-foreground">
+            дизайнера с доступом и таким ФИО нет. Роль «дизайнер» дают в «Справочниках», доступ к приложению — в платформе.
+          </span>
+        )}
         {error && <span className="text-destructive">{error}</span>}
         {(card.transfers ?? []).map((t, i) => (
           <div key={i} className="text-muted-foreground">
@@ -3383,11 +3385,11 @@ function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: 
         <div className="flex flex-wrap gap-1">
           {(card.can ?? []).filter((w): w is Step => w !== 'remark').map((what) =>
             what === 'return' ? (
-              <button key={what} className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => setReturning((v) => !v)}>
+              <button key={what} className={meaningClass('object', true)} onClick={() => setReturning((v) => !v)}>
                 {STEP_NAMES[what]}
               </button>
             ) : (
-              <button key={what} className={buttonClass({ tone: 'accent', variant: 'soft', small: true })} onClick={() => act(what)}>
+              <button key={what} className={meaningClass('agree', true)} onClick={() => act(what)}>
                 {STEP_NAMES[what]}
               </button>
             ),
@@ -3406,11 +3408,7 @@ function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: 
                 if (e.key === 'Enter' && comment.trim()) act('return')
               }}
             />
-            <button
-              className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
-              disabled={!comment.trim()}
-              onClick={() => act('return')}
-            >
+            <button className={meaningClass('object', true)} disabled={!comment.trim()} onClick={() => act('return')}>
               вернуть с замечанием
             </button>
           </div>
@@ -3515,7 +3513,7 @@ function RemarksSection(props: {
               onError={setError}
             />
             <div className="flex gap-1">
-              <button className={buttonClass({ tone: 'accent', variant: 'soft', small: true })} disabled={!text.trim()} onClick={put}>
+              <button className={meaningClass('act', true)} disabled={!text.trim()} onClick={put}>
                 поставить
               </button>
               <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => props.onPending(null)}>
@@ -3568,7 +3566,7 @@ function RemarksSection(props: {
                 .map((k) => (
                   <button
                     key={k}
-                    className={buttonClass({ tone: k === 'rejected' ? 'neutral' : 'accent', variant: 'outline', small: true })}
+                    className={meaningClass(k === 'rejected' ? 'object' : 'agree', true)}
                     onClick={() =>
                       done(
                         sayRemark(card.id, r.id, k, k === 'rejected' ? reply[r.id] : undefined).then(() =>
