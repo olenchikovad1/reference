@@ -441,6 +441,8 @@ export function WorkWindow() {
   }, [sized, product, size, calibration, torso])
 
   const selected = find(visible, visible.selectedId)
+  // Выбор красок дуотона — у каждого принта свой: другой принт — выбор с нуля.
+  useEffect(() => setDuoPick([]), [visible.selectedId])
 
   // Несохранённое — отличие экрана от открытой версии; у несохранённой ни разу
   // работы — всё, что на холсте.
@@ -1910,6 +1912,15 @@ export function WorkWindow() {
         <Section title="Цвет и прозрачность">
           {/* Исходник не меняется: хранятся краска и прозрачность (US-0502). */}
           <div style={S.swatches}>
+            {/* Первой — «как в оригинале» (владелец 29.09): вернуть исходный
+                цвет не только Ctrl+Z. */}
+            <button
+              title="Как в оригинале — без краски"
+              aria-label="как в оригинале"
+              aria-pressed={!selected.look?.tint}
+              onClick={() => commit((comp) => relook(comp, selected.id, { tint: null }))}
+              style={{ ...S.swatch, ...S.original, outline: !selected.look?.tint ? '2px solid currentColor' : undefined }}
+            />
             {colours.map((c) => (
               <button
                 key={c.code}
@@ -1929,11 +1940,6 @@ export function WorkWindow() {
               ? `перекрашен в ${colours.find((c) => c.code === selected.look?.tint?.code)?.group ?? selected.look.tint.code} — форма и полутона те же`
               : 'исходный цвет — для одноцветного принта выберите краску'}
           </p>
-          {selected.look?.tint && (
-            <button className={small()} onClick={() => commit((comp) => relook(comp, selected.id, { tint: null }))}>
-              вернуть исходный цвет
-            </button>
-          )}
           <Slider
             label="прозрачность"
             hint="насколько сквозь принт видна ткань: 0 — принт закрывает её полностью"
@@ -2119,6 +2125,16 @@ export function WorkWindow() {
             >
               дуотон из выбранных ({duoPick.length})
             </button>
+            {duoPick.length > 0 && (
+              <button className={small()} onClick={() => setDuoPick([])}>
+                снять выбор
+              </button>
+            )}
+            {selected.look?.duotone && (
+              <button className={small()} onClick={() => commit((c) => relook(c, selected.id, { duotone: null }))}>
+                убрать дуотон
+              </button>
+            )}
             <button
               className={small()}
               onClick={() =>
@@ -3253,6 +3269,8 @@ const S: Record<string, React.CSSProperties> = {
   textInput: { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 6, marginBottom: 6 },
   swatches: { display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 },
   swatch: { width: 26, height: 26, borderRadius: 5, border: 'none', cursor: 'pointer', padding: 0 },
+  // «Как в оригинале»: шахматка — «без краски», как прозрачность в редакторах.
+  original: { background: 'repeating-conic-gradient(#d1d5db 0 25%, #fff 0 50%) 0 0 / 10px 10px', boxShadow: 'inset 0 0 0 1px #9ca3af' },
   slider: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 2 },
   sliderValue: { fontSize: 11, color: '#6b7280', width: 38, textAlign: 'right' },
   num: { display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginBottom: 4 },
