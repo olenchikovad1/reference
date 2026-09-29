@@ -1123,12 +1123,13 @@ export function WorkWindow() {
   // путём, что «Сохранить как», — со снимками сторон из этого окна. Снимок
   // рисует только окно, на сервере отрисовки нет; поэтому наполнение здесь, а
   // не скриптом мимо окна (так 28.09 на все карточки легла одна картинка).
-  // Только стенд без платформы: `referenceStand.fill(120)` в консоли.
+  // Только стенд без платформы: `referenceStand.fill(120)` в консоли; третье
+  // число — доля референсов с надписью из «Текстов» под принтом (US-0717).
   const standLive = useRef({ keep })
   standLive.current = { keep }
   useEffect(() => {
     if (!WITHOUT_PLATFORM) return
-    const w = window as unknown as { referenceStand?: { fill: (n: number, seed?: number) => Promise<number[]> } }
+    const w = window as unknown as { referenceStand?: { fill: (n: number, seed?: number, withText?: number) => Promise<number[]> } }
     w.referenceStand = { fill: fillStand }
     return () => {
       delete w.referenceStand
@@ -1136,7 +1137,7 @@ export function WorkWindow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- сеттеры стабильны, свежее — через standLive
   }, [])
 
-  async function fillStand(n: number, from = 20260929): Promise<number[]> {
+  async function fillStand(n: number, from = 20260929, withText = 0): Promise<number[]> {
     // Пауза таймером, а не кадрами: окно в фоне кадров почти не получает, а
     // миниатюры рисуются в эффектах и кадров не ждут.
     const settle = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
@@ -1145,6 +1146,9 @@ export function WorkWindow() {
     const colourModels = walk(await fetchCatalogue())
     const prints = (await fetchLibrary()).filter((p) => !p.defect)
     if (!colourModels.length || !prints.length) throw new Error('на стенде нет цветомоделей B-HDY-14 или принтов')
+    // Слоганы — заведённые в «Текстах» (scripts/stand/seed_slogans.py).
+    const slogans = withText > 0 ? (await fetchTexts('')).map((t) => t.text) : []
+    if (withText > 0 && !slogans.length) throw new Error('в «Текстах» пусто — сначала scripts/stand/seed_slogans.py')
     // Детерминированно: то же зерно — тот же набор; другое зерно — другой.
     let seed = from
     const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648)
@@ -1177,27 +1181,27 @@ export function WorkWindow() {
       setColourCode(cm.colour_code)
       setSize(pickOne([98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164]))
       setStateCode(side)
-      history.open(null, {
-        selectedId: null,
-        elements: [
-          {
-            id: newElementId(),
-            kind: 'image',
-            name: p.name?.name ?? p.file_name,
-            src,
-            aspect,
-            hasAlpha,
-            placement: {
-              side,
-              anchor: 'neck',
-              dxCm: pickOne([-4, -2, 0, 2, 4]),
-              dyCm: pickOne([8, 10, 12, 14]),
-              widthCm: pickOne([10, 14, 18, 22]),
-              rotation: 0,
-            },
-          },
-        ],
-      })
+      const dxCm = pickOne([-4, -2, 0, 2, 4])
+      const dyCm = pickOne([8, 10, 12, 14])
+      const widthCm = pickOne([10, 14, 18, 22])
+      const elements: PrintElement[] = [
+        { id: newElementId(), kind: 'image', name: p.name?.name ?? p.file_name, src, aspect, hasAlpha, placement: { side, anchor: 'neck', dxCm, dyCm, widthCm, rotation: 0 } },
+      ]
+      if (slogans.length && rnd() < withText) {
+        // Надпись под принтом: светлая на тёмной кофте, тёмная на светлой.
+        const light = /WHITE|MILK|CREAM|GREY|BEIGE/.test(cm.colour_code)
+        const style = { text: pickOne(slogans), fontFamily: pickOne(FONTS).family, weight: 600, rgb: (light ? [20, 20, 20] : [255, 255, 255]) as [number, number, number] }
+        elements.push({
+          id: newElementId(),
+          kind: 'text',
+          name: 'надпись',
+          ...style,
+          colourCode: light ? 'BLACK' : 'WHITE',
+          textAspect: aspectOf(style),
+          placement: { side, anchor: 'neck', dxCm, dyCm: dyCm + widthCm / aspect + 2, widthCm: pickOne([14, 16, 18]), rotation: 0 },
+        })
+      }
+      history.open(null, { selectedId: null, elements })
       // Кадр и миниатюры сторон должны лечь до снимка: окно перерисовалось,
       // картинка загружена, миниатюры догнали работу.
       await settle(250)
