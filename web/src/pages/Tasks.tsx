@@ -70,7 +70,7 @@ export function Tasks() {
  *  а не по строке с номером. */
 function Grid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
       {children}
     </div>
   )
@@ -94,7 +94,7 @@ function TaskList({ rows, empty }: { rows: Task[]; empty: string }) {
         // Статус карточка пишет сама; причина — только если она что-то добавляет.
         const note = t.reason === STATUS_NAMES[t.status] ? undefined : [{ text: t.reason, tone: t.status === 'rework' ? ('warning' as const) : ('muted' as const) }]
         return card ? (
-          <div key={t.id} className="grid h-64">
+          <div key={t.id} className="grid h-64 min-w-0">
             <ReferenceCard card={card} note={note} onOpen={() => open(t.id)} onHover={open.warm(t.id)} />
           </div>
         ) : (
@@ -173,7 +173,7 @@ function DraftCard({ d, card, onOpen, onDrop }: { d: MyDraft; card?: Card; onOpe
     { text: `правлено ${when}${d.base_number ? ` · поверх версии ${d.base_number}` : ''}` },
   ]
   if (card) return (
-    <div className="grid h-64">
+    <div className="grid h-64 min-w-0">
       <ReferenceCard card={card} note={note} onOpen={onOpen} onDiscard={onDrop} />
     </div>
   )

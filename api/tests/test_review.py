@@ -214,3 +214,18 @@ async def test_liked_draft_is_decided_at_once(client) -> None:
     r = await client.post(f"{API}/references/{ref}/approve-final", headers=as_(CHIEF))
     assert r.status_code == 200
     assert (await client.get(f"{API}/references/{ref}")).json()["status"] == "final"
+
+
+async def test_approved_waits_for_the_chief_only_with_the_final_right(client) -> None:
+    """План 097: у главного без права «Окончательное принятие» согласованное
+    не лежит в «Ждёт меня» — шаг ему не доступен."""
+    from reference_api.db import session_factory
+    from reference_api.services import review
+
+    ref = await new_reference(client)
+    await client.post(f"{API}/references/{ref}/approve", headers=as_(CHIEF))
+    async with session_factory() as db:
+        with_right, _ = await review.tasks(db, CHIEF, can_final=True)
+        without, _ = await review.tasks(db, CHIEF, can_final=False)
+    assert ref in [t.id for t in with_right]
+    assert ref not in [t.id for t in without]

@@ -159,7 +159,7 @@ class Task:
     reason: str
 
 
-async def tasks(db: AsyncSession, who: str | None) -> tuple[list[Task], list[Task]]:
+async def tasks(db: AsyncSession, who: str | None, can_final: bool = True) -> tuple[list[Task], list[Task]]:
     """«Мои задачи» — вычислением из статусов и ролей (И-8): что ждёт именно
     меня, и что я отдал и жду от других."""
     person = await people_repo.app_person(db, who) if who else None
@@ -175,7 +175,7 @@ async def tasks(db: AsyncSession, who: str | None) -> tuple[list[Task], list[Tas
             e, n = returns.get(c.id), open_remarks.get(c.id, 0)
             head = f"вернули с {n} {_remarks_word(n)}" if n else "вернули"
             mine.append(Task(c.id, c.name, c.status, f"{head}: «{e.comment}»" if e and e.comment else head))
-        elif c.status == "approved" and role == "chief":
+        elif c.status == "approved" and role == "chief" and can_final:
             mine.append(Task(c.id, c.name, c.status, "согласован — ждёт окончательного принятия"))
         elif c.executor_id == who and c.status in {"review", "approved"}:
             waiting.append(Task(c.id, c.name, c.status,

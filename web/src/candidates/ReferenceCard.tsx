@@ -83,7 +83,7 @@ function ReferenceCardView({
   const [menu, setMenu] = useState(false)
   const [before, setBefore] = useState('')
   return (
-    <div data-flip={card.id} className={`group relative flex min-h-0 flex-col ${dragging ? 'opacity-40' : ''}`}>
+    <div data-flip={card.id} className={`group relative flex min-h-0 min-w-0 flex-col ${dragging ? 'opacity-40' : ''}`}>
       {/* Куда встанет — видно заранее: черта над местом переносимой. */}
       {dragging && <div aria-hidden className="absolute -top-2 left-0 right-0 z-10 h-1 rounded bg-primary" />}
     <button
