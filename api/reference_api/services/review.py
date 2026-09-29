@@ -43,7 +43,8 @@ STEPS = {
     "submit": ({"draft", "rework"}, "review", {"executor"}),
     # Отозвать отправленное, пока никто не решил: не та версия ушла.
     "recall": ({"review"}, "draft", {"executor"}),
-    "return": ({"review"}, "rework", {"editor", "chief"}),
+    # На доработку — и не дожидаясь отправки, и передумав после согласования (план 096).
+    "return": ({"draft", "review", "approved"}, "rework", {"editor", "chief"}),
     # Понравилось как есть — согласовать, не дожидаясь отправки (план 095).
     "approve": ({"draft", "review", "rework"}, "approved", {"editor", "chief"}),
     # Согласовали по ошибке — обратно на согласование, с причиной.

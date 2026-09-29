@@ -1,4 +1,4 @@
-import { Modal, TextInput, buttonClass } from '@platform/ui'
+import { Icon, Modal, TextInput, buttonClass } from '@platform/ui'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -53,6 +53,7 @@ import {
   step as reviewStep,
   STATUS_NAMES,
   STEP_ASKS,
+  moveToDrop,
   STEP_NAMES,
   SAY_NAMES,
   addVoiceRemark,
@@ -87,6 +88,7 @@ import { useCan, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
 import { WINDOW_KEYS, windowKey } from '../shared/keys'
 import { HotkeysHint } from '../candidates/HotkeysHint'
+import { ThumbsUp } from '../candidates/ThumbsUp'
 import { weightText } from '../shared/percent'
 import { meaningClass, type Meaning } from '../candidates/meaning'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
@@ -3463,9 +3465,11 @@ const STEP_MEANING: Record<Step, Meaning> = {
   revive: 'agree',
 }
 
-/** Полоса решений внизу окна (план 094): только доступные мне сейчас шаги —
- *  по состоянию и роли, — «замечание» и «обсуждение». Кнопки в рамке своего
- *  цвета; где нужна причина — поле тут же, Enter — выполнить, Esc — отмена. */
+/** Полоса решений внизу окна (план 096): 👍 «нравится», ✕ «на доработку»,
+ *  💬 «обсуждение» и ⋯ «статус» — остальные переходы и перенос в дроп.
+ *  Только то, что мне доступно сейчас: по состоянию, роли в согласовании и
+ *  праву платформы (без функции «Окончательное принятие» кнопки нет — раньше
+ *  она была и отвечала Not Found). Где нужна причина — поле тут же. */
 function DecisionBar(props: {
   card: FullCard
   openRemarks: number
@@ -3475,11 +3479,25 @@ function DecisionBar(props: {
   onChanged: (card: FullCard) => void
 }) {
   const { card } = props
+  const canFinal = useCan(CODE, 'review', 'approve-final')
+  const drops = useQuery({ queryKey: ['drops'], queryFn: fetchDrops, staleTime: 60_000 })
   const [asking, setAsking] = useState<Step | null>(null)
   const [comment, setComment] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const steps = (card.can ?? []).filter((w): w is Step => w !== 'remark')
+  const [menu, setMenu] = useState(false)
+  const [moving, setMoving] = useState(false)
+  const status = card.status ?? 'draft'
+  const steps = (card.can ?? []).filter((w): w is Step => w !== 'remark' && (w !== 'approve-final' || canFinal))
+  // «Нравится» — следующее «да»: согласовать, а согласованное главному —
+  // принять окончательно.
+  const like: Step | null = steps.includes('approve') ? 'approve' : status === 'approved' && steps.includes('approve-final') ? 'approve-final' : null
+  const liked = status === 'approved' || status === 'final'
+  const rest = steps.filter((w) => w !== like && w !== 'return')
+  const said = (e: Error) =>
+    /not found/i.test(e.message)
+      ? 'на это нет права в платформе — его выдают в «Доступах» платформы (набор «Суперредактор» или функция раздела «Согласование»)'
+      : e.message
   const act = (what: Step) => {
     setBusy(true)
     void reviewStep(card.id, what, comment)
@@ -3490,10 +3508,30 @@ function DecisionBar(props: {
         setError(null)
         props.onChanged(fresh)
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => setError(said(e)))
       .finally(() => setBusy(false))
   }
-  const press = (what: Step) => (STEP_ASKS[what] ? (setAsking(what), setComment('')) : act(what))
+  const press = (what: Step) => {
+    setMenu(false)
+    if (STEP_ASKS[what]) {
+      setAsking(what)
+      setComment('')
+    } else act(what)
+  }
+  const moveTo = (dropId: number) => {
+    setBusy(true)
+    void moveToDrop(card.id, dropId)
+      .then(() => openReference(card.id))
+      .then((fresh) => {
+        setMoving(false)
+        setMenu(false)
+        setError(null)
+        props.onChanged(fresh)
+      })
+      .catch((e: Error) => setError(said(e)))
+      .finally(() => setBusy(false))
+  }
+  const big = (meaning: Meaning) => `${meaningClass(meaning, false, true)} flex items-center gap-1.5`
   return (
     <div
       className="absolute bottom-4 left-1/2 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col items-center gap-1"
@@ -3522,21 +3560,62 @@ function DecisionBar(props: {
           </button>
         </div>
       )}
-      <div className="pf-card flex flex-wrap items-center justify-center gap-2 border border-line bg-background/95 p-2 shadow" aria-label="решения по референсу">
-        <span className="px-1 text-xs text-muted-foreground">{STATUS_NAMES[card.status ?? 'draft']}</span>
-        {steps.map((what) => (
-          <button key={what} className={meaningClass(STEP_MEANING[what], false, true)} disabled={busy} aria-pressed={asking === what} onClick={() => press(what)}>
-            {STEP_NAMES[what]}
-          </button>
-        ))}
-        {(card.can ?? []).includes('remark') && (
-          <button className={meaningClass('act', false, true)} onClick={props.onRemark} title="Нажмите на принт, надпись или место изделия">
-            замечание
+      <div className="pf-card relative flex items-center gap-2 border border-line bg-background/95 p-2 shadow" aria-label="решения по референсу">
+        <span className="px-1 text-xs text-muted-foreground">{STATUS_NAMES[status]}</span>
+        {(like || liked) && (
+          <button
+            className={big('agree')}
+            disabled={busy || !like}
+            aria-pressed={liked}
+            title={like ? STEP_NAMES[like] : STATUS_NAMES[status]}
+            onClick={() => like && press(like)}
+          >
+            <ThumbsUp /> {like === 'approve-final' ? 'окончательно' : liked ? 'нравится ✓' : 'нравится'}
           </button>
         )}
-        <button className={meaningClass('quiet', false, true)} aria-pressed={props.talkOpen} onClick={() => props.onTalk(!props.talkOpen)}>
-          обсуждение{props.openRemarks ? ` · ${props.openRemarks}` : ''}
+        {steps.includes('return') && (
+          <button className={big('object')} disabled={busy} title="На доработку — с причиной" onClick={() => press('return')}>
+            <Icon name="x" size={20} /> на доработку
+          </button>
+        )}
+        <button className={big('quiet')} aria-pressed={props.talkOpen} title="Замечания и путь по версиям" onClick={() => props.onTalk(!props.talkOpen)}>
+          <Icon name="message-circle" size={20} /> обсуждение{props.openRemarks ? ` · ${props.openRemarks}` : ''}
         </button>
+        <button className={big('quiet')} aria-expanded={menu} title="Сменить статус, перенести" onClick={() => setMenu((v) => !v)}>
+          <Icon name="list" size={20} /> статус
+        </button>
+        {menu && (
+          <div className="pf-card absolute bottom-full right-0 mb-2 flex w-64 flex-col gap-1 border border-line bg-background p-2 text-sm shadow-lg">
+            {rest.map((what) => (
+              <button key={what} className={meaningClass(STEP_MEANING[what], true, true)} disabled={busy} onClick={() => press(what)}>
+                {STEP_NAMES[what]}
+              </button>
+            ))}
+            {(card.can ?? []).includes('remark') && (
+              <button className={meaningClass('act', true, true)} onClick={() => (setMenu(false), props.onRemark())}>
+                замечание
+              </button>
+            )}
+            {!moving ? (
+              <button className={meaningClass('quiet', true, true)} onClick={() => setMoving(true)}>
+                перенести в дроп…
+              </button>
+            ) : (
+              <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+                {(drops.data ?? [])
+                  .filter((d) => !d.retired)
+                  .map((d) => (
+                    <button key={d.id} className={meaningClass('act', true, true)} disabled={busy} onClick={() => moveTo(d.id)}>
+                      {d.name}
+                    </button>
+                  ))}
+              </div>
+            )}
+            {rest.length === 0 && !(card.can ?? []).includes('remark') && (
+              <span className="text-xs text-muted-foreground">других переходов у вас сейчас нет</span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
