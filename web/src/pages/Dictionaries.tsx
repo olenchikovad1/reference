@@ -3,13 +3,15 @@
 // их до роли нельзя, а в согласовании он бывает дизайнером в одной работе и
 // редактором в другой. Доступ по-прежнему у платформы.
 
-import { EmptyState, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
+import { EmptyState, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import { CODE } from '../app/shell'
 import { useCan, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { fetchPeople, ROLE_NAMES, setRole, type Person, type Role } from '../shared/api/people'
+import { fetchLibrary, fetchRetag, startRetag } from '../shared/api/assets'
+import { meaningClass } from '../candidates/meaning'
 
 const ROLE_OPTIONS = (Object.keys(ROLE_NAMES) as Role[]).map((r) => ({ value: r, label: ROLE_NAMES[r] }))
 
@@ -28,7 +30,71 @@ export function Dictionaries() {
         {people.data?.map((p) => <PersonRow key={p.id} person={p} canEdit={canEdit} />)}
         {canEdit && <NewPerson />}
       </div>
+      <Retag />
     </div>
+  )
+}
+
+/** Обслуживание библиотеки (US-0716): переразметка всей библиотеки — редкая
+ *  и тяжёлая операция, поэтому здесь, а не рядом с «добавить файлы», и
+ *  спрашивает: сколько картинок, что изменится, что не тронется. */
+function Retag() {
+  const canRun = useCan(CODE, 'prints', 'write')
+  const library = useQuery({ queryKey: ['library', false], queryFn: () => fetchLibrary(false), enabled: canRun })
+  const run = useQuery({
+    queryKey: ['retag'],
+    queryFn: fetchRetag,
+    enabled: canRun,
+    refetchInterval: (q) => (q.state.data && !q.state.data.finished ? 2000 : false),
+  })
+  const [asking, setAsking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (!canRun) return null
+  const running = !!run.data && !run.data.finished
+  const n = library.data?.length ?? 0
+  return (
+    <section className="mt-6 max-w-3xl">
+      <h2 className="mb-1 text-sm font-semibold">Обслуживание библиотеки</h2>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Переразметка — когда сменили модели разметки: каждая картинка заново получает вид, общие теги и предупреждения.
+      </p>
+      <button className={meaningClass('object', true, true)} disabled={running} onClick={() => setAsking(true)}>
+        {running ? `переразметка идёт: ${run.data!.done} из ${run.data!.total}` : 'переразметить библиотеку…'}
+      </button>
+      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      <Modal
+        open={asking}
+        onClose={() => setAsking(false)}
+        title="Переразметить всю библиотеку?"
+        actions={
+          <>
+            <button className={meaningClass('quiet')} onClick={() => setAsking(false)}>
+              не надо
+            </button>
+            <button
+              className={meaningClass('object')}
+              onClick={() => {
+                setAsking(false)
+                void startRetag()
+                  .then(() => run.refetch())
+                  .catch((e: Error) => setError(e.message))
+              }}
+            >
+              переразметить {n}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm">
+          {n} картинок будут размечены заново нынешними моделями: вид, общие теги и предупреждения. Идёт в фоне, около
+          {' '}
+          {Math.max(1, Math.round((n * 4) / 60))} мин.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Не тронутся: свои теги референсов, скрытые автотеги, вид, поставленный рукой, и брак.
+        </p>
+      </Modal>
+    </section>
   )
 }
 

@@ -24,7 +24,6 @@ import {
   searchAssets,
   setKind,
   fetchRetag,
-  startRetag,
   uploadAssets,
   KIND_OPTIONS,
   UploadRefused,
@@ -154,21 +153,9 @@ export function Prints() {
             >
               брак
             </button>
-            {canEdit && (
-              <button
-                className={buttonClass({ tone: 'neutral', variant: 'outline' })}
-                disabled={retagRunning}
-                onClick={() =>
-                  void startRetag()
-                    .then(() => retag.refetch())
-                    .catch((e: Error) => setKindError(e.message))
-                }
-                title="Разметить всю библиотеку нынешними моделями: вид, теги, предупреждения. Свои теги референсов не трогаются."
-              >
-                {retagRunning ? 'переразметка идёт…' : 'переразметить библиотеку'}
-              </button>
-            )}
-            <label className={buttonClass({ tone: 'accent', variant: 'outline' })}>
+            {/* Главное действие экрана — залитое (US-0716). Переразметка всей
+                библиотеки — в «Справочниках», под подтверждением. */}
+            <label className={`${buttonClass({ tone: 'accent', variant: 'solid' })} cursor-pointer`}>
               добавить файлы
               <input
                 type="file"
