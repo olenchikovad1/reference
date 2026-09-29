@@ -123,6 +123,8 @@ import { useHistoryState } from '../shared/useHistory'
 // переехали как есть из временного экрана примерки; здесь раскладка и связка.
 
 const PRODUCT = 'B-HDY-14'
+/** Предел отдаления — доля от «вписать в окно». */
+const MIN_ZOOM = 0.5
 
 /** Лист для узнавания «такой принт уже был», точек на сантиметр. */
 const RECOGNITION_PX_PER_CM = 12
@@ -581,10 +583,12 @@ export function WorkWindow() {
    * а именно ради этого его и приближают.
    */
   function zoomTo(next: number, around?: { x: number; y: number }) {
-    const z = Math.min(6, Math.max(1, Number(next.toFixed(2))))
+    // Отдалить можно до половины от «вписать в окно» (владелец 29.09: хочется
+    // кофту с полями вокруг), дальше изделие только мельчало бы.
+    const z = Math.min(6, Math.max(MIN_ZOOM, Number(next.toFixed(2))))
     setZoom(z)
     setRenderScale(Math.min(3, Math.ceil(z)))
-    if (z === 1) {
+    if (z <= 1) {
       setPan({ x: 0, y: 0 })
       return
     }
