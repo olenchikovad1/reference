@@ -46,8 +46,6 @@ sections:
       - {code: export-techpack, name: Выгрузить техпакет}
       - {code: purge-trash, name: Очистить корзину}
       - {code: delete-forever, name: "Удалить насовсем, минуя корзину"}
-    children:
-      - {code: trash, name: Корзина, icon: trash}
   - code: prints
     name: Принты
     shareable: false
@@ -98,6 +96,15 @@ sections:
     icon: megaphone
     tone: amber
     actions: [view]
+  # Корзина — своим разделом (план 099): удаляют не только референсы —
+  # принты, надписи и другое встанут вкладками рядом. Вернуть и стереть —
+  # по-прежнему правами своих разделов (references:delete, purge-trash).
+  - code: trash
+    name: Корзина
+    shareable: false
+    icon: trash
+    tone: slate
+    actions: [view]
   - code: dictionaries
     name: Справочники
     shareable: false
@@ -112,7 +119,7 @@ right_sets:
     # delete — в корзину и обратно (решение 0014): неудачные варианты дизайнер
     # убирает сам; стереть насовсем — функция очистки корзины, её нет.
     grants: [references:view, references:write, references:delete, prints:view, prints:write,
-             texts:view, texts:write, drops:view, products:view, review:view, agenda:view, dictionaries:view]
+             texts:view, texts:write, drops:view, products:view, review:view, agenda:view, trash:view, dictionaries:view]
   - code: editor
     name: Редактор
     grants: [references:view, review:view, review:write, agenda:view, prints:view, texts:view, drops:view,
@@ -120,6 +127,7 @@ right_sets:
   - code: chief-editor
     name: Суперредактор
     grants: [references:view, references:write, references:delete, review:view, review:write, agenda:view,
+             trash:view,
              prints:view, prints:write,
              texts:view, texts:write, drops:view, drops:write, drops:approve-in-drop, dictionaries:view,
              dictionaries:write,

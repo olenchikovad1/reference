@@ -32,7 +32,7 @@ export const HOME_PATH = '/'
 export const SECTIONS: SectionPlace[] = [
   { code: 'references', title: 'Референсы', path: '/references', plan: 'план 073 (US-0491)',
     about: 'Витрина референсов: все работы карточками, фильтр по дропу и адресату, большое рабочее окно поверх.',
-    children: [{ code: 'trash', path: '/references/trash' }] },
+    children: [] },
   { code: 'prints', title: 'Принты', path: '/prints', plan: 'план 073 (US-0495)',
     about: 'Принты библиотеки: где каждый использован, свои теги рядом с автотегами, поиск по смыслу.', children: [] },
   { code: 'texts', title: 'Тексты', path: '/texts', plan: 'план 073 (US-0496)',
@@ -46,6 +46,8 @@ export const SECTIONS: SectionPlace[] = [
     children: [] },
   { code: 'agenda', title: 'Повестка', path: '/agenda', plan: 'план 099 (US-0711)',
     about: 'Повестка созвона: что выдвинуто на обсуждение, по дропам, с поводами.', children: [] },
+  { code: 'trash', title: 'Корзина', path: '/trash', plan: 'план 099 (US-0712)',
+    about: 'Корзина: удалённое 30 дней возвращается целиком.', children: [] },
   { code: 'dictionaries', title: 'Справочники', path: '/dictionaries', plan: 'план 073',
     about: 'Справочники: товарная иерархия, адресаты, палитра.', children: [] },
 ]

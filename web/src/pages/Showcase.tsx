@@ -7,10 +7,10 @@
 // отрисовка на лету: шестьдесят карточек не должны рисовать сто двадцать
 // изделий.
 
-import { EmptyState, Icon, IconButton, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
+import { EmptyState, IconButton, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
 import { warmGarments } from '../candidates/GarmentCanvas'
@@ -444,9 +444,6 @@ export function Showcase() {
               onChange={(e) => setSortOwn(e.target.value === 'own')}
             />
           </div>
-          <Link to="/references/trash" className={`${buttonClass({ tone: 'neutral', variant: 'outline' })} flex items-center gap-1`}>
-            <Icon name="trash" size={16} /> корзина
-          </Link>
           {/* Открыто окно — «?» его: у окна своя подсказка. */}
           <HotkeysHint rows={SHOWCASE_KEYS} label="Клавиши витрины" listen={openRef === undefined} />
         </div>

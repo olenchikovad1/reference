@@ -3,7 +3,7 @@
 // функция «очистить корзину», с подтверждением. Картинки при этом остаются в
 // библиотеке: их берут другие референсы.
 
-import { DataTable, EmptyState, Modal, PageHeader, buttonClass, type DataColumn } from '@platform/ui'
+import { DataTable, EmptyState, Modal, PageHeader, Tabs, buttonClass, type DataColumn } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
@@ -78,6 +78,9 @@ export function Trash() {
   return (
     <main className="p-4">
       <PageHeader title="Корзина" description="удалённое возвращается целиком, с историей; через 30 дней стирается само" />
+      {/* Вкладки по видам удалённого (план 099): принты, надписи и другое
+          встанут рядом, когда их станут удалять. */}
+      <Tabs label="Корзина" current="references" onPick={() => undefined} items={[{ id: 'references', label: 'Референсы', count: trash.data?.length }]} />
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
       {trash.isError ? (
         <EmptyState title="Корзина не пришла" description="Сервис не ответил. Обновите страницу; если повторится — стенд сервиса не поднят." />

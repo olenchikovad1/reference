@@ -39,7 +39,7 @@ const PAGES: Record<string, () => ReactElement> = {
   references: () => <Showcase />,
   prints: () => <Prints />,
   texts: () => <Texts />,
-  'references/trash': () => <Trash />,
+  trash: () => <Trash />,
   drops: () => <Drops />,
   products: () => <Products />,
   dictionaries: () => <Dictionaries />,

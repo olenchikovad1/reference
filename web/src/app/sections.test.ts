@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import manifest from '../../../manifest.reference.yaml?raw'
-import { activeMenu, hrefOfChild, hrefOfCode, routerPath, SECTIONS, sectionOfPath } from './sections'
+import { activeMenu, hrefOfCode, routerPath, SECTIONS, sectionOfPath } from './sections'
 
 describe('разделы приложения', () => {
   it('те же коды и в том же порядке, что в манифесте для платформы', () => {
@@ -14,7 +14,7 @@ describe('разделы приложения', () => {
 
   it('адрес для рамки — с приставкой, для роутера — без', () => {
     expect(hrefOfCode('prints')).toBe('/reference/prints')
-    expect(hrefOfChild('references', 'trash')).toBe('/reference/references/trash')
+    expect(hrefOfCode('trash')).toBe('/reference/trash')
     expect(routerPath('/reference/prints')).toBe('/prints')
     expect(routerPath('/reference')).toBe('/')
     expect(hrefOfCode('library')).toBeNull()
@@ -22,7 +22,7 @@ describe('разделы приложения', () => {
 
   it('подсвечивается раздел и подпункт, в котором человек', () => {
     expect(activeMenu('/review')).toEqual({ section: 'review', child: null })
-    expect(activeMenu('/references/trash')).toEqual({ section: 'references', child: 'trash' })
+    expect(activeMenu('/trash')).toEqual({ section: 'trash', child: null })
     expect(activeMenu('/prints')).toEqual({ section: 'prints', child: null })
     expect(activeMenu('/')).toEqual({ section: null, child: null })
   })
