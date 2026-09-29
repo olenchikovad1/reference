@@ -580,14 +580,21 @@ class NotADesigner(ValueError):
 
 async def pass_to(db: AsyncSession, reference_id: int, to_id: str, by_id: str | None) -> None:
     """Передать работу другому исполнителю (US-0509). Только человеку с ролью
-    «дизайнер» из таблицы ролей приложения (решение 0016)."""
+    «дизайнер» из таблицы ролей приложения (решение 0016) — и с доступом к
+    приложению: передать тому, кто её не откроет, — сразу получить «нет
+    доступа — передайте работу» (владелец 29.09, стендовый «Кузнецов» за
+    платформой)."""
     from reference_api.repositories import people as people_repo
+    from reference_api.services import people
 
     if await repo.get(db, reference_id) is None:
         raise NoSuchReference("референса с таким номером нет")
     person = await people_repo.app_person(db, to_id)
     if person is None or person.role != "designer":
         raise NotADesigner("работу передают только дизайнеру — у этого человека другая роль или её нет")
+    if not (await people.members_of(db, [to_id]))[to_id].access:
+        raise NotADesigner(f"у «{person.full_name}» нет доступа к приложению — работу он не откроет; "
+                           "доступ выдают в платформе")
     await repo.pass_to(db, reference_id, to_id, by_id)
 
 

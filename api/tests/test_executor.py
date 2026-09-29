@@ -91,7 +91,13 @@ async def test_showcase_marks_mine_and_no_access(client) -> None:
     hers = await new_reference(client)
     gone = await new_reference(client)
     await client.post(f"/reference/api/references/{hers}/executor", json={"subject_id": IVANOVA})
-    await client.post(f"/reference/api/references/{gone}/executor", json={"subject_id": GONE})
+    r = await client.post(f"/reference/api/references/{gone}/executor", json={"subject_id": GONE})
+    assert r.status_code == 422 and "нет доступа" in r.json()["detail"], "тому, кто не откроет, работу не передают"
+    # Доступ забрали уже после передачи — исполнитель остаётся, с пометкой.
+    from reference_api.db import engine
+
+    async with engine.begin() as conn:
+        await conn.execute(text("update reference_cards set executor_id = :g where id = :i"), {"g": GONE, "i": gone})
     cards = {c["id"]: c for c in (await client.get("/reference/api/references")).json()}
     assert cards[mine]["mine"] is True and cards[hers]["mine"] is False
     assert cards[hers]["executor"]["access"] is True
