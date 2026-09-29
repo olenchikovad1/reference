@@ -28,7 +28,7 @@ async def my_tasks(request: Request, db: AsyncSession = Depends(session)) -> Tas
 
 
 
-@agenda_router.get("", response_model=list[AgendaProposedOut], dependencies=[requires("review", Action.VIEW)])
+@agenda_router.get("", response_model=list[AgendaProposedOut], dependencies=[requires("agenda", Action.VIEW)])
 async def agenda(db: AsyncSession = Depends(session)) -> list[AgendaProposedOut]:
     """Повестка (план 098): что выдвинуто на обсуждение и почему — пока по
     референсу не решили и не сняли вручную. Встреч в приложении нет."""

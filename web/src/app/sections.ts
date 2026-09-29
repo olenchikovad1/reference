@@ -44,10 +44,10 @@ export const SECTIONS: SectionPlace[] = [
   { code: 'review', title: 'Согласование', path: '/review', plan: 'план 075 (US-0510)',
     about: 'Согласование: чей ход, замечания на слоях и версиях, голосом тоже.',
     children: [] },
+  { code: 'agenda', title: 'Повестка', path: '/agenda', plan: 'план 099 (US-0711)',
+    about: 'Повестка созвона: что выдвинуто на обсуждение, по дропам, с поводами.', children: [] },
   { code: 'dictionaries', title: 'Справочники', path: '/dictionaries', plan: 'план 073',
     about: 'Справочники: товарная иерархия, адресаты, палитра.', children: [] },
-  { code: 'archive', title: 'Архив', path: '/archive', plan: 'позже',
-    about: 'Архив: итоги выпущенного, только чтение.', children: [] },
 ]
 
 const byCode = new Map(SECTIONS.map((s) => [s.code, s]))

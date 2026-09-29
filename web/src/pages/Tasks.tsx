@@ -8,27 +8,24 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
-import { DropFilterBar } from '../candidates/DropFilter'
+import { CardGrid } from '../candidates/CardGrid'
 import { ReferenceCard } from '../candidates/ReferenceCard'
+import { useCards, useOpen } from '../shared/cardPages'
 import { meaningClass } from '../candidates/meaning'
 import {
   dropAccidental,
   dropDraft,
   fetchMyDrafts,
   fetchTasks,
-  fetchAgenda,
-  listReferences,
   STATUS_NAMES,
   type Card,
-  type AgendaItem,
   type MyDraft,
   type Task,
 } from '../shared/api/references'
-import { prefetchCard, rememberDraft } from '../shared/cardCache'
+import { rememberDraft } from '../shared/cardCache'
 import { forgetBuffer } from '../shared/draftWriter'
-import { passes, useDropFilter } from '../shared/filters'
 
-type TabId = 'mine' | 'waiting' | 'drafts' | 'agenda'
+type TabId = 'mine' | 'waiting' | 'drafts'
 
 /** «Согласование» — один раздел, внутри вкладки (US-0687): что ждёт меня,
  *  что я отдал, где у меня несохранённое. Вкладка — в адресе (`?tab=`):
@@ -37,10 +34,8 @@ type TabId = 'mine' | 'waiting' | 'drafts' | 'agenda'
 export function Tasks() {
   const tasks = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks, refetchInterval: 15_000 })
   const drafts = useQuery({ queryKey: ['my-drafts'], queryFn: fetchMyDrafts, refetchOnWindowFocus: true })
-  const agenda = useQuery({ queryKey: ['agenda-page'], queryFn: fetchAgenda })
-  const agendaCount = agenda.data?.length
   const [params, setParams] = useSearchParams()
-  const counts = { mine: tasks.data?.mine.length, waiting: tasks.data?.waiting.length, drafts: drafts.data?.length, agenda: agendaCount }
+  const counts = { mine: tasks.data?.mine.length, waiting: tasks.data?.waiting.length, drafts: drafts.data?.length }
   const asked = params.get('tab') as TabId | null
   const tab: TabId =
     asked && asked in counts ? asked : counts.mine ? 'mine' : counts.waiting ? 'waiting' : counts.drafts ? 'drafts' : 'mine'
@@ -56,12 +51,9 @@ export function Tasks() {
           { id: 'mine', label: 'Ждёт меня', count: counts.mine },
           { id: 'waiting', label: 'Отдал — жду', count: counts.waiting },
           { id: 'drafts', label: 'Мои черновики', count: counts.drafts },
-          { id: 'agenda', label: 'Повестка', count: counts.agenda },
         ]}
       >
-        {tab === 'agenda' ? (
-          <AgendaTab />
-        ) : tab === 'drafts' ? (
+        {tab === 'drafts' ? (
           <MyDrafts />
         ) : tasks.isPending ? (
           <p className="text-sm text-muted-foreground">Загружаю задачи…</p>
@@ -75,28 +67,12 @@ export function Tasks() {
   )
 }
 
-/** Сетка карточек, как на витрине (US-0688): референс узнают по картинке,
- *  а не по строке с номером. */
-function Grid({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-      {children}
-    </div>
-  )
-}
-
-/** Карточки витрины по номерам — из того же списка, что и витрина. */
-function useCards(): Map<number, Card> {
-  const cards = useQuery({ queryKey: ['references'], queryFn: listReferences })
-  return new Map((cards.data ?? []).map((c) => [c.id, c]))
-}
-
 function TaskList({ rows, empty }: { rows: Task[]; empty: string }) {
   const cards = useCards()
   const open = useOpen()
   if (rows.length === 0) return <EmptyState title="Пусто" description={empty} />
   return (
-    <Grid>
+    <CardGrid>
       {rows.map((t) => {
         const card = cards.get(t.id)
         const why = t.reason === STATUS_NAMES[t.status] ? t.reason : `${STATUS_NAMES[t.status]} — ${t.reason}`
@@ -113,18 +89,10 @@ function TaskList({ rows, empty }: { rows: Task[]; empty: string }) {
           </Link>
         )
       })}
-    </Grid>
+    </CardGrid>
   )
 }
 
-/** Открыть окно поверх согласования: крестик вернёт на ту же вкладку. */
-function useOpen() {
-  const navigate = useNavigate()
-  const queries = useQueryClient()
-  const open = (id: number) => navigate(`/references/${id}`, { state: { inApp: true } })
-  open.warm = (id: number) => () => prefetchCard(queries, id)
-  return open
-}
 
 /** Мои черновики (US-0685): где у меня несохранённое и что в нём — словами.
  *  Мелкое помечено «похоже на случайное»: задел мышью, пока листал. Выбросить
@@ -163,13 +131,13 @@ function MyDrafts() {
       {drafts.data && rows.length === 0 && (
         <EmptyState title="Пусто" description="Несохранённого нигде нет: всё, что правили, — в версиях." />
       )}
-      <Grid>
+      <CardGrid>
         {rows.map((d) => (
           <DraftCard key={d.reference_id ?? 'new'} d={d} card={d.reference_id === null ? undefined : cards.get(d.reference_id)}
             onOpen={() => (d.reference_id === null ? navigate('/references/new', { state: { inApp: true } }) : open(d.reference_id))}
             onDrop={() => run(dropDraft(d.reference_id).then(() => forget([d.reference_id])))} />
         ))}
-      </Grid>
+      </CardGrid>
     </section>
   )
 }
@@ -203,59 +171,3 @@ function DraftCard({ d, card, onOpen, onDrop }: { d: MyDraft; card?: Card; onOpe
   )
 }
 
-/** Повестка (план 098): витрина того, что требует обсуждения, — по дропам,
- *  с поводами на карточках, с теми же отборами, что на витрине. Встреч в
- *  приложении нет (владелец: они идут в телемосте); с повестки референс
- *  уходит решением по нему или «снять с обсуждения». */
-function AgendaTab() {
-  const agenda = useQuery({ queryKey: ['agenda-page'], queryFn: fetchAgenda })
-  const cards = useCards()
-  const open = useOpen()
-  const drop = useDropFilter()
-  if (agenda.isError) return <p className="text-sm text-destructive">{(agenda.error as Error).message}</p>
-  if (!agenda.data) return <p className="text-sm text-muted-foreground">Собираю повестку…</p>
-  const when = (at: string) => new Date(at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-  const rows = agenda.data
-    .map((item) => ({ item, card: cards.get(item.reference_id) }))
-    .filter((r): r is { item: AgendaItem; card: Card } => !!r.card)
-    .filter(({ card }) =>
-      passes(
-        { drops: card.drop_ids, audiences: card.audience ? [card.audience] : [], categories: card.category ? [card.category] : [] },
-        drop.filter,
-      ),
-    )
-  // По дропам: референс, чья цветомодель выходит в нескольких, — в каждом.
-  const groups = new Map<string, typeof rows>()
-  for (const r of rows) for (const d of r.card.drops.length ? r.card.drops : ['без дропа']) groups.set(d, [...(groups.get(d) ?? []), r])
-  return (
-    <div>
-      <DropFilterBar {...drop} />
-      {rows.length === 0 && (
-        <EmptyState
-          title="Обсуждать нечего"
-          description="На повестку выдвигают из окна референса: «статус» → «выдвинуть на обсуждение», с поводом."
-        />
-      )}
-      {[...groups.entries()].map(([name, list]) => (
-        <section key={name} className="mb-4">
-          <h2 className="mb-1 text-sm font-semibold">
-            {name} · {list.length}
-          </h2>
-          <Grid>
-            {list.map(({ item, card }) => (
-              <div key={item.reference_id} className="grid h-64 min-w-0">
-                <ReferenceCard
-                  // Повод — полной строкой ниже (кто, когда, что), без краткой метки карточки.
-                  card={{ ...card, agenda: [] }}
-                  note={item.reasons.map((r) => ({ text: `${r.by_name ?? 'без входа'}, ${when(r.at)}: ${r.reason}`, tone: 'warning' as const }))}
-                  onOpen={() => open(item.reference_id)}
-                  onHover={open.warm(item.reference_id)}
-                />
-              </div>
-            ))}
-          </Grid>
-        </section>
-      ))}
-    </div>
-  )
-}
