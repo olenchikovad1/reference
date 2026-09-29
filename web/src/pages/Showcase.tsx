@@ -7,7 +7,7 @@
 // отрисовка на лету: шестьдесят карточек не должны рисовать сто двадцать
 // изделий.
 
-import { EmptyState, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
+import { EmptyState, Icon, IconButton, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -408,27 +408,20 @@ export function Showcase() {
             : `по запросу «${query.trim()}» — ${shown?.length ?? 0}`
         }
         actions={
-          <div className="flex items-center gap-2">
+          // Вверху — только поиск (владелец 29.09: «вверху справа помойка»):
+          // порядок, корзина и клавиши — в одной полосе с отборами.
+          <div className="flex w-80 items-center gap-1">
             <TextInput
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="снежное, танк, мишка…"
+              placeholder="поиск: снежное, танк, мишка…"
               aria-label="поиск по картинкам и надписям референсов"
             />
-            {query && (
-              <button className={buttonClass({ tone: 'neutral', variant: 'outline' })} onClick={() => setQuery('')}>
-                сбросить
-              </button>
-            )}
-            <Link to="/references/trash" className={buttonClass({ tone: 'neutral', variant: 'outline' })}>
-              корзина
-            </Link>
-            {/* Открыто окно — «?» его: у окна своя подсказка. */}
-            <HotkeysHint rows={SHOWCASE_KEYS} label="Клавиши витрины" listen={openRef === undefined} />
+            {query && <IconButton icon="x" aria-label="сбросить поиск" onClick={() => setQuery('')} />}
           </div>
         }
       />
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-4">
         <DropFilterBar {...drop}>
           <Chip on={onlyMine} set={setOnlyMine} title="Только референсы, где я исполнитель">
             только мои
@@ -437,21 +430,26 @@ export function Showcase() {
             мои черновики
           </Chip>
         </DropFilterBar>
-        {/* Порядок — отдельно от отборов и назван порядком (US-0686). */}
-        <label className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
-          порядок
-          <div className="w-36">
+        {/* Порядок — отдельно от отборов и назван порядком (US-0686); рядом
+            корзина и клавиши — одной полосой, одной высоты. */}
+        <div className="mb-3 flex items-center gap-2">
+          <div className="w-44">
             <Select
               aria-label="порядок карточек"
               options={[
-                { value: 'date', label: 'по дате' },
-                { value: 'own', label: 'вручную' },
+                { value: 'date', label: 'порядок: по дате' },
+                { value: 'own', label: 'порядок: вручную' },
               ]}
               value={sortOwn ? 'own' : 'date'}
               onChange={(e) => setSortOwn(e.target.value === 'own')}
             />
           </div>
-        </label>
+          <Link to="/references/trash" className={`${buttonClass({ tone: 'neutral', variant: 'outline' })} flex items-center gap-1`}>
+            <Icon name="trash" size={16} /> корзина
+          </Link>
+          {/* Открыто окно — «?» его: у окна своя подсказка. */}
+          <HotkeysHint rows={SHOWCASE_KEYS} label="Клавиши витрины" listen={openRef === undefined} />
+        </div>
       </div>
       <div aria-live="polite" className="sr-only">
         {announce}

@@ -90,6 +90,7 @@ import { WINDOW_KEYS, windowKey } from '../shared/keys'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { ThumbsUp } from '../candidates/ThumbsUp'
 import { weightText } from '../shared/percent'
+import { useDismiss } from '../shared/useDismiss'
 import { meaningClass, type Meaning } from '../candidates/meaning'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
 import { useFrameAlpha } from '../shared/frameAlpha'
@@ -261,6 +262,8 @@ export function WorkWindow() {
   // Всплывающим окном и только по нажатию (план 095): открытое само или
   // запомненное прятало правую полосу, и работать было нельзя.
   const [talkOpen, setTalkOpen] = useState(false)
+  const talkRef = useRef<HTMLDivElement | null>(null)
+  const closeTalk = useCallback(() => setTalkOpen(false), [])
   const [pendingRemark, setPendingRemark] = useState<PendingRemark | null>(null)
   const [focusRemark, setFocusRemark] = useState<number | null>(null)
   const [viewing, setViewing] = useState<number | null>(null)
@@ -447,6 +450,9 @@ export function WorkWindow() {
   // Выбор красок дуотона — у каждого принта свой: другой принт — выбор с нуля.
   useEffect(() => setDuoPick([]), [visible.selectedId])
   const [cropMenu, setCropMenu] = useState(false)
+  const cropRef = useRef<HTMLDivElement | null>(null)
+  const closeCropMenu = useCallback(() => setCropMenu(false), [])
+  useDismiss(cropMenu, closeCropMenu, [cropRef])
   const [cropOpen, setCropOpen] = useState(false)
   useEffect(() => {
     setCropMenu(false)
@@ -1495,6 +1501,9 @@ export function WorkWindow() {
     setTalkOpen(false)
     setPendingRemark(null)
   }, [current?.id])
+  // Недописанное замечание нажатием мимо не теряется: окно ждёт «поставить»
+  // или «отмена» (введённое не пропадает — правило экранов).
+  useDismiss(talkOpen && !pendingRemark, closeTalk, [talkRef], '[data-talk-toggle]')
 
   const catalogue = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue, staleTime: 60_000 })
   const cmId = current?.colour_model_id ?? colourModelId
@@ -1964,7 +1973,7 @@ export function WorkWindow() {
       {/* Обрезка — одной строкой со значком (владелец 29.09): нужна редко, а
           картинка обрезки занимала полпанели. Выбор — по нажатию, своя
           обрезка — в небольшом окне. */}
-      <div className="relative mb-2">
+      <div ref={cropRef} className="relative mb-2">
         <button
           className={`${small()} w-full justify-start`}
           aria-expanded={cropMenu}
@@ -2584,6 +2593,7 @@ export function WorkWindow() {
 
           {current && talkOpen && (
             <div
+              ref={talkRef}
               role="dialog"
               aria-label="обсуждение"
               className="pf-card absolute bottom-24 left-1/2 z-40 flex max-h-[65%] w-[440px] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-y-auto border border-line bg-background p-3 text-sm shadow-xl"
@@ -3499,6 +3509,12 @@ function DecisionBar(props: {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [menu, setMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const closeMenu = useCallback(() => {
+    setMenu(false)
+    setMoving(false)
+  }, [])
+  useDismiss(menu, closeMenu, [menuRef], '[data-status-toggle]')
   const [moving, setMoving] = useState(false)
   const status = card.status ?? 'draft'
   const steps = (card.can ?? []).filter((w): w is Step => w !== 'remark' && (w !== 'approve-final' || canFinal))
@@ -3598,17 +3614,17 @@ function DecisionBar(props: {
           </Hint>
         )}
         <Hint text="Открыть замечания — написать новое текстом или голосом — и путь по версиям">
-          <button className={big('quiet')} aria-pressed={props.talkOpen} onClick={() => props.onTalk(!props.talkOpen)}>
+          <button className={big('quiet')} data-talk-toggle aria-pressed={props.talkOpen} onClick={() => (setMenu(false), props.onTalk(!props.talkOpen))}>
             <Icon name="message-circle" size={20} /> обсуждение{props.openRemarks ? ` · ${props.openRemarks}` : ''}
           </button>
         </Hint>
         <Hint text="Другие переходы статуса, замечание и перенос в другой дроп">
-          <button className={big('quiet')} aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
+          <button className={big('quiet')} data-status-toggle aria-expanded={menu} onClick={() => (props.onTalk(false), setMenu((v) => !v))}>
             <Icon name="list" size={20} /> статус
           </button>
         </Hint>
         {menu && (
-          <div className="pf-card absolute bottom-full right-0 mb-2 flex w-64 flex-col gap-1 border border-line bg-background p-2 text-sm shadow-lg">
+          <div ref={menuRef} className="pf-card absolute bottom-full right-0 mb-2 flex w-64 flex-col gap-1 border border-line bg-background p-2 text-sm shadow-lg">
             {rest.map((what) => (
               <Hint key={what} text={STEP_HINTS[what]} side="left">
                 <button className={meaningClass(STEP_MEANING[what], true, true)} disabled={busy} onClick={() => press(what)}>
