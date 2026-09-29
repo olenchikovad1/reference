@@ -44,7 +44,8 @@ import { fetchDrops } from '../shared/api/drops'
 /** Где браузер помнит выбранный порядок витрины. */
 const SORT_KEY = 'reference.showcase.sort'
 
-/** Строк на витрине — ровно три, при любой высоте окна. */
+/** На экран помещается три ряда карточек при любой высоте окна; дальше —
+ *  колесом вниз (US-0721, владелец 29.09: «людям привычнее колёсиком»). */
 const ROWS = 3
 const GAP = 12
 /** Ширина карточки к высоте: изделие почти квадратное, плюс подпись снизу. */
@@ -246,19 +247,21 @@ export function Showcase() {
     const move = (ev: PointerEvent) => {
       place(ev.clientX, ev.clientY)
       const box = grid.current?.getBoundingClientRect()
-      // У края витрина едет сама: карточки дальше экрана тоже достижимы.
+      // У верхнего и нижнего края окна витрина едет сама: карточки ниже
+      // экрана тоже достижимы.
       if (box && grid.current) {
-        if (ev.clientX < box.left + 48) grid.current.scrollLeft -= 16
-        else if (ev.clientX > box.right - 48) grid.current.scrollLeft += 16
+        const scroller = scrollerOf(grid.current)
+        if (ev.clientY < 48) scroller.scrollBy(0, -16)
+        else if (ev.clientY > window.innerHeight - 48) scroller.scrollBy(0, 16)
       }
       for (const el of grid.current?.querySelectorAll<HTMLElement>('[data-flip]') ?? []) {
         const cid = Number(el.dataset.flip)
         if (ids.includes(cid)) continue
         const r = el.getBoundingClientRect()
         if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) continue
-        // Столбцы по три: соседи по порядку — сверху и снизу. Верхняя
-        // половина — перед карточкой, нижняя — после.
-        const next = rest.indexOf(cid) + (ev.clientY > r.top + r.height / 2 ? 1 : 0)
+        // Ряды слева направо: соседи по порядку — слева и справа. Левая
+        // половина — перед карточкой, правая — после.
+        const next = rest.indexOf(cid) + (ev.clientX > r.left + r.width / 2 ? 1 : 0)
         if (next !== at) {
           at = next
           setDrag({ ids, at, visible })
@@ -372,8 +375,8 @@ export function Showcase() {
     return () => window.removeEventListener('keydown', onUndo)
   })
 
-  /** Стрелки ходят по карточкам: вверх-вниз — в столбце, вбок — на столбец;
-   *  пробел выделяет. */
+  /** Стрелки ходят по карточкам: вбок — соседняя, вверх-вниз — ряд выше или
+   *  ниже; пробел выделяет. */
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
     const all = [...(grid.current?.querySelectorAll<HTMLButtonElement>('[data-card]') ?? [])]
     const at = all.indexOf(document.activeElement as HTMLButtonElement)
@@ -386,7 +389,10 @@ export function Showcase() {
       }
       return
     }
-    const by: Record<string, number> = { ArrowDown: 1, ArrowUp: -1, ArrowRight: ROWS, ArrowLeft: -ROWS }
+    // Карточек в ряду — сколько стоит на одной высоте с первой.
+    const top0 = all[0]?.getBoundingClientRect().top
+    const perRow = Math.max(1, all.filter((b) => Math.abs(b.getBoundingClientRect().top - top0) < 4).length)
+    const by: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: perRow, ArrowUp: -perRow }
     if (!(e.key in by)) return
     e.preventDefault()
     // Переставлять карточки с клавиатуры нельзя (владелец 26.09): порядок
@@ -531,13 +537,10 @@ export function Showcase() {
           }}
           onKeyDown={onKey}
           style={{
-            height: height.value,
             display: 'grid',
-            gridTemplateRows: `repeat(${ROWS}, minmax(0, 1fr))`,
-            gridAutoFlow: 'column',
-            gridAutoColumns: rowHeight * ASPECT,
+            gridTemplateColumns: `repeat(auto-fill, minmax(${Math.round(rowHeight * ASPECT)}px, 1fr))`,
+            gridAutoRows: rowHeight,
             gap: GAP,
-            overflowX: 'auto',
             paddingBottom: 4,
           }}
         >
@@ -844,4 +847,14 @@ function Chip(props: { on: boolean; set: (v: (was: boolean) => boolean) => void;
       {props.children}
     </button>
   )
+}
+
+/** Что прокручивается под витриной: ближайший предок с прокруткой по
+ *  вертикали, иначе страница. В оболочке платформы это её колонка. */
+function scrollerOf(el: HTMLElement): { scrollBy: (x: number, y: number) => void } {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const y = getComputedStyle(p).overflowY
+    if ((y === 'auto' || y === 'scroll') && p.scrollHeight > p.clientHeight) return p
+  }
+  return window
 }
