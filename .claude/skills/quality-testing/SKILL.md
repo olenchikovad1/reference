@@ -1,6 +1,6 @@
 ---
 name: quality-testing
-description: Write the test first and make it fail for the right reason, then organise the suite so fast tests actually run in the working loop and heavy ones run once per block. Use when implementing logic in backend or frontend code, when fixing a bug that should not return, when deciding whether a change needs a test at all, when a test needs a mock or a fixture, and when the loop has become slow enough that tests get skipped.
+description: Write the test first and make it fail for the right reason, then decide what to run by risk: check what the change could break and nothing more, never after every edit, the full suite only once at the end of a plan, and any single test that takes over two minutes only on a critical regression, one at a time. Use when about to run tests or the whole suite, when implementing logic in backend or frontend code, when fixing a bug that should not return, when deciding whether a change needs a test at all, when a test needs a mock or a fixture, and when the loop has become slow enough that tests get skipped.
 source: projects_skills/skills/quality/testing
 adapted: 2026-09-23
 ---
@@ -36,8 +36,18 @@ adapted: 2026-09-23
 - **Разделение на быстрые и тяжёлые обязано использоваться, а не существовать.**
   Одна команда, которая гоняет всё, означает, что в цикле не гоняют ничего.
 - **Ориентир для цикла — прогон не дольше полуминуты.**
-- **Тяжёлое — реальная база, внешние интеграции, браузер** — запускается раз на
-  смысловой блок, а не после каждого шага.
+- **Что запускать — решает риск, а не ритуал. Правило владельца, критичное.**
+  Тесты — нервная система: сигнал боли, а не ежедневный осмотр; гонять на
+  износ — убивать время и нервы. Перед прогоном спросить: что эта правка
+  могла сломать? — и проверить это и только это. После правки — ничего.
+  Разовая задача — проверить саму задачу; быстрые — только если задето
+  общее. История плана — свой функционал и то, что рядом. Весь сьют — один
+  раз, в конце плана. Цвет кнопки не повод ни для быстрых, ни для сьюта.
+- **Тест дольше двух минут сам по себе — только при критическом регрессе,
+  точечно и по одному.** Правило владельца: десять таких — двадцать минут
+  простоя без смысла. В весь сьют в конце плана они не входят.
+- **Тяжёлое — реальная база, внешние интеграции, браузер** — идёт, только
+  если риск лежит именно там, или в составе всего сьюта в конце плана.
 - **Всё, что уходит за пределы процесса, мокается всегда.**
 - **Тест не зависит от других тестов и от порядка запуска.**
 - **Фикстура создаёт ровно то, что нужно этому тесту.**
