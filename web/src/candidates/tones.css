@@ -9,3 +9,19 @@
   --btn-tint: var(--success-soft);
   --btn-ink: var(--success);
 }
+
+/* Кнопка в рамке (план 094): рамка — цвет смысла в полную силу, при
+   наведении подсвечивается вся рамка, а не только фон. Нейтральная —
+   рамкой текста. */
+.pf-btn--framed {
+  border: 1.5px solid var(--btn-ink);
+  font-weight: 600;
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+.pf-btn--framed:hover:not(:disabled),
+.pf-btn--framed:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--btn-ink) 35%, transparent);
+}
+.pf-btn--framed[aria-pressed='true'] {
+  background: var(--btn-tint);
+}

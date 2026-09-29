@@ -26,8 +26,11 @@ const LOOK: Record<Meaning, { tone: string; variant: 'solid' | 'soft' | 'outline
   quiet: { tone: 'neutral', variant: 'outline' },
 }
 
-/** Классы кнопки по смыслу. `small` — внутри строки или карточки. */
-export function meaningClass(meaning: Meaning, small = false): string {
+/** Классы кнопки по смыслу. `small` — внутри строки или карточки.
+ *  `framed` — в рамке своего цвета, наведение подсвечивает рамку целиком
+ *  (полоса решений окна, план 094). */
+export function meaningClass(meaning: Meaning, small = false, framed = false): string {
+  if (framed) return `${meaningClass(meaning, small).replace(/pf-btn--(solid|soft|outline)/, 'pf-btn--outline')} pf-btn--framed`
   const { tone, variant } = LOOK[meaning]
   // Положительного тона у платформы нет: класс собирается тем же образом,
   // pf-btn--positive задан в tones.css.

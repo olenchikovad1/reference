@@ -50,6 +50,7 @@ import {
   sayRemark,
   step as reviewStep,
   STATUS_NAMES,
+  STEP_ASKS,
   STEP_NAMES,
   SAY_NAMES,
   addVoiceRemark,
@@ -84,7 +85,7 @@ import { useCan, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
 import { WINDOW_KEYS, windowKey } from '../shared/keys'
 import { HotkeysHint } from '../candidates/HotkeysHint'
-import { meaningClass } from '../candidates/meaning'
+import { meaningClass, type Meaning } from '../candidates/meaning'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
 import { useFrameAlpha } from '../shared/frameAlpha'
 import { declaredInks, FULL, mainColoursOf, type CropShape, type Ink } from '../shared/look'
@@ -2520,35 +2521,27 @@ export function WorkWindow() {
             </div>
           )}
 
+          {current && (
+            <DecisionBar
+              card={current}
+              openRemarks={openRemarks}
+              talkOpen={talkOpen}
+              onTalk={setTalkOpen}
+              onRemark={() => {
+                setTalkOpen(true)
+                setPlacing(true)
+              }}
+              onChanged={(card) => {
+                setCurrent(card)
+                queries.setQueryData(cardKey(card.id), card)
+                void queries.invalidateQueries({ queryKey: ['references'] })
+                void queries.invalidateQueries({ queryKey: ['tasks'] })
+              }}
+            />
+          )}
+
           {/* Виды — иконками изделия с принтом: что лежит на спине, видно до нажатия. */}
-          <div className="absolute right-3 top-3 flex items-end gap-2" aria-label="виды изделия">
-            {/* Согласование — левее видов (владелец 29.09): крупная белая
-                галочка на зелёном, как обычно рисуют согласование. Число —
-                открытые замечания и мой ход. */}
-            {current && (
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="text-[11px] text-muted-foreground">Согласование</span>
-                <button
-                  className={`relative flex h-14 w-14 items-center justify-center rounded-full shadow ${
-                    talkOpen ? 'ring-4 ring-success/40' : ''
-                  }`}
-                  style={{ background: 'var(--success)' }}
-                  onClick={() => setTalkOpen(!talkOpen)}
-                  aria-pressed={talkOpen}
-                  aria-label={`согласование: ${openRemarks} открытых замечаний${myTurn ? ', ваш ход' : ''}`}
-                  title="Согласование, замечания, исполнитель — открыть или скрыть (Esc скрывает)"
-                >
-                  <svg viewBox="0 0 24 24" className="h-8 w-8" aria-hidden fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 12.5l4.5 4.5L19 7.5" />
-                  </svg>
-                  {openRemarks + (myTurn ? 1 : 0) > 0 && (
-                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-destructive px-1 text-xs font-bold leading-5 text-white">
-                      {openRemarks + (myTurn ? 1 : 0)}
-                    </span>
-                  )}
-                </button>
-              </div>
-            )}
+          <div className="absolute right-3 top-3 flex gap-2" aria-label="виды изделия">
             {product.states.map((s, i) => (
               <div key={s.code} className="flex flex-col items-center gap-0.5">
               {/* Подпись над иконкой: по картинке перед от спины отличают не все,
@@ -3371,60 +3364,16 @@ function ExecutorSection({ card, onChanged }: { card: FullCard; onChanged: (card
 
 /** Согласование (US-0510): статус, шаги, доступные смотрящему, и путь по
  *  версиям. Вернуть можно только с замечанием. */
-function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: FullCard) => void }) {
-  const [comment, setComment] = useState('')
-  const [returning, setReturning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+function ReviewSection({ card }: { card: FullCard; onChanged?: (card: FullCard) => void }) {
   const status = card.status ?? 'draft'
   const [wholePath, setWholePath] = useState(false)
-  const act = (what: Step) =>
-    void reviewStep(card.id, what, comment)
-      .then(() => openReference(card.id))
-      .then((fresh) => {
-        setComment('')
-        setReturning(false)
-        setError(null)
-        onChanged(fresh)
-      })
-      .catch((e: Error) => setError(e.message))
   const when = (at: string) => new Date(at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
   return (
     <Section title={`Согласование · ${STATUS_NAMES[status]}`}>
       <div className="flex flex-col gap-1 text-xs">
-        <div className="flex flex-wrap gap-1">
-          {(card.can ?? []).filter((w): w is Step => w !== 'remark').map((what) =>
-            what === 'return' ? (
-              <button key={what} className={meaningClass('object', true)} onClick={() => setReturning((v) => !v)}>
-                {STEP_NAMES[what]}
-              </button>
-            ) : (
-              <button key={what} className={meaningClass('agree', true)} onClick={() => act(what)}>
-                {STEP_NAMES[what]}
-              </button>
-            ),
-          )}
-          {(card.can ?? []).filter((w) => w !== 'remark').length === 0 && <span className="text-muted-foreground">ваш шаг здесь сейчас не нужен</span>}
-        </div>
-        {returning && (
-          <div className="flex flex-col gap-1">
-            <TextInput
-              aria-label="замечание при возврате"
-              value={comment}
-              placeholder="что поправить — без замечания вернуть нельзя"
-              onChange={(e) => setComment(e.target.value)}
-              onKeyDown={(e) => {
-                e.stopPropagation()
-                if (e.key === 'Enter' && comment.trim()) act('return')
-              }}
-            />
-            <button className={meaningClass('object', true)} disabled={!comment.trim()} onClick={() => act('return')}>
-              вернуть с замечанием
-            </button>
-          </div>
-        )}
-        {error && <span className="text-destructive">{error}</span>}
         {/* Путь по версиям свёрнут до двух последних шагов: он растёт с каждым
-            кругом, а замечания под ним не должны уезжать вниз (US-0689). */}
+            кругом, а замечания под ним не должны уезжать вниз (US-0689).
+            Решения — в полосе внизу окна (план 094). */}
         {(card.status_events ?? []).length > 2 && (
           <button className="self-start text-muted-foreground underline" onClick={() => setWholePath((v) => !v)}>
             {wholePath ? 'свернуть путь' : `весь путь · ${(card.status_events ?? []).length}`}
@@ -3438,6 +3387,97 @@ function ReviewSection({ card, onChanged }: { card: FullCard; onChanged: (card: 
         ))}
       </div>
     </Section>
+  )
+}
+
+/** Смысл шага — цвет его кнопки (US-0690): согласие, возражение, брак. */
+const STEP_MEANING: Record<Step, Meaning> = {
+  submit: 'agree',
+  recall: 'quiet',
+  return: 'object',
+  approve: 'agree',
+  unapprove: 'object',
+  'approve-final': 'agree',
+  reject: 'destroy',
+  revive: 'agree',
+}
+
+/** Полоса решений внизу окна (план 094): только доступные мне сейчас шаги —
+ *  по состоянию и роли, — «замечание» и «обсуждение». Кнопки в рамке своего
+ *  цвета; где нужна причина — поле тут же, Enter — выполнить, Esc — отмена. */
+function DecisionBar(props: {
+  card: FullCard
+  openRemarks: number
+  talkOpen: boolean
+  onTalk: (on: boolean) => void
+  onRemark: () => void
+  onChanged: (card: FullCard) => void
+}) {
+  const { card } = props
+  const [asking, setAsking] = useState<Step | null>(null)
+  const [comment, setComment] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const steps = (card.can ?? []).filter((w): w is Step => w !== 'remark')
+  const act = (what: Step) => {
+    setBusy(true)
+    void reviewStep(card.id, what, comment)
+      .then(() => openReference(card.id))
+      .then((fresh) => {
+        setComment('')
+        setAsking(null)
+        setError(null)
+        props.onChanged(fresh)
+      })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setBusy(false))
+  }
+  const press = (what: Step) => (STEP_ASKS[what] ? (setAsking(what), setComment('')) : act(what))
+  return (
+    <div
+      className="absolute bottom-4 left-1/2 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col items-center gap-1"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      {error && <div className="pf-card border border-line bg-background px-2 py-1 text-xs text-destructive">{error}</div>}
+      {asking && (
+        <div className="pf-card flex items-center gap-1 border border-line bg-background p-1">
+          <TextInput
+            aria-label={STEP_ASKS[asking]}
+            autoFocus
+            value={comment}
+            placeholder={`${STEP_ASKS[asking]} — без этого «${STEP_NAMES[asking]}» нельзя`}
+            onChange={(e) => setComment(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if (e.key === 'Enter' && comment.trim()) act(asking)
+              if (e.key === 'Escape') setAsking(null)
+            }}
+          />
+          <button className={meaningClass(STEP_MEANING[asking], false, true)} disabled={!comment.trim() || busy} onClick={() => act(asking)}>
+            {STEP_NAMES[asking]}
+          </button>
+          <button className={meaningClass('quiet', false, true)} onClick={() => setAsking(null)}>
+            отмена
+          </button>
+        </div>
+      )}
+      <div className="pf-card flex flex-wrap items-center justify-center gap-2 border border-line bg-background/95 p-2 shadow" aria-label="решения по референсу">
+        <span className="px-1 text-xs text-muted-foreground">{STATUS_NAMES[card.status ?? 'draft']}</span>
+        {steps.map((what) => (
+          <button key={what} className={meaningClass(STEP_MEANING[what], false, true)} disabled={busy} aria-pressed={asking === what} onClick={() => press(what)}>
+            {STEP_NAMES[what]}
+          </button>
+        ))}
+        {(card.can ?? []).includes('remark') && (
+          <button className={meaningClass('act', false, true)} onClick={props.onRemark} title="Нажмите на принт, надпись или место изделия">
+            замечание
+          </button>
+        )}
+        <button className={meaningClass('quiet', false, true)} aria-pressed={props.talkOpen} onClick={() => props.onTalk(!props.talkOpen)}>
+          обсуждение{props.openRemarks ? ` · ${props.openRemarks}` : ''}
+        </button>
+      </div>
+    </div>
   )
 }
 
