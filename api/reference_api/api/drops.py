@@ -49,19 +49,23 @@ async def matrix(drop_id: int, db: AsyncSession = Depends(session)) -> MatrixOut
     )
 
 
-def _node(n: HierarchyNode) -> TreeNodeOut:
+def _colour_models(n: HierarchyNode) -> list[int]:
+    return [cm.id for m in n.models for cm in m.colour_models] + [i for c in n.children for i in _colour_models(c)]
+
+
+def _node(n: HierarchyNode, counts: dict[int, int]) -> TreeNodeOut:
     return TreeNodeOut(
         id=n.id,
         level=n.level,
         name=n.name,
         audience=n.audience,
-        children=[_node(c) for c in sorted(n.children, key=lambda c: c.name)],
+        children=[_node(c, counts) for c in sorted(n.children, key=lambda c: c.name)],
         models=[
             TreeModelOut(
                 **_model(m).model_dump(),
                 colour_models=[
                     TreeColourModelOut(id=cm.id, colour_code=cm.colour_code, drops=[d.name for d in cm.drops],
-                                       drop_ids=[d.id for d in cm.drops])
+                                       drop_ids=[d.id for d in cm.drops], references=counts.get(cm.id, 0))
                     for cm in m.colour_models
                 ],
             )
@@ -73,7 +77,9 @@ def _node(n: HierarchyNode) -> TreeNodeOut:
 @router.get("/catalogue", response_model=list[TreeNodeOut])
 async def catalogue(db: AsyncSession = Depends(session)) -> list[TreeNodeOut]:
     """Товарная иерархия деревом: модели с цветомоделями и дропами, где те выходят."""
-    return [_node(n) for n in await service.tree(db)]
+    roots = await service.tree(db)
+    counts = await service.references_on(db, [i for n in roots for i in _colour_models(n)])
+    return [_node(n, counts) for n in roots]
 
 
 @router.get("/drops/{drop_id}/board", response_model=BoardOut)

@@ -59,6 +59,8 @@ class TreeColourModelOut(BaseModel):
     drops: list[str]
     #: Для фильтра по дропу — по номеру, а не по имени.
     drop_ids: list[int] = []
+    #: Живых референсов на цветомодели (US-0718).
+    references: int = 0
 
 
 class TreeModelOut(ModelOut):

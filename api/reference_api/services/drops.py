@@ -84,6 +84,11 @@ async def tree(db: AsyncSession) -> list[HierarchyNode]:
     return await repo.roots(db)
 
 
+async def references_on(db: AsyncSession, colour_model_ids: list[int]) -> dict[int, int]:
+    """Сколько живых референсов на каждой цветомодели — карточка изделия (US-0718)."""
+    return await repo.references_by_colour_model(db, colour_model_ids)
+
+
 async def colour_model_for_work(db: AsyncSession, colour_model_id: int) -> ColourModel:
     """Цветомодель, на которой можно рисовать; иначе — отказ с причиной."""
     cm = await repo.colour_model(db, colour_model_id)
