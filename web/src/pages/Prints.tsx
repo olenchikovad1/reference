@@ -1,15 +1,16 @@
 // Страница «Принты» (US-0495): библиотека картинками, а не референсами — одна
-// картинка стоит в десятке референсов. Плитка: миниатюра, название с
-// источником, сильные теги с весом, «где использован». Поиск — по весам любым
+// картинка стоит в десятке референсов. Плитка рядами по пропорциям (US-0713):
+// картинка, имя, три сильных тега; остальное — в окне по нажатию. Поиск — по весам любым
 // русским словом (план 071). Файлы бросаются прямо на страницу: уходят в
 // библиотеку и сразу получают теги и название.
 
-import { Checkbox, EmptyState, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
+import { Checkbox, EmptyState, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { AssignBar, DropFilterBar } from '../candidates/DropFilter'
+import { Justified, JustifiedCell, useRatios } from '../candidates/Justified'
 import { passes, useDropFilter } from '../shared/filters'
 import { CODE } from '../app/shell'
 import { useCan } from '../shared/api/platform'
@@ -36,21 +37,9 @@ export function Prints() {
   // Фильтр «брак»: забракованное не видно нигде, кроме него (US-0499).
   const [defects, setDefects] = useState(false)
   const library = useQuery({ queryKey: ['library', defects], queryFn: () => fetchLibrary(defects) })
-  const canDefect = useCan(CODE, 'prints', 'mark-defect')
-  const canEdit = useCan(CODE, 'prints', 'write')
-  const [kindError, setKindError] = useState<string | null>(null)
-  const [marking, setMarking] = useState<string | null>(null)
-  const [markReason, setMarkReason] = useState('')
-
-  function mark(digest: string) {
-    markDefect(digest, markReason.trim())
-      .then(() => {
-        setMarking(null)
-        setMarkReason('')
-        return queries.invalidateQueries({ queryKey: ['library'] })
-      })
-      .catch((e: Error) => setError(`${e.message} — повторите.`))
-  }
+  const [opened, setOpened] = useState<string | null>(null)
+  const openedItem = library.data?.find((i) => i.digest === opened) ?? null
+  const [ratioOf, learnRatio] = useRatios()
   const queries = useQueryClient()
   // Ход переразметки (US-0629): пока идёт — перечитывается сам, закончилась —
   // библиотека перечитывается один раз, чтобы показать новые теги.
@@ -63,7 +52,6 @@ export function Prints() {
   useEffect(() => {
     if (retag.data?.finished) void queries.invalidateQueries({ queryKey: ['library'] })
   }, [retag.data?.finished, queries])
-  const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const found = useWeights(query)
   const [busy, setBusy] = useState<string | null>(null)
@@ -175,8 +163,7 @@ export function Prints() {
       <AssignBar selected={picked.size} onAssign={assign} onClear={() => setPicked(new Set())} />
       {busy && <p className="mb-2 text-sm text-muted-foreground">{busy}</p>}
       {(error || found.error) && <p className="mb-2 text-sm text-destructive">{error ?? found.error}</p>}
-      {kindError && <p className="mb-2 text-sm text-destructive">{kindError}</p>}
-      {retag.data && (
+      {retagRunning && retag.data && (
         <div className="mb-2 rounded border border-line px-2 py-1 text-xs" role="status">
           {retagRunning
             ? `Переразметка библиотеки: ${retag.data.done} из ${retag.data.total}`
@@ -213,147 +200,194 @@ export function Prints() {
       ) : found.rows !== null && items.length === 0 ? (
         <EmptyState title="Ничего не нашлось" description="Назовите предмет, а не настроение: «мяч», а не «весело»." />
       ) : (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          {items.map(({ item, weight, because }) => (
-            <article key={item.digest} className="pf-card flex flex-col overflow-hidden border border-line text-sm">
-              <div className="relative aspect-square bg-muted">
-                <div className="absolute left-2 top-2 z-10">
-                  <Checkbox
-                    label=""
-                    aria-label={`выбрать ${item.name?.name ?? item.file_name}`}
-                    checked={picked.has(item.digest)}
-                    onChange={() => toggle(item.digest)}
-                  />
-                </div>
-                <img src={assetUrl(item.digest, 'thumb')} alt={item.name?.name ?? item.file_name} className="h-full w-full object-contain" />
-                {weight !== undefined && (
-                  <span
-                    className="absolute right-1 top-1 rounded bg-card px-1 text-xs"
-                    title={because ? 'слово запроса — её тег' : 'насколько картинка про запрос относительно всей библиотеки'}
-                  >
-                    {because ?? `по картинке · вес ${weight.toFixed(1)}`}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-1 flex-col gap-1 p-2">
-                <div className="truncate font-semibold" title={item.file_name}>
-                  {item.name?.name ?? item.file_name}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {item.name ? (SOURCES[item.name.source] ?? item.name.source) : 'название неизвестно'}
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {item.tags
-                    .filter((t) => t.strong)
-                    .slice(0, 5)
-                    .map((t) => (
-                      <span key={t.code} className="rounded bg-tone-blue-soft px-1.5 text-xs" title={`вес ${t.score.toFixed(4)} · ${t.model}`}>
-                        {t.name}
-                      </span>
-                    ))}
-                </div>
-                {item.warnings.map((w) => (
-                  <div key={w.kind + w.text} className="rounded bg-tone-amber-soft px-1.5 text-xs" role="note">
-                    {w.text}
-                  </div>
-                ))}
-                {item.kind && (
-                  <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground">
-                    <div className="w-40">
-                      <Select
-                        aria-label={`вид картинки ${item.name?.name ?? item.file_name}`}
-                        options={KIND_OPTIONS}
-                        value={item.kind.kind}
-                        disabled={!canEdit}
-                        onChange={(e) =>
-                          void setKind(item.digest, e.target.value)
-                            .then(() => {
-                              setKindError(null)
-                              return queries.invalidateQueries({ queryKey: ['library'] })
-                            })
-                            .catch((err: Error) => setKindError(err.message))
-                        }
-                      />
+        <Justified>
+          {items.map(({ item, weight, because }) => {
+            const title = item.name?.name ?? item.file_name
+            const on = picked.has(item.digest)
+            return (
+              <JustifiedCell
+                key={item.digest}
+                ratio={ratioOf(item.digest)}
+                caption={
+                  <div className="px-0.5 pt-1 text-xs leading-tight">
+                    <div className="truncate font-medium" title={item.file_name}>
+                      {title}
                     </div>
-                    <span title="вид решает, какая модель ставит теги">
-                      {item.kind.manual
-                        ? 'поправлено рукой'
-                        : item.kind.both
-                          ? `не уверена: ещё ${KIND_OPTIONS.find((o) => o.value === item.kind?.second)?.label ?? item.kind.second} — размечена обеими`
-                          : 'определён сам'}
-                    </span>
+                    <div className="truncate text-muted-foreground">
+                      {item.defect
+                        ? defectText(item.defect)
+                        : item.tags
+                            .filter((t) => t.strong)
+                            .slice(0, 3)
+                            .map((t) => t.name)
+                            .join(' · ') || '\u00a0'}
+                    </div>
                   </div>
-                )}
-                {drop.filter.drop !== null &&
-                  item.drops
-                    .filter((d) => d.id === drop.filter.drop)
-                    .map((d) => (
-                      <div key={d.id} className="text-xs text-muted-foreground">
-                        {d.via === null ? (
-                          `в дропе: ${{ proposed: 'предложен', approved: 'одобрен', rejected: 'не одобрен' }[d.status ?? 'proposed']}` +
-                          (d.reason ? ` — «${d.reason}»` : '')
-                        ) : (
-                          <>
-                            в дропе: через{' '}
-                            <button className="underline" onClick={() => navigate(`/references/${d.via}`)}>
-                              референс №{d.via}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                {item.defect && <div className="text-xs text-destructive">{defectText(item.defect)}</div>}
-                {canDefect && item.defect && (
-                  <button
-                    className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
-                    onClick={() => void unmarkDefect(item.digest).then(() => queries.invalidateQueries({ queryKey: ['library'] }))}
-                  >
-                    снять брак
-                  </button>
-                )}
-                {canDefect && !item.defect && marking !== item.digest && (
-                  <button className={buttonClass({ tone: 'danger', variant: 'outline', small: true })} onClick={() => setMarking(item.digest)}>
-                    брак
-                  </button>
-                )}
-                {marking === item.digest && (
-                  <div className="flex gap-1">
-                    <TextInput
-                      value={markReason}
-                      onChange={(e) => setMarkReason(e.target.value)}
-                      placeholder="почему — обязательно"
-                      aria-label="причина брака"
-                      autoFocus
+                }
+              >
+                <div
+                  className={`group relative h-full w-full overflow-hidden rounded bg-muted ${on ? 'ring-2 ring-accent' : ''}`}
+                >
+                  <button className="h-full w-full cursor-zoom-in" onClick={() => setOpened(item.digest)} aria-label={`открыть ${title}`}>
+                    <img
+                      src={assetUrl(item.digest, 'thumb')}
+                      alt={title}
+                      className="h-full w-full object-cover"
+                      onLoad={(e) => learnRatio(item.digest, e.currentTarget)}
                     />
-                    <button
-                      className={buttonClass({ tone: 'danger', variant: 'solid', small: true })}
-                      disabled={!markReason.trim()}
-                      onClick={() => mark(item.digest)}
-                    >
-                      забраковать
-                    </button>
+                  </button>
+                  <div className={`absolute left-1.5 top-1.5 ${on || picked.size > 0 ? '' : 'opacity-0 group-hover:opacity-100'}`}>
+                    <Checkbox label="" aria-label={`выбрать ${title}`} checked={on} onChange={() => toggle(item.digest)} />
                   </div>
-                )}
-                <div className="mt-auto flex flex-wrap items-center gap-1 text-xs">
-                  <span className="text-muted-foreground">где использован:</span>
-                  {item.references.length === 0 && <span className="text-muted-foreground">нигде</span>}
-                  {item.references.map((r) => (
-                    <button
-                      key={r.id}
-                      className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
-                      onClick={() => navigate(`/references/${r.id}`)}
-                      title={r.name}
+                  {item.warnings.length > 0 && (
+                    <span
+                      className="absolute bottom-1 right-1 rounded bg-tone-amber-soft px-1 text-xs"
+                      title={item.warnings.map((w) => w.text).join('; ')}
                     >
-                      №{r.id}
-                    </button>
-                  ))}
+                      ⚠
+                    </span>
+                  )}
+                  {weight !== undefined && (
+                    <span
+                      className="absolute right-1 top-1 rounded bg-card px-1 text-xs"
+                      title={because ? 'слово запроса — её тег' : 'насколько картинка про запрос относительно всей библиотеки'}
+                    >
+                      {because ?? `вес ${weight.toFixed(1)}`}
+                    </span>
+                  )}
                 </div>
-              </div>
-            </article>
-          ))}
-        </div>
+              </JustifiedCell>
+            )
+          })}
+        </Justified>
       )}
+      {openedItem && <PrintDetails item={openedItem} onClose={() => setOpened(null)} />}
     </main>
+  )
+}
+
+/** Всё, что знаем о картинке, — в окне, а не на плитке: вид с поправкой,
+ *  предупреждения, дропы, «где использован», брак. */
+function PrintDetails({ item, onClose }: { item: LibraryItem; onClose: () => void }) {
+  const canDefect = useCan(CODE, 'prints', 'mark-defect')
+  const canEdit = useCan(CODE, 'prints', 'write')
+  const queries = useQueryClient()
+  const navigate = useNavigate()
+  const [marking, setMarking] = useState(false)
+  const [markReason, setMarkReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const refresh = () => queries.invalidateQueries({ queryKey: ['library'] })
+  const fail = (e: Error) => setError(`${e.message} — повторите.`)
+  const title = item.name?.name ?? item.file_name
+  return (
+    <Modal open onClose={onClose} title={title} size="wide">
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <img src={assetUrl(item.digest, 'preview')} alt={title} className="max-h-[60vh] min-w-0 flex-1 rounded bg-muted object-contain" />
+        <div className="flex w-full flex-col gap-2 text-sm sm:w-72">
+          <div className="text-xs text-muted-foreground">
+            {item.file_name} · {item.name ? (SOURCES[item.name.source] ?? item.name.source) : 'название неизвестно'}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {item.tags
+              .filter((t) => t.strong)
+              .map((t) => (
+                <span key={t.code} className="rounded bg-tone-blue-soft px-1.5 text-xs" title={`вес ${t.score.toFixed(4)} · ${t.model}`}>
+                  {t.name}
+                </span>
+              ))}
+          </div>
+          {item.warnings.map((w) => (
+            <div key={w.kind + w.text} className="rounded bg-tone-amber-soft px-1.5 text-xs" role="note">
+              {w.text}
+            </div>
+          ))}
+          {item.kind && (
+            <div className="flex flex-col items-start gap-1 text-xs text-muted-foreground">
+              <div className="w-48">
+                <Select
+                  aria-label={`вид картинки ${title}`}
+                  options={KIND_OPTIONS}
+                  value={item.kind.kind}
+                  disabled={!canEdit}
+                  onChange={(e) => void setKind(item.digest, e.target.value).then(refresh).catch(fail)}
+                />
+              </div>
+              <span title="вид решает, какая модель ставит теги">
+                {item.kind.manual
+                  ? 'вид поправлен рукой'
+                  : item.kind.both
+                    ? `не уверена: ещё ${KIND_OPTIONS.find((o) => o.value === item.kind?.second)?.label ?? item.kind.second} — размечена обеими`
+                    : 'вид определён сам'}
+              </span>
+            </div>
+          )}
+          {item.drops.length > 0 && (
+            <div className="text-xs">
+              <div className="text-muted-foreground">дропы:</div>
+              {item.drops.map((d) => (
+                <div key={d.id}>
+                  {d.name} —{' '}
+                  {d.via === null ? (
+                    { proposed: 'предложен', approved: 'одобрен', rejected: 'не одобрен' }[d.status ?? 'proposed'] + (d.reason ? ` («${d.reason}»)` : '')
+                  ) : (
+                    <button className="underline" onClick={() => navigate(`/references/${d.via}`)}>
+                      через референс №{d.via}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-1 text-xs">
+            <span className="text-muted-foreground">где использован:</span>
+            {item.references.length === 0 && <span className="text-muted-foreground">нигде</span>}
+            {item.references.map((r) => (
+              <button
+                key={r.id}
+                className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+                onClick={() => navigate(`/references/${r.id}`, { state: { inApp: true } })}
+                title={r.name}
+              >
+                №{r.id}
+              </button>
+            ))}
+          </div>
+          {item.defect && <div className="text-xs text-destructive">{defectText(item.defect)}</div>}
+          {canDefect && item.defect && (
+            <button
+              className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+              onClick={() => void unmarkDefect(item.digest).then(refresh).then(onClose).catch(fail)}
+            >
+              снять брак
+            </button>
+          )}
+          {canDefect && !item.defect && !marking && (
+            <button className={buttonClass({ tone: 'danger', variant: 'outline', small: true })} onClick={() => setMarking(true)}>
+              в брак…
+            </button>
+          )}
+          {marking && (
+            <div className="flex gap-1">
+              <TextInput
+                value={markReason}
+                onChange={(e) => setMarkReason(e.target.value)}
+                placeholder="почему — обязательно"
+                aria-label="причина брака"
+                autoFocus
+              />
+              <button
+                className={buttonClass({ tone: 'danger', variant: 'solid', small: true })}
+                disabled={!markReason.trim()}
+                onClick={() => void markDefect(item.digest, markReason.trim()).then(refresh).then(onClose).catch(fail)}
+              >
+                забраковать
+              </button>
+            </div>
+          )}
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+      </div>
+    </Modal>
   )
 }
 
