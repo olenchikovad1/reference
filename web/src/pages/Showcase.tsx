@@ -34,6 +34,7 @@ import {
   listReferences,
   moveToDrop,
   setOrder,
+  restoreReference,
   trashReference,
   STATUS_NAMES,
   type Card,
@@ -103,8 +104,10 @@ export function Showcase() {
   const ghost = useRef<HTMLDivElement | null>(null)
   // Щелчок, пришедший сразу после переноса, — не «открыть карточку».
   const justDragged = useRef(false)
-  // Прежние порядки для Ctrl+Z: отмена — это тоже порядок целиком.
-  const undoOrders = useRef<number[][]>([])
+  // Отмена на витрине (US-0683): порядок целиком и удаление в корзину — одной
+  // лентой. Ctrl+Z снимает последнее, Ctrl+Y делает его снова.
+  const undoStack = useRef<ShowcaseStep[]>([])
+  const redoStack = useRef<ShowcaseStep[]>([])
   const [announce, setAnnounce] = useState('')
   const { ref: openRef } = useParams()
 
@@ -145,6 +148,12 @@ export function Showcase() {
   }
   const [eraseReason, setEraseReason] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
+  /** Шаг в ленту отмены витрины; новый шаг обрывает повтор. */
+  const remember = (step: ShowcaseStep) => {
+    undoStack.current.push(step)
+    redoStack.current = []
+  }
+
   const act = (run: () => Promise<unknown>) =>
     run()
       .then(() => {
@@ -187,7 +196,10 @@ export function Showcase() {
   async function saveOrder(next: number[], moved: number[], remember = true) {
     const prev = fullOwn()
     if (next.join(',') === prev.join(',')) return
-    if (remember) undoOrders.current.push(prev)
+    if (remember) {
+      undoStack.current.push({ kind: 'order', before: prev, after: next })
+      redoStack.current = []
+    }
     const put = (order: number[]) => {
       const pos = new Map(order.map((id, i) => [id, i]))
       queries.setQueryData<Card[]>(['references'], (cs) => cs?.map((c) => ({ ...c, my_position: pos.get(c.id) ?? null })))
@@ -330,16 +342,28 @@ export function Showcase() {
   const live = useRef({ gripStart, pressStart, moveMenu })
   live.current = { gripStart, pressStart, moveMenu }
 
-  // Ctrl+Z на витрине — вернуть прежний порядок. Открыто окно — отмена его.
+  // Ctrl+Z / Ctrl+Y на витрине — порядок и корзина. Открыто окно — клавиши
+  // его, витрина под ним их не слышит.
   useEffect(() => {
     const onUndo = (e: globalThis.KeyboardEvent) => {
-      if (openRef !== undefined || !(e.ctrlKey || e.metaKey) || e.code !== 'KeyZ' || e.shiftKey) return
+      if (openRef !== undefined || !(e.ctrlKey || e.metaKey)) return
+      const back = e.code === 'KeyZ' && !e.shiftKey
+      const again = e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)
+      if (!back && !again) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      const prev = undoOrders.current.pop()
-      if (!prev) return
+      const from = back ? undoStack : redoStack
+      const to = back ? redoStack : undoStack
+      const step = from.current.pop()
+      if (!step) return
       e.preventDefault()
-      void saveOrder(prev, [], false)
+      to.current.push(step)
+      if (step.kind === 'order') void saveOrder(back ? step.before : step.after, [], false)
+      else {
+        const run = back ? restoreReference : trashReference
+        void act(() => Promise.all(step.ids.map((id) => run(id))))
+        setAnnounce(`${back ? 'возвращено из корзины' : 'снова в корзине'}: ${step.ids.map((id) => `№${id}`).join(', ')}`)
+      }
     }
     window.addEventListener('keydown', onUndo)
     return () => window.removeEventListener('keydown', onUndo)
@@ -534,7 +558,7 @@ export function Showcase() {
               onOpen={(e) => {
                 if (justDragged.current) return
                 if (e.ctrlKey || e.metaKey || e.shiftKey) pick(c.id, e)
-                else navigate(`/references/${c.id}`)
+                else navigate(`/references/${c.id}`, { state: { inApp: true } })
               }}
               onHover={() => prefetchCard(queries, c.id)}
               selected={selected.has(c.id)}
@@ -571,7 +595,7 @@ export function Showcase() {
               onClick={() => {
                 const c = trashing
                 setTrashing(null)
-                if (c) void act(() => trashReference(c.id))
+                if (c) void act(() => trashReference(c.id)).then(() => remember({ kind: 'trash', ids: [c.id] }))
               }}
             >
               в корзину
@@ -596,7 +620,8 @@ export function Showcase() {
               className={buttonClass({ tone: 'danger', variant: 'solid' })}
               onClick={() => {
                 setBulkTrash(false)
-                void bulk('удалить в корзину', (id) => trashReference(id))
+                const ids = [...selected]
+                void bulk('удалить в корзину', (id) => trashReference(id)).then(() => remember({ kind: 'trash', ids }))
               }}
             >
               удалить {selected.size}
@@ -975,3 +1000,7 @@ function useFreeHeight(): { value: number; measure: (el: HTMLElement | null) => 
     },
   }
 }
+
+/** Шаг ленты отмены витрины: порядок целиком — до и после, или удалённые
+ *  в корзину (одна карточка или пачка) — возвращаются тем же шагом. */
+type ShowcaseStep = { kind: 'order'; before: number[]; after: number[] } | { kind: 'trash'; ids: number[] }

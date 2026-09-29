@@ -47,3 +47,30 @@ export function redo<T>(h: History<T>): History<T> {
   const [present, ...future] = h.future
   return { past: [...h.past, h.present], present, future }
 }
+
+/** Чья история: номер референса, null — новый, ещё не сохранённый. */
+export type HistoryKey = number | null
+
+/** Сколько чужих историй держим на сеанс — листают десятками, не сотнями. */
+export const SHELF_DEPTH = 50
+
+/** Перейти к истории другого референса (US-0683). Своя история кладётся на
+ *  полку, чужая снимается с неё — если на полке лежит то же, что открыли;
+ *  иначе (референс поменяли в другом месте) история начинается заново.
+ *  Отмена поэтому никогда не приносит работу соседнего референса. */
+export function switchTo<T>(
+  shelf: ReadonlyMap<HistoryKey, History<T>>,
+  key: HistoryKey,
+  h: History<T>,
+  next: HistoryKey,
+  value: T,
+  same: (a: T, b: T) => boolean,
+): { shelf: Map<HistoryKey, History<T>>; h: History<T> } {
+  const out = new Map(shelf)
+  out.delete(key)
+  out.set(key, h)
+  while (out.size > SHELF_DEPTH) out.delete(out.keys().next().value as HistoryKey)
+  const kept = out.get(next)
+  out.delete(next)
+  return { shelf: out, h: kept && same(kept.present, value) ? { ...kept, present: value } : start(value) }
+}

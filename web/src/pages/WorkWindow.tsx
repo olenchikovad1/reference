@@ -157,7 +157,9 @@ export function WorkWindow() {
   // на 98 не влезает вдвое, и узнать это надо здесь, а не на фабрике.
   const [size, setSize] = useState<number | null>(null)
   const [overlay, setOverlay] = useState<Overlay>('zones')
-  const history = useHistoryState<Composition>(EMPTY)
+  // У каждого референса своя история (US-0683): отмена не приносит работу
+  // соседнего. «То же» — без выбранного: выбор не часть работы.
+  const history = useHistoryState<Composition>(EMPTY, sameWork)
   const composition = history.value
   // Живое изменение — без записи; шаг закрепляется там, где действие кончилось.
   const setComposition = history.set
@@ -745,7 +747,7 @@ export function WorkWindow() {
     // ложится раньше, чем React отрисует смену адреса, и оба изменения
     // приходят одним кадром — без обложки и без прежней карточки.
     void openCard(next)
-    navigate(`/references/${next}`, { replace: true })
+    navigate(`/references/${next}`, { replace: true, state: location.state })
   }
 
   // Соседи по витрине готовятся заранее — данные и картинки: следующее A или
@@ -805,7 +807,7 @@ export function WorkWindow() {
     setSize(w.size ?? null)
     // Открытая версия — без выбранного: панель появляется по нажатию, а не
     // потому, что при сохранении что-то было выделено.
-    commit({ ...c, selectedId: null })
+    history.open(card.id, { ...c, selectedId: null })
     setCurrent(card)
     setViewing(number)
     setColourModelId(card.colour_model_id)
@@ -870,7 +872,7 @@ export function WorkWindow() {
     if (d.stateCode) setStateCode(d.stateCode)
     setColourCode(d.colourCode ?? colourCode)
     setSize(d.size ?? null)
-    commit({ ...c, selectedId: null })
+    history.open(card.id, { ...c, selectedId: null })
     setCurrent(card)
     setViewing(at)
     setColourModelId(card.colour_model_id)
@@ -892,7 +894,7 @@ export function WorkWindow() {
     if (d.stateCode) setStateCode(d.stateCode)
     if (!colourFromDrop && d.colourCode) setColourCode(d.colourCode)
     setSize(d.size ?? null)
-    commit({ ...c, selectedId: null })
+    history.open(null, { ...c, selectedId: null })
     setRestored(true)
     setDraftHeld(draft)
   }
@@ -1111,9 +1113,13 @@ export function WorkWindow() {
 
   /** Закрыть окно — туда, откуда открыли: шагом назад по истории, чтобы
    *  «назад» после закрытия не открывало окно снова. Открыли прямой ссылкой —
-   *  на витрину. Вопроса нет: несохранённое осталось черновиком. */
+   *  на витрину. Вопроса нет: несохранённое осталось черновиком.
+   *
+   *  «Открыто изнутри» (витрина, «Мои задачи») — пометка в состоянии перехода, а не `location.key`: листание
+   *  A/D меняет адрес с заменой, и ключ у открытого ссылкой становится не
+   *  'default' — шаг назад приводил на ту же ссылку, окно не закрывалось. */
   function close() {
-    if (location.key !== 'default') navigate(-1)
+    if ((location.state as { inApp?: boolean } | null)?.inApp) navigate(-1)
     else navigate('/references', { replace: true })
   }
 
@@ -1320,7 +1326,7 @@ export function WorkWindow() {
   // отдать, а «назад» по-прежнему ведёт на витрину.
   useEffect(() => {
     if (windowOpen && current && ref !== String(current.id) && (aimed.current === null || aimed.current === current.id))
-      navigate(`/references/${current.id}`, { replace: true })
+      navigate(`/references/${current.id}`, { replace: true, state: location.state })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id])
 
@@ -1359,7 +1365,7 @@ export function WorkWindow() {
     setColourModelId(q.get('colour_model') ? Number(q.get('colour_model')) : null)
     setColourCode(q.get('colour') ?? 'WHITE')
     setSize(null)
-    commit(EMPTY)
+    history.open(null, EMPTY)
     setRestored(false)
     void restoreNew()
   }
@@ -3569,4 +3575,9 @@ function RemarkAudio(props: { referenceId: number; remark: Remark }) {
   }, [props.referenceId, props.remark.id])
   if (error) return <div className="text-destructive">{error}</div>
   return url ? <audio controls src={url} className="h-7 w-full" aria-label={`запись замечания`} /> : null
+}
+
+/** Та же работа — без выбранного: по нему история с полки не отбрасывается. */
+function sameWork(a: Composition, b: Composition): boolean {
+  return a === b || JSON.stringify({ ...a, selectedId: null }) === JSON.stringify({ ...b, selectedId: null })
 }

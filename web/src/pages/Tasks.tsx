@@ -35,7 +35,7 @@ function TaskList({ title, rows, empty }: { title: string; rows: Task[]; empty: 
       {rows.length === 0 && <EmptyState title="Пусто" description={empty} />}
       <div className="flex flex-col gap-1">
         {rows.map((t) => (
-          <Link key={t.id} to={`/references/${t.id}`} className="rounded border border-line px-2 py-1 text-sm hover:bg-hover">
+          <Link key={t.id} to={`/references/${t.id}`} state={{ inApp: true }} className="rounded border border-line px-2 py-1 text-sm hover:bg-hover">
             №{t.id} · {t.name}
             <span className="ml-2 text-xs text-muted-foreground">
               {t.reason === STATUS_NAMES[t.status] ? t.reason : `${STATUS_NAMES[t.status]} — ${t.reason}`}

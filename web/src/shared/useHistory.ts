@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 
-import { canRedo, canUndo, push, redo, start, undo, type History } from './history'
+import { canRedo, canUndo, push, redo, start, switchTo, undo, type History, type HistoryKey } from './history'
 
 // Состояние с историей.
 //
@@ -21,6 +21,9 @@ import { canRedo, canUndo, push, redo, start, undo, type History } from './histo
 interface Tracked<T> {
   readonly h: History<T>
   readonly base: T
+  /** Чья это история и полка остальных (US-0683): у каждого референса своя. */
+  readonly key: HistoryKey
+  readonly shelf: ReadonlyMap<HistoryKey, History<T>>
 }
 
 export interface HistoryState<T> {
@@ -31,6 +34,9 @@ export interface HistoryState<T> {
   commit: (next?: T | ((prev: T) => T)) => void
   undo: () => void
   redo: () => void
+  /** Открыть работу референса `key`: другой референс — своя история, тот же
+   *  — шаг в текущей (смена версии тоже отменяется). */
+  open: (key: HistoryKey, value: T) => void
   readonly canUndo: boolean
   readonly canRedo: boolean
 }
@@ -39,8 +45,8 @@ function apply<T>(next: T | ((prev: T) => T), prev: T): T {
   return typeof next === 'function' ? (next as (p: T) => T)(prev) : next
 }
 
-export function useHistoryState<T>(initial: T): HistoryState<T> {
-  const [state, setState] = useState<Tracked<T>>(() => ({ h: start(initial), base: initial }))
+export function useHistoryState<T>(initial: T, same: (a: T, b: T) => boolean = Object.is): HistoryState<T> {
+  const [state, setState] = useState<Tracked<T>>(() => ({ h: start(initial), base: initial, key: null, shelf: new Map() }))
 
   const set = useCallback((next: T | ((prev: T) => T)) => {
     setState((s) => ({ ...s, h: { ...s.h, present: apply(next, s.h.present) } }))
@@ -50,23 +56,37 @@ export function useHistoryState<T>(initial: T): HistoryState<T> {
     setState((s) => {
       const value = next === undefined ? s.h.present : apply(next, s.h.present)
       if (value === s.base) return { ...s, h: { ...s.h, present: value } }
-      return { h: push({ ...s.h, present: s.base }, value), base: value }
+      return { ...s, h: push({ ...s.h, present: s.base }, value), base: value }
     })
   }, [])
 
   const doUndo = useCallback(() => {
     setState((s) => {
       const h = undo({ ...s.h, present: s.base })
-      return { h, base: h.present }
+      return { ...s, h, base: h.present }
     })
   }, [])
 
   const doRedo = useCallback(() => {
     setState((s) => {
       const h = redo({ ...s.h, present: s.base })
-      return { h, base: h.present }
+      return { ...s, h, base: h.present }
     })
   }, [])
+
+  const open = useCallback(
+    (key: HistoryKey, value: T) => {
+      setState((s) => {
+        if (key === s.key) {
+          if (value === s.base) return { ...s, h: { ...s.h, present: value } }
+          return { ...s, h: push({ ...s.h, present: s.base }, value), base: value }
+        }
+        const { shelf, h } = switchTo(s.shelf, s.key, { ...s.h, present: s.base }, key, value, same)
+        return { h, base: value, key, shelf }
+      })
+    },
+    [same],
+  )
 
   return {
     value: state.h.present,
@@ -74,6 +94,7 @@ export function useHistoryState<T>(initial: T): HistoryState<T> {
     commit,
     undo: doUndo,
     redo: doRedo,
+    open,
     canUndo: canUndo(state.h),
     canRedo: canRedo(state.h),
   }
