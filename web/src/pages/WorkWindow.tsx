@@ -2608,6 +2608,7 @@ export function WorkWindow() {
                 ×
               </button>
             </div>
+          {current && <AgendaSection card={current} />}
           {current && (
             <ReviewSection
               card={current}
@@ -3615,8 +3616,14 @@ function DecisionBar(props: {
       <div className="pf-card relative flex items-center gap-2 border border-line bg-background/95 p-2 shadow" aria-label="решения по референсу">
         <span className="px-1 text-xs text-muted-foreground">{STATUS_NAMES[status]}</span>
         {onAgenda && (
-          <Hint text={(agenda.data ?? []).map((a) => `${a.by_name ?? 'без входа'}: ${a.reason}`).join(' · ')}>
-            <span className="rounded bg-warning/15 px-1.5 py-0.5 text-xs font-semibold text-warning">на обсуждении</span>
+          <Hint text="Что предложили обсудить — открыть обсуждение">
+            <button
+              data-talk-toggle
+              className="whitespace-nowrap rounded bg-warning/15 px-1.5 py-0.5 text-xs font-semibold text-warning hover:bg-warning/25"
+              onClick={() => (setMenu(false), props.onTalk(true))}
+            >
+              на обсуждении
+            </button>
           </Hint>
         )}
         {(like || liked) && (
@@ -4101,4 +4108,47 @@ function cropSummary(el: PrintElement, clipped: boolean): string {
   const crop = el.kind === 'image' ? el.look?.crop : undefined
   if (crop && (crop.w < 1 || crop.h < 1 || crop.x > 0 || crop.y > 0 || (crop.shape ?? 'rect') !== 'rect')) parts.push('своя')
   return parts.length ? parts.join(' + ') : 'не обрезано'
+}
+
+/** «На повестке» (план 099): что предложили обсудить — кто, когда, что;
+ *  тут же «снять с обсуждения». Пусто — блока нет. */
+function AgendaSection({ card }: { card: FullCard }) {
+  const queries = useQueryClient()
+  const agenda = useQuery({ queryKey: ['agenda', card.id], queryFn: () => fetchAgendaOf(card.id) })
+  const [error, setError] = useState<string | null>(null)
+  const rows = agenda.data ?? []
+  if (rows.length === 0) return null
+  const when = (at: string) => new Date(at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return (
+    <Section title={`На повестке · ${rows.length}`}>
+      <div className="flex flex-col gap-1 text-xs">
+        {rows.map((a, i) => (
+          <div key={i} className="rounded border border-warning/40 bg-warning/10 px-2 py-1">
+            <div className="font-semibold">{a.reason}</div>
+            <div className="text-muted-foreground">
+              {a.by_name ?? 'без входа'} · {when(a.at)}
+            </div>
+          </div>
+        ))}
+        <Hint text="Убрать из повестки — обсуждать не нужно">
+          <button
+            className={`${meaningClass('withdraw', true, true)} self-start`}
+            onClick={() =>
+              void unproposeDiscussion(card.id)
+                .then(() => {
+                  setError(null)
+                  void queries.invalidateQueries({ queryKey: ['agenda', card.id] })
+                  void queries.invalidateQueries({ queryKey: ['references'] })
+                  void queries.invalidateQueries({ queryKey: ['agenda-page'] })
+                })
+                .catch((e: Error) => setError(e.message))
+            }
+          >
+            снять с обсуждения
+          </button>
+        </Hint>
+        {error && <span className="text-destructive">{error}</span>}
+      </div>
+    </Section>
+  )
 }
