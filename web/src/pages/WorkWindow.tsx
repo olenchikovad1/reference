@@ -35,6 +35,7 @@ import {
   assetUrl,
   defectText,
   digestOf,
+  fetchLibrary,
   fetchTags,
   recogniseAssets,
   uploadAssets,
@@ -79,7 +80,7 @@ import {
   type VersionBody,
 } from '../shared/api/references'
 import { CODE } from '../app/shell'
-import { useCan } from '../shared/api/platform'
+import { useCan, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
 import { WINDOW_KEYS, windowKey } from '../shared/keys'
 import { HotkeysHint } from '../candidates/HotkeysHint'
@@ -708,9 +709,14 @@ export function WorkWindow() {
   async function snapshotSides(): Promise<Record<string, string>> {
     if (thumbWork !== sized) {
       // Миниатюры идут за работой с задержкой — догоняем их сразу и ждём два
-      // кадра отрисовки, а не паузу наугад.
+      // кадра отрисовки, а не паузу наугад. Но не дольше 100 мс: вкладке в
+      // фоне браузер кадров не даёт вовсе, и сохранение ждало бы вечно, хотя
+      // миниатюры рисуются в эффектах и кадров не требуют.
       setThumbWork(sized)
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+      await new Promise<void>((r) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => r()))
+        setTimeout(r, 100)
+      })
     }
     const out: Record<string, string> = {}
     await Promise.all(
@@ -1061,31 +1067,115 @@ export function WorkWindow() {
   function addFromLibrary(digest: string, name: string) {
     if (refusedHere()) return
     const src = assetUrl(digest, 'preview')
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
+    void probeImage(src).then(({ aspect, hasAlpha }) => {
       cacheImage(src)
-      const w = Math.max(1, Math.min(160, img.naturalWidth))
-      const h = Math.max(1, Math.round((w * img.naturalHeight) / img.naturalWidth))
-      const probe = document.createElement('canvas')
-      probe.width = w
-      probe.height = h
-      const ctx = probe.getContext('2d', { willReadFrequently: true })
-      ctx?.drawImage(img, 0, 0, w, h)
-      const hasAlpha = ctx ? detectAlpha(ctx.getImageData(0, 0, w, h).data) : true
       commit((c) =>
         add(c, {
           id: newElementId(),
           kind: 'image',
           name,
           src,
-          aspect: img.naturalWidth / img.naturalHeight,
+          aspect,
           hasAlpha,
           placement: { side: stateCode, anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
         }),
       )
+    })
+  }
+
+  // Наполнение витрины стенда (US-0684): сотня разных референсов тем же
+  // путём, что «Сохранить как», — со снимками сторон из этого окна. Снимок
+  // рисует только окно, на сервере отрисовки нет; поэтому наполнение здесь, а
+  // не скриптом мимо окна (так 28.09 на все карточки легла одна картинка).
+  // Только стенд без платформы: `referenceStand.fill(120)` в консоли.
+  const standLive = useRef({ keep })
+  standLive.current = { keep }
+  useEffect(() => {
+    if (!WITHOUT_PLATFORM) return
+    const w = window as unknown as { referenceStand?: { fill: (n: number, seed?: number) => Promise<number[]> } }
+    w.referenceStand = { fill: fillStand }
+    return () => {
+      delete w.referenceStand
     }
-    img.src = src
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- сеттеры стабильны, свежее — через standLive
+  }, [])
+
+  async function fillStand(n: number, from = 20260929): Promise<number[]> {
+    // Пауза таймером, а не кадрами: окно в фоне кадров почти не получает, а
+    // миниатюры рисуются в эффектах и кадров не ждут.
+    const settle = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+    const walk = (nodes: Awaited<ReturnType<typeof fetchCatalogue>>): { id: number; colour_code: string }[] =>
+      nodes.flatMap((t) => [...t.models.filter((m) => m.code === PRODUCT).flatMap((m) => m.colour_models), ...walk(t.children)])
+    const colourModels = walk(await fetchCatalogue())
+    const prints = (await fetchLibrary()).filter((p) => !p.defect)
+    if (!colourModels.length || !prints.length) throw new Error('на стенде нет цветомоделей B-HDY-14 или принтов')
+    // Детерминированно: то же зерно — тот же набор; другое зерно — другой.
+    let seed = from
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648)
+    const pickOne = <T,>(xs: readonly T[]) => xs[Math.floor(rnd() * xs.length)]
+    const made: number[] = []
+    const broken: string[] = []
+    for (let i = 0; i < n; i++) {
+      const p = pickOne(prints)
+      const cm = pickOne(colourModels)
+      const side = pickOne(['front', 'back'] as const)
+      const src = assetUrl(p.digest, 'preview')
+      const probed = await probeImage(src).catch(() => null)
+      if (!probed) {
+        // Картинки нет в хранилище — её в наборе не будет, и это названо.
+        broken.push(p.file_name)
+        prints.splice(prints.indexOf(p), 1)
+        if (!prints.length) throw new Error('ни одна картинка библиотеки не загрузилась')
+        i--
+        continue
+      }
+      const { aspect, hasAlpha } = probed
+      cacheImage(src)
+      aimed.current = null
+      onServer.current = null
+      setCurrent(null)
+      setViewing(null)
+      setBaseline(null)
+      setDraftHeld(null)
+      setColourModelId(cm.id)
+      setColourCode(cm.colour_code)
+      setSize(pickOne([98, 104, 110, 116, 122, 128, 134, 140, 146, 152, 158, 164]))
+      setStateCode(side)
+      history.open(null, {
+        selectedId: null,
+        elements: [
+          {
+            id: newElementId(),
+            kind: 'image',
+            name: p.name?.name ?? p.file_name,
+            src,
+            aspect,
+            hasAlpha,
+            placement: {
+              side,
+              anchor: 'neck',
+              dxCm: pickOne([-4, -2, 0, 2, 4]),
+              dyCm: pickOne([8, 10, 12, 14]),
+              widthCm: pickOne([10, 14, 18, 22]),
+              rotation: 0,
+            },
+          },
+        ],
+      })
+      // Кадр и миниатюры сторон должны лечь до снимка: окно перерисовалось,
+      // картинка загружена, миниатюры догнали работу.
+      await settle(250)
+      const saved = await standLive.current.keep((body) => saveReference({ ...body, colour_model_id: cm.id, forked_from: null }))
+      if (!saved) throw new Error(`№${i + 1} из ${n} не сохранился — смотрите подсказку окна`)
+      made.push(saved.id)
+      // После «Сохранить как» окно само переходит на новый номер и открывает
+      // его; следующая работа, положенная раньше, чем открытие закончилось,
+      // записывалась черновиком к только что сохранённой карточке.
+      await settle(600)
+      if ((i + 1) % 10 === 0) console.info(`наполнение стенда: ${i + 1} из ${n}`)
+    }
+    if (broken.length) console.warn(`наполнение стенда: не загрузились и пропущены — ${broken.join(', ')}`)
+    return made
   }
 
   async function addPhrase(text: string, key: string) {
@@ -3580,4 +3670,24 @@ function RemarkAudio(props: { referenceId: number; remark: Remark }) {
 /** Та же работа — без выбранного: по нему история с полки не отбрасывается. */
 function sameWork(a: Composition, b: Composition): boolean {
   return a === b || JSON.stringify({ ...a, selectedId: null }) === JSON.stringify({ ...b, selectedId: null })
+}
+
+/** Пропорция и прозрачность картинки — по уменьшенной пробе. */
+function probeImage(src: string): Promise<{ aspect: number; hasAlpha: boolean }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const w = Math.max(1, Math.min(160, img.naturalWidth))
+      const h = Math.max(1, Math.round((w * img.naturalHeight) / img.naturalWidth))
+      const probe = document.createElement('canvas')
+      probe.width = w
+      probe.height = h
+      const ctx = probe.getContext('2d', { willReadFrequently: true })
+      ctx?.drawImage(img, 0, 0, w, h)
+      resolve({ aspect: img.naturalWidth / img.naturalHeight, hasAlpha: ctx ? detectAlpha(ctx.getImageData(0, 0, w, h).data) : true })
+    }
+    img.onerror = () => reject(new Error(`картинка не загрузилась: ${src}`))
+    img.src = src
+  })
 }
