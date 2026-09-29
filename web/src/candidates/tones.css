@@ -21,6 +21,7 @@
 .pf-btn--framed:hover:not(:disabled),
 .pf-btn--framed:focus-visible {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--btn-ink) 35%, transparent);
+  background: var(--btn-tint);
 }
 .pf-btn--framed[aria-pressed='true'] {
   background: var(--btn-tint);
