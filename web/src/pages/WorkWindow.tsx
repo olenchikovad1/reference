@@ -36,6 +36,7 @@ import {
   defectText,
   digestOf,
   fetchLibrary,
+  markDefect,
   fetchTags,
   recogniseAssets,
   uploadAssets,
@@ -231,6 +232,8 @@ export function WorkWindow() {
   // Нет права записи на «Референсах» — кнопки сохранения нет вовсе, а не
   // есть и отказывает; сервис и сам ответит «нет такого пути» (US-0487).
   const canSave = useCan(CODE, 'references', 'write')
+  // Брак картинки — функция раздела «Принты» (план 095: прямо из окна).
+  const canDefect = useCan(CODE, 'prints', 'mark-defect')
   // Теги файлов по имени файла. Ставятся сами при узнавании; для уже
   // лежащих — досчитываются по сохранённому вектору.
   const [tagsOf, setTagsOf] = useState<Record<string, FileTags>>({})
@@ -1898,6 +1901,7 @@ export function WorkWindow() {
           ×
         </button>
       </div>
+      {selected.kind === 'image' && canDefect && <DefectPrint key={selected.src} src={selected.src} name={selected.name} />}
       {selected.kind === 'image' && (
         <Section title="Цвет и прозрачность">
           {/* Исходник не меняется: хранятся краска и прозрачность (US-0502). */}
@@ -3797,3 +3801,50 @@ function probeImage(src: string): Promise<{ aspect: number; hasAlpha: boolean }>
   })
 }
 
+/** Забраковать картинку из окна (план 095): брак ставится в библиотеке —
+ *  для всех референсов, где она есть, — с причиной; как на «Принтах». */
+function DefectPrint({ src, name }: { src: string; name: string }) {
+  const queries = useQueryClient()
+  const [asking, setAsking] = useState(false)
+  const [reason, setReason] = useState('')
+  const [done, setDone] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const send = () =>
+    void markDefect(digestOf(src), reason.trim())
+      .then(() => {
+        setDone(reason.trim())
+        setAsking(false)
+        setError(null)
+        void queries.invalidateQueries({ queryKey: ['library'] })
+      })
+      .catch((e: Error) => setError(e.message))
+  if (done) return <p className="mb-2 text-xs text-destructive">«{name}» в браке: {done} — в новых референсах её не положить</p>
+  return (
+    <div className="mb-2 flex flex-col gap-1 text-xs">
+      {!asking ? (
+        <button className={`${meaningClass('destroy', true, true)} self-start`} onClick={() => setAsking(true)}>
+          забраковать картинку
+        </button>
+      ) : (
+        <div className="flex gap-1">
+          <TextInput
+            aria-label="почему в брак"
+            autoFocus
+            value={reason}
+            placeholder="почему в брак — видно всем"
+            onChange={(e) => setReason(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if (e.key === 'Enter' && reason.trim()) send()
+              if (e.key === 'Escape') setAsking(false)
+            }}
+          />
+          <button className={meaningClass('destroy', true, true)} disabled={!reason.trim()} onClick={send}>
+            в брак
+          </button>
+        </div>
+      )}
+      {error && <span className="text-destructive">{error}</span>}
+    </div>
+  )
+}
