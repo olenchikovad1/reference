@@ -112,7 +112,7 @@ async def test_a_step_not_of_your_role_is_refused(client) -> None:
     assert (await client.post(f"{API}/references/{ref}/submit", headers=as_(PETROV))).status_code == 403
     await client.post(f"{API}/references/{ref}/submit", headers=as_(IVANOVA))
     assert (await client.post(f"{API}/references/{ref}/approve", headers=as_(IVANOVA))).status_code == 403
-    assert (await client.post(f"{API}/references/{ref}/approve-final", headers=as_(PETROV))).status_code == 409
+    assert (await client.post(f"{API}/references/{ref}/approve-final", headers=as_(PETROV))).status_code == 403,         "окончательно — только главный"
     card = (await client.get(f"{API}/references/{ref}", headers=as_(IVANOVA))).json()
     assert card["status"] == "review" and card["can"] == ["recall"], "принять ей нельзя, отозвать — можно"
 
@@ -204,3 +204,13 @@ async def test_recall_unapprove_reject_and_revive_follow_the_table(client) -> No
     events = (await status()).json()["status_events"]
     assert [e["to"] for e in events][-2:] == ["rejected", "draft"]
     assert events[-2]["comment"] == "сюжет не для детей" and events[-1]["comment"] == "переделаем сюжет"
+
+
+async def test_liked_draft_is_decided_at_once(client) -> None:
+    """План 095: понравилось как есть — согласовать или принять сразу."""
+    ref = await new_reference(client)
+    can = (await client.get(f"{API}/references/{ref}", headers=as_(CHIEF))).json()["can"]
+    assert {"approve", "approve-final", "reject"} <= set(can), "у черновика главному решать можно сразу"
+    r = await client.post(f"{API}/references/{ref}/approve-final", headers=as_(CHIEF))
+    assert r.status_code == 200
+    assert (await client.get(f"{API}/references/{ref}")).json()["status"] == "final"

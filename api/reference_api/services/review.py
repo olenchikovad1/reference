@@ -44,11 +44,13 @@ STEPS = {
     # Отозвать отправленное, пока никто не решил: не та версия ушла.
     "recall": ({"review"}, "draft", {"executor"}),
     "return": ({"review"}, "rework", {"editor", "chief"}),
-    "approve": ({"review"}, "approved", {"editor", "chief"}),
+    # Понравилось как есть — согласовать, не дожидаясь отправки (план 095).
+    "approve": ({"draft", "review", "rework"}, "approved", {"editor", "chief"}),
     # Согласовали по ошибке — обратно на согласование, с причиной.
     "unapprove": ({"approved"}, "review", {"editor", "chief"}),
-    "approve-final": ({"approved"}, "final", {"chief"}),
-    "reject": ({"review", "rework", "approved"}, "rejected", {"editor", "chief"}),
+    # Главный принимает окончательно сразу, из любого живого состояния.
+    "approve-final": ({"draft", "review", "rework", "approved"}, "final", {"chief"}),
+    "reject": ({"draft", "review", "rework", "approved"}, "rejected", {"editor", "chief"}),
     "revive": ({"rejected"}, "draft", {"chief"}),
 }
 
