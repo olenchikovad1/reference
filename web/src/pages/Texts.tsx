@@ -159,7 +159,7 @@ export function Texts() {
         }
       />
       <DropFilterBar {...drop} />
-      <AssignBar selected={picked.size} onAssign={assign} onClear={() => setPicked(new Set())} />
+      <AssignBar selected={picked.size} noun={['надпись', 'надписи', 'надписей']} onAssign={assign} onClear={() => setPicked(new Set())} />
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
       {texts.isError ? (
         <EmptyState title="Тексты не пришли" description="Сервис не ответил. Обновите страницу; если повторится — стенд сервиса не поднят." />

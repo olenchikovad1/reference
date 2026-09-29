@@ -8,14 +8,16 @@
 // браузер (flex с ростом по пропорции), скрипт ничего не пересчитывает.
 // Кандидат в платформу (решение 0005).
 
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useState, type KeyboardEventHandler, type ReactNode } from 'react'
 
 /** Высота ряда до растяжения, в точках: на ширине 1400 — пять-семь картинок. */
 const ROW = 190
 
-export function Justified({ children }: { children: ReactNode }) {
+export function Justified({ children, onKeyDown }: { children: ReactNode; onKeyDown?: KeyboardEventHandler<HTMLDivElement> }) {
   return (
-    <div className="flex flex-wrap gap-2 after:block after:grow-[1000000] after:content-['']">{children}</div>
+    <div className="flex flex-wrap gap-2 after:block after:grow-[1000000] after:content-['']" onKeyDown={onKeyDown}>
+      {children}
+    </div>
   )
 }
 

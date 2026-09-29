@@ -4,13 +4,15 @@
 // русским словом (план 071). Файлы бросаются прямо на страницу: уходят в
 // библиотеку и сразу получают теги и название.
 
-import { Checkbox, EmptyState, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
+import { Checkbox, EmptyState, Hint, IconButton, Modal, PageHeader, Select, TextInput, buttonClass, counted } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, type DragEvent } from 'react'
+import { useEffect, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { AssignBar, DropFilterBar } from '../candidates/DropFilter'
+import { HotkeysHint } from '../candidates/HotkeysHint'
 import { Justified, JustifiedCell, useRatios } from '../candidates/Justified'
+import type { KeyRow } from '../shared/keys'
 import { passes, useDropFilter } from '../shared/filters'
 import { CODE } from '../app/shell'
 import { useCan } from '../shared/api/platform'
@@ -33,11 +35,57 @@ import {
 
 const SOURCES: Record<string, string> = { catalog: 'из каталога', inherited: 'как у той же картинки' }
 
+const PRINTS_KEYS: readonly KeyRow[] = [
+  { keys: '← → ↑ ↓', what: 'по картинкам: вбок — соседняя, вверх-вниз — в соседнем ряду' },
+  { keys: 'Enter', what: 'открыть крупно' },
+  { keys: 'Пробел', what: 'выделить картинку' },
+  { keys: 'Ctrl + щелчок', what: 'добавить к выделенным или убрать' },
+  { keys: 'Shift + щелчок', what: 'выделить от прошлой выделенной до этой' },
+  { keys: 'Esc', what: 'снять выделение' },
+  { keys: '?', what: 'эта подсказка' },
+]
+
+const DROP_STATUS: Record<string, string> = { proposed: 'предложен', approved: 'одобрен', rejected: 'не одобрен' }
+
+/** Кружок статуса в правом верхнем углу (владелец 29.09): брак — красный,
+ *  одобрен в дроп — зелёный, предложен — жёлтый, не одобрен — серый. С
+ *  отбором дропа — статус в нём; без — лучший из всех дропов. */
+function StatusDot({ item, drop }: { item: LibraryItem; drop: number | null }) {
+  const links = item.drops.filter((d) => drop === null || d.id === drop)
+  const of = (d: (typeof links)[number]) => (d.via !== null ? 'approved' : (d.status ?? 'proposed'))
+  const best = item.defect
+    ? 'defect'
+    : (['approved', 'proposed', 'rejected'] as const).find((st) => links.some((d) => of(d) === st))
+  if (!best) return null
+  const look = {
+    defect: ['bg-destructive', '✕', item.defect ? defectText(item.defect) : ''],
+    approved: ['bg-success', '✓', ''],
+    proposed: ['bg-warning', '?', ''],
+    rejected: ['bg-muted-foreground', '–', ''],
+  }[best]
+  const text =
+    best === 'defect'
+      ? look[2]
+      : links.map((d) => `${d.name}: ${d.via !== null ? `через референс №${d.via}` : DROP_STATUS[d.status ?? 'proposed']}`).join('; ')
+  return (
+    <span
+      className={`absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold text-white shadow ${look[0]}`}
+      title={text}
+      aria-label={text}
+    >
+      {look[1]}
+    </span>
+  )
+}
+
 export function Prints() {
   // Фильтр «брак»: забракованное не видно нигде, кроме него (US-0499).
   const [defects, setDefects] = useState(false)
   const library = useQuery({ queryKey: ['library', defects], queryFn: () => fetchLibrary(defects) })
+  const canDefect = useCan(CODE, 'prints', 'mark-defect')
   const [opened, setOpened] = useState<string | null>(null)
+  // Окно открывается сразу с вводом причины брака — из значка на плитке.
+  const [openedToDefect, setOpenedToDefect] = useState(false)
   const openedItem = library.data?.find((i) => i.digest === opened) ?? null
   const [ratioOf, learnRatio] = useRatios()
   const queries = useQueryClient()
@@ -108,6 +156,56 @@ export function Prints() {
       })
       .catch((e: Error) => setError(`${e.message} — повторите.`))
   }
+  // Ctrl+щелчок — добавить или убрать, Shift+щелчок — от прошлой выделенной
+  // до этой: как на витрине референсов.
+  const [lastPicked, setLastPicked] = useState<string | null>(null)
+  function pickBy(digest: string, e: { shiftKey: boolean }) {
+    if (e.shiftKey && lastPicked) {
+      const order = items.map(({ item }) => item.digest)
+      const [a, b] = [order.indexOf(lastPicked), order.indexOf(digest)].sort((x, y) => x - y)
+      if (a >= 0) {
+        setPicked((s) => new Set([...s, ...order.slice(a, b + 1)]))
+        return
+      }
+    }
+    toggle(digest)
+    setLastPicked(digest)
+  }
+  /** Стрелки по плитке: вбок — соседняя, вверх-вниз — ближайшая в соседнем
+   *  ряду; пробел выделяет, Enter открывает, Esc снимает выделение. */
+  function onTilesKey(e: KeyboardEvent<HTMLDivElement>) {
+    const tiles = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('[data-tile]')]
+    const at = tiles.indexOf(document.activeElement as HTMLButtonElement)
+    if (e.key === 'Escape' && picked.size) {
+      setPicked(new Set())
+      return
+    }
+    if (at < 0) return
+    const here = tiles[at]
+    if (e.key === ' ') {
+      e.preventDefault()
+      pickBy(here.dataset.tile!, e)
+      return
+    }
+    let next: HTMLButtonElement | undefined
+    if (e.key === 'ArrowRight') next = tiles[at + 1]
+    else if (e.key === 'ArrowLeft') next = tiles[at - 1]
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const r = here.getBoundingClientRect()
+      const x = r.left + r.width / 2
+      const down = e.key === 'ArrowDown'
+      const rows = tiles
+        .map((t) => ({ t, r: t.getBoundingClientRect() }))
+        .filter(({ r: o }) => (down ? o.top > r.bottom - 2 : o.bottom < r.top + 2))
+      const row = down ? Math.min(...rows.map((o) => o.r.top)) : Math.max(...rows.map((o) => o.r.top))
+      next = rows
+        .filter((o) => Math.abs(o.r.top - row) < 4)
+        .sort((p, q) => Math.abs(p.r.left + p.r.width / 2 - x) - Math.abs(q.r.left + q.r.width / 2 - x))[0]?.t
+    } else return
+    e.preventDefault()
+    next?.focus()
+    next?.scrollIntoView({ block: 'nearest' })
+  }
   const toggle = (digest: string) =>
     setPicked((s) => {
       const next = new Set(s)
@@ -143,6 +241,7 @@ export function Prints() {
             </button>
             {/* Главное действие экрана — залитое (US-0716). Переразметка всей
                 библиотеки — в «Справочниках», под подтверждением. */}
+            <HotkeysHint rows={PRINTS_KEYS} label="Клавиши принтов" />
             <label className={`${buttonClass({ tone: 'accent', variant: 'solid' })} cursor-pointer`}>
               добавить файлы
               <input
@@ -160,7 +259,9 @@ export function Prints() {
         }
       />
       <DropFilterBar {...drop} />
-      <AssignBar selected={picked.size} onAssign={assign} onClear={() => setPicked(new Set())} />
+      <AssignBar selected={picked.size} noun={['картинка', 'картинки', 'картинок']} onAssign={assign} onClear={() => setPicked(new Set())}>
+        {canDefect && !defects && <GroupDefect digests={[...picked]} onDone={() => setPicked(new Set())} />}
+      </AssignBar>
       {busy && <p className="mb-2 text-sm text-muted-foreground">{busy}</p>}
       {(error || found.error) && <p className="mb-2 text-sm text-destructive">{error ?? found.error}</p>}
       {retagRunning && retag.data && (
@@ -200,7 +301,7 @@ export function Prints() {
       ) : found.rows !== null && items.length === 0 ? (
         <EmptyState title="Ничего не нашлось" description="Назовите предмет, а не настроение: «мяч», а не «весело»." />
       ) : (
-        <Justified>
+        <Justified onKeyDown={onTilesKey}>
           {items.map(({ item, weight, because }) => {
             const title = item.name?.name ?? item.file_name
             const on = picked.has(item.digest)
@@ -213,14 +314,15 @@ export function Prints() {
                     <div className="truncate font-medium" title={item.file_name}>
                       {title}
                     </div>
-                    <div className="truncate text-muted-foreground">
-                      {item.defect
-                        ? defectText(item.defect)
-                        : item.tags
-                            .filter((t) => t.strong)
-                            .slice(0, 3)
-                            .map((t) => t.name)
-                            .join(' · ') || '\u00a0'}
+                    <div className="mt-0.5 flex h-4 gap-1 overflow-hidden">
+                      {item.tags
+                        .filter((t) => t.strong)
+                        .slice(0, 3)
+                        .map((t) => (
+                          <span key={t.code} className="shrink-0 rounded-full bg-tone-blue-soft px-1.5 leading-4" title={`тег · вес ${t.score.toFixed(2)}`}>
+                            {t.name}
+                          </span>
+                        ))}
                     </div>
                   </div>
                 }
@@ -228,7 +330,16 @@ export function Prints() {
                 <div
                   className={`group relative h-full w-full overflow-hidden rounded bg-muted ${on ? 'ring-2 ring-accent' : ''}`}
                 >
-                  <button className="h-full w-full cursor-zoom-in" onClick={() => setOpened(item.digest)} aria-label={`открыть ${title}`}>
+                  <button
+                    data-tile={item.digest}
+                    className="h-full w-full cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+                    onClick={(e) => {
+                      if (e.ctrlKey || e.metaKey || e.shiftKey) return pickBy(item.digest, e)
+                      setOpenedToDefect(false)
+                      setOpened(item.digest)
+                    }}
+                    aria-label={`открыть ${title}`}
+                  >
                     <img
                       src={assetUrl(item.digest, 'thumb')}
                       alt={title}
@@ -239,9 +350,30 @@ export function Prints() {
                   <div className={`absolute left-1.5 top-1.5 ${on || picked.size > 0 ? '' : 'opacity-0 group-hover:opacity-100'}`}>
                     <Checkbox label="" aria-label={`выбрать ${title}`} checked={on} onChange={() => toggle(item.digest)} />
                   </div>
+                  <StatusDot item={item} drop={drop.filter.drop} />
+                  <div className="absolute bottom-1.5 right-1.5 flex gap-1 rounded bg-card/90 p-0.5 opacity-0 shadow-sm group-focus-within:opacity-100 group-hover:opacity-100">
+                    <IconButton icon="search" size="xs" aria-label="открыть" title="Открыть крупно: теги, вид, дропы, где использован" onClick={() => { setOpenedToDefect(false); setOpened(item.digest) }} />
+                    <IconButton
+                      icon="calendar-days"
+                      size="xs"
+                      aria-label="в дроп"
+                      title="Предложить в дроп: выделится одна эта картинка, дроп выбирается в полосе сверху"
+                      onClick={() => setPicked(new Set([item.digest]))}
+                    />
+                    {canDefect && !item.defect && (
+                      <IconButton
+                        icon="ban"
+                        size="xs"
+                        danger
+                        aria-label="в брак"
+                        title="В брак — с причиной: картинка пропадёт из выдачи, дропов и новых референсов"
+                        onClick={() => { setOpenedToDefect(true); setOpened(item.digest) }}
+                      />
+                    )}
+                  </div>
                   {item.warnings.length > 0 && (
                     <span
-                      className="absolute bottom-1 right-1 rounded bg-tone-amber-soft px-1 text-xs"
+                      className="absolute right-9 top-1.5 flex h-6 items-center rounded-full bg-tone-amber-soft px-1.5 text-xs"
                       title={item.warnings.map((w) => w.text).join('; ')}
                     >
                       ⚠
@@ -249,7 +381,7 @@ export function Prints() {
                   )}
                   {weight !== undefined && (
                     <span
-                      className="absolute right-1 top-1 rounded bg-card px-1 text-xs"
+                      className="absolute bottom-1 left-1 rounded bg-card px-1 text-xs"
                       title={because ? 'слово запроса — её тег' : 'насколько картинка про запрос относительно всей библиотеки'}
                     >
                       {because ?? `вес ${weight.toFixed(1)}`}
@@ -261,19 +393,19 @@ export function Prints() {
           })}
         </Justified>
       )}
-      {openedItem && <PrintDetails item={openedItem} onClose={() => setOpened(null)} />}
+      {openedItem && <PrintDetails item={openedItem} defecting={openedToDefect} onClose={() => setOpened(null)} />}
     </main>
   )
 }
 
 /** Всё, что знаем о картинке, — в окне, а не на плитке: вид с поправкой,
  *  предупреждения, дропы, «где использован», брак. */
-function PrintDetails({ item, onClose }: { item: LibraryItem; onClose: () => void }) {
+function PrintDetails({ item, defecting, onClose }: { item: LibraryItem; defecting: boolean; onClose: () => void }) {
   const canDefect = useCan(CODE, 'prints', 'mark-defect')
   const canEdit = useCan(CODE, 'prints', 'write')
   const queries = useQueryClient()
   const navigate = useNavigate()
-  const [marking, setMarking] = useState(false)
+  const [marking, setMarking] = useState(defecting)
   const [markReason, setMarkReason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const refresh = () => queries.invalidateQueries({ queryKey: ['library'] })
@@ -420,4 +552,42 @@ function useWeights(query: string): { rows: Hit[] | null; error: string | null }
     }
   }, [query])
   return { rows, error }
+}
+
+/** Брак выделенным разом (US-0714): одна причина на всех, каждую — отдельно. */
+function GroupDefect({ digests, onDone }: { digests: string[]; onDone: () => void }) {
+  const queries = useQueryClient()
+  const [asking, setAsking] = useState(false)
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const all = counted(digests.length, 'картинка', 'картинки', 'картинок')
+  if (!asking)
+    return (
+      <Hint text={`${all} — в брак с одной причиной: пропадут из выдачи, дропов и новых референсов; вернуть — фильтр «брак»`}>
+        <button className={buttonClass({ tone: 'danger', variant: 'outline', small: true })} onClick={() => setAsking(true)}>
+          в брак…
+        </button>
+      </Hint>
+    )
+  return (
+    <div className="flex items-center gap-1">
+      <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder="почему — обязательно" aria-label="причина брака" autoFocus />
+      <button
+        className={buttonClass({ tone: 'danger', variant: 'solid', small: true })}
+        disabled={!reason.trim()}
+        onClick={() =>
+          void Promise.all(digests.map((d) => markDefect(d, reason.trim())))
+            .then(() => queries.invalidateQueries({ queryKey: ['library'] }))
+            .then(onDone)
+            .catch((e: Error) => setError(`${e.message} — повторите.`))
+        }
+      >
+        забраковать {digests.length}
+      </button>
+      <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => setAsking(false)}>
+        не надо
+      </button>
+      {error && <span className="text-xs text-destructive">{error}</span>}
+    </div>
+  )
 }
