@@ -1,4 +1,4 @@
-import { TextInput, buttonClass } from '@platform/ui'
+import { Modal, TextInput, buttonClass } from '@platform/ui'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -25,6 +25,7 @@ import {
   restyle,
   retype,
   type ImageElement,
+  type PrintElement,
   type TextElement,
 } from '../shared/composition'
 import { DEFAULT_FONT, FONTS } from '../shared/fonts'
@@ -443,6 +444,12 @@ export function WorkWindow() {
   const selected = find(visible, visible.selectedId)
   // Выбор красок дуотона — у каждого принта свой: другой принт — выбор с нуля.
   useEffect(() => setDuoPick([]), [visible.selectedId])
+  const [cropMenu, setCropMenu] = useState(false)
+  const [cropOpen, setCropOpen] = useState(false)
+  useEffect(() => {
+    setCropMenu(false)
+    setCropOpen(false)
+  }, [visible.selectedId])
 
   // Несохранённое — отличие экрана от открытой версии; у несохранённой ни разу
   // работы — всё, что на холсте.
@@ -1952,10 +1959,22 @@ export function WorkWindow() {
           />
         </Section>
       )}
-      <Section title="Обрезка по разметке">
-        {/* Граница — линия изделия, а не рамка картинки (US-0505): сдвинули
-            принт — видна другая его часть; другой размер — другое поле. */}
-        <div className="flex flex-wrap gap-1">
+      {/* Обрезка — одной строкой со значком (владелец 29.09): нужна редко, а
+          картинка обрезки занимала полпанели. Выбор — по нажатию, своя
+          обрезка — в небольшом окне. */}
+      <div className="relative mb-2">
+        <button
+          className={`${small()} w-full justify-start`}
+          aria-expanded={cropMenu}
+          onClick={() => setCropMenu((v) => !v)}
+          title="Как обрезать принт"
+        >
+          <span aria-hidden>✂</span> обрезка: {cropSummary(selected, clips.has(selected.id))}
+        </button>
+        {cropMenu && (
+          <div className="pf-card absolute left-0 right-0 top-full z-30 mt-1 flex flex-col gap-1 border border-line bg-background p-2 text-xs shadow-lg">
+            <span className="text-muted-foreground">по разметке изделия</span>
+            <div className="flex flex-wrap gap-1">
           {(
             [
               [null, 'не обрезать'],
@@ -1972,20 +1991,46 @@ export function WorkWindow() {
             <button
               key={name}
               className={on((selected.placement.clip ?? null) === clip)}
-              onClick={() => commit((c) => place(c, selected.id, { clip }))}
+              onClick={() => {
+                commit((c) => place(c, selected.id, { clip }))
+                setCropMenu(false)
+              }}
             >
               {name}
             </button>
           ))}
-        </div>
-        {selected.placement.clip && !clips.has(selected.id) && (
-          <p className="text-xs text-muted-foreground">на этой стороне такой разметки нет — принт не обрезан</p>
+            </div>
+            {selected.placement.clip && !clips.has(selected.id) && (
+              <p className="text-muted-foreground">на этой стороне такой разметки нет — принт не обрезан</p>
+            )}
+            {selected.kind === 'image' && (
+              <button
+                className={`${small()} self-start`}
+                onClick={() => {
+                  setCropMenu(false)
+                  setCropOpen(true)
+                }}
+              >
+                своя обрезка…
+              </button>
+            )}
+          </div>
         )}
-      </Section>
+      </div>
       {selected.kind === 'image' && (
-        <Section title="Обрезка">
+        <Modal
+          open={cropOpen}
+          onClose={() => setCropOpen(false)}
+          title={`Обрезка · ${selected.name}`}
+          actions={
+            <button className={meaningClass('act')} onClick={() => setCropOpen(false)}>
+              готово
+            </button>
+          }
+        >
           {/* Кусок исходника в его долях (US-0504): раздвинуть обратно можно
               всегда, исходник цел; печатный лист режет тот же кусок. */}
+          <div className="flex flex-col gap-2 text-xs">
           <CropBox
             src={selected.src}
             sourceAspect={selected.aspect * ((selected.look?.crop ?? FULL).h / (selected.look?.crop ?? FULL).w)}
@@ -2029,7 +2074,8 @@ export function WorkWindow() {
               второй кусок
             </button>
           </div>
-        </Section>
+          </div>
+        </Modal>
       )}
       {selected.kind === 'image' && (
         <Section title="Краски">
@@ -3869,4 +3915,19 @@ function DefectPrint({ src, name }: { src: string; name: string }) {
       {error && <span className="text-destructive">{error}</span>}
     </div>
   )
+}
+
+/** Что сейчас с обрезкой — одной подписью у значка ✂. */
+function cropSummary(el: PrintElement, clipped: boolean): string {
+  const names: Record<string, string> = {
+    field: 'по печатному полю',
+    'zipper-left': 'левее молнии',
+    'zipper-right': 'правее молнии',
+    seams: 'по боковым швам',
+  }
+  const parts = []
+  if (el.placement.clip) parts.push(clipped ? names[el.placement.clip] ?? el.placement.clip : 'разметки нет')
+  const crop = el.kind === 'image' ? el.look?.crop : undefined
+  if (crop && (crop.w < 1 || crop.h < 1 || crop.x > 0 || crop.y > 0 || (crop.shape ?? 'rect') !== 'rect')) parts.push('своя')
+  return parts.length ? parts.join(' + ') : 'не обрезано'
 }
