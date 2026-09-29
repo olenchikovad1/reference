@@ -114,7 +114,7 @@ async def test_a_step_not_of_your_role_is_refused(client) -> None:
     assert (await client.post(f"{API}/references/{ref}/approve", headers=as_(IVANOVA))).status_code == 403
     assert (await client.post(f"{API}/references/{ref}/approve-final", headers=as_(PETROV))).status_code == 409
     card = (await client.get(f"{API}/references/{ref}", headers=as_(IVANOVA))).json()
-    assert card["status"] == "review" and card["can"] == []
+    assert card["status"] == "review" and card["can"] == ["recall"], "принять ей нельзя, отозвать — можно"
 
 
 async def test_editing_an_approved_reference_sends_it_back_to_draft(client) -> None:
@@ -166,3 +166,41 @@ async def test_submit_rings_editors_and_return_rings_the_executor(client, rung) 
     await step(client, ref, "submit", IVANOVA)
     await step(client, ref, "approve", SIDOROVA)
     assert len(rung) == 3, "принятие не звонит: ход ушёл главному, «Мои задачи» это покажут"
+
+
+# --- Новые переходы (план 094) --------------------------------------------
+
+
+async def test_recall_unapprove_reject_and_revive_follow_the_table(client) -> None:
+    ref = await new_reference(client)
+    post = lambda what, who, **body: client.post(f"{API}/references/{ref}/{what}", headers=as_(who), json=body or None)  # noqa: E731
+    status = lambda: client.get(f"{API}/references/{ref}")  # noqa: E731
+
+    assert (await post("submit", IVANOVA)).status_code == 200
+    assert (await post("recall", PETROV)).status_code == 403, "отзывает исполнитель"
+    assert (await post("recall", IVANOVA)).status_code == 200
+    assert (await status()).json()["status"] == "draft", "отозвала — снова черновик"
+
+    await post("submit", IVANOVA)
+    await post("approve", PETROV)
+    assert (await post("unapprove", PETROV, comment="")).status_code == 422, "отменить — только с причиной"
+    assert (await post("unapprove", PETROV, comment="согласовал не ту")).status_code == 200
+    assert (await status()).json()["status"] == "review"
+
+    r = await post("reject", SIDOROVA, comment=" ")
+    assert r.status_code == 422 and "причин" in r.json()["detail"]
+    assert (await post("reject", SIDOROVA, comment="сюжет не для детей")).status_code == 200
+    card = (await status()).json()
+    assert card["status"] == "rejected"
+
+    d = await digest(client)
+    r = await client.post(f"{API}/references/{ref}/versions", headers=as_(IVANOVA), json={
+        "name": "ракета", "sheet_digest": d, "image_digests": [d], "texts": []})
+    assert r.status_code == 409 and "забракован" in r.json()["detail"], "забракованный не правится"
+    assert (await post("submit", IVANOVA)).status_code == 409
+
+    assert (await post("revive", SIDOROVA, comment="давай ещё раз")).status_code == 403, "вернуть — только главный"
+    assert (await post("revive", CHIEF, comment="переделаем сюжет")).status_code == 200
+    events = (await status()).json()["status_events"]
+    assert [e["to"] for e in events][-2:] == ["rejected", "draft"]
+    assert events[-2]["comment"] == "сюжет не для детей" and events[-1]["comment"] == "переделаем сюжет"

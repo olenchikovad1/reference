@@ -109,8 +109,8 @@ export interface Card extends Saver {
   status?: Status
 }
 
-export type Status = 'draft' | 'review' | 'rework' | 'approved' | 'final'
-export type Step = 'submit' | 'return' | 'approve' | 'approve-final'
+export type Status = 'draft' | 'review' | 'rework' | 'approved' | 'final' | 'rejected'
+export type Step = 'submit' | 'recall' | 'return' | 'approve' | 'unapprove' | 'approve-final' | 'reject' | 'revive'
 
 export const STATUS_NAMES: Record<Status, string> = {
   draft: 'черновик',
@@ -118,13 +118,26 @@ export const STATUS_NAMES: Record<Status, string> = {
   rework: 'на доработке',
   approved: 'согласован',
   final: 'окончательно принят',
+  rejected: 'забракован',
 }
 
 export const STEP_NAMES: Record<Step, string> = {
   submit: 'отправить на согласование',
+  recall: 'отозвать',
   return: 'вернуть на доработку',
-  approve: 'принять',
+  approve: 'подтвердить согласование',
+  unapprove: 'отменить согласование',
   'approve-final': 'принять окончательно',
+  reject: 'забраковать',
+  revive: 'вернуть в работу',
+}
+
+/** Шаги, которым нужна причина (план 094), — и что спросить в поле. */
+export const STEP_ASKS: Partial<Record<Step, string>> = {
+  return: 'что поправить',
+  unapprove: 'почему отменяете',
+  reject: 'почему бракуете',
+  revive: 'почему возвращаете',
 }
 
 /** Переход статуса: кто, когда, на какой версии, с каким замечанием. */
@@ -143,7 +156,7 @@ export async function step(referenceId: number, what: Step, comment?: string): P
   const r = await fetch(`${BASE}references/${referenceId}/${what}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: what === 'return' ? JSON.stringify({ comment: comment ?? '' }) : undefined,
+    body: what in STEP_ASKS ? JSON.stringify({ comment: comment ?? '' }) : undefined,
   })
   if (!r.ok) throw await refusal(r, 'шаг не сделан')
   return r.json()

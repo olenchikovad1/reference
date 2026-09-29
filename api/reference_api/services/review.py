@@ -32,15 +32,32 @@ STATUS_NAMES = {
     "rework": "на доработке",
     "approved": "согласован",
     "final": "окончательно принят",
+    "rejected": "забракован",
 }
 
 #: Переход: из каких статусов, в какой, какой роли. «executor» — исполнитель
-#: этого референса, остальное — роль в таблице ролей.
+#: этого референса, остальное — роль в таблице ролей. Решения владельца
+#: 29.09 (план 094): забраковать — редактор и главный; забракованный —
+#: конечный, вернуть в работу может только главный.
 STEPS = {
     "submit": ({"draft", "rework"}, "review", {"executor"}),
+    # Отозвать отправленное, пока никто не решил: не та версия ушла.
+    "recall": ({"review"}, "draft", {"executor"}),
     "return": ({"review"}, "rework", {"editor", "chief"}),
     "approve": ({"review"}, "approved", {"editor", "chief"}),
+    # Согласовали по ошибке — обратно на согласование, с причиной.
+    "unapprove": ({"approved"}, "review", {"editor", "chief"}),
     "approve-final": ({"approved"}, "final", {"chief"}),
+    "reject": ({"review", "rework", "approved"}, "rejected", {"editor", "chief"}),
+    "revive": ({"rejected"}, "draft", {"chief"}),
+}
+
+#: Шаги, у которых причина обязательна, — и как о ней спросить.
+NEEDS_COMMENT = {
+    "return": "вернуть на доработку можно только с замечанием",
+    "unapprove": "отменить согласование можно только с причиной",
+    "reject": "забраковать можно только с причиной — дизайнер должен понять почему",
+    "revive": "вернуть в работу можно только с причиной",
 }
 
 
@@ -100,8 +117,8 @@ async def step(db: AsyncSession, reference_id: int, action: str, who: str | None
     if not (await _roles(db, card, who)) & need:
         raise NotYourStep("этот шаг — не для вашей роли в согласовании")
     text = " ".join((comment or "").split()) or None
-    if action == "return" and not text:
-        raise NoComment("вернуть на доработку можно только с замечанием")
+    if action in NEEDS_COMMENT and not text:
+        raise NoComment(NEEDS_COMMENT[action])
     number = await repo.last_number(db, reference_id)
     await repo.move(db, reference_id, to, number, who, text)
     await _ring(db, card, action, number, who, text)
@@ -118,6 +135,9 @@ async def _ring(db: AsyncSession, card, action: str, number: int, who: str | Non
     elif action == "return" and card.executor_id and card.executor_id != who:
         bell.ring([card.executor_id], f"reference:{card.id}:rework:v{number}",
                   f"Референс №{card.id} вернули на доработку", comment or "", link)
+    elif action == "reject" and card.executor_id and card.executor_id != who:
+        bell.ring([card.executor_id], f"reference:{card.id}:rejected:v{number}",
+                  f"Референс №{card.id} забракован", comment or "", link)
 
 
 async def after_new_version(db: AsyncSession, reference_id: int, number: int, who: str | None) -> None:

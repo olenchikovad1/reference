@@ -110,6 +110,8 @@ async def add_version(
         raise HTTPException(status_code=404, detail=str(missing)) from None
     except service.DefectInWork as refusal:
         raise HTTPException(status_code=422, detail=str(refusal)) from None
+    except service.Rejected as refusal:
+        raise HTTPException(status_code=409, detail=str(refusal)) from None
     return _saved(saved)
 
 
@@ -584,3 +586,30 @@ async def remark_text(reference_id: int, remark_id: int, body: RemarkTextIn, req
     except (review.NoSuchReference, review.NotYourStep, review.BadRemark) as e:
         raise _refused(e) from None
     return next(r for r in await _remarks(db, reference_id, _author(request)) if r.id == remark_id)
+
+
+
+@router.post("/{reference_id}/recall", response_model=list[StatusEventOut], dependencies=[requires("references", Action.WRITE)])
+async def recall(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
+    """Отозвать отправленное — исполнитель, пока никто не решил (план 094)."""
+    return await _step(reference_id, "recall", request, db)
+
+
+@router.post("/{reference_id}/unapprove", response_model=list[StatusEventOut], dependencies=[requires("review", Action.WRITE)])
+async def unapprove(reference_id: int, body: CommentIn, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
+    """Отменить согласование — редактор или главный, с причиной (план 094)."""
+    return await _step(reference_id, "unapprove", request, db, body.comment)
+
+
+@router.post("/{reference_id}/reject", response_model=list[StatusEventOut], dependencies=[requires("review", Action.WRITE)])
+async def reject(reference_id: int, body: CommentIn, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
+    """Забраковать — редактор или главный, с причиной (план 094)."""
+    return await _step(reference_id, "reject", request, db, body.comment)
+
+
+# Право — запись согласования; что вернуть может только главный, решает роль
+# в согласовании (решение 0016) в сервисе.
+@router.post("/{reference_id}/revive", response_model=list[StatusEventOut], dependencies=[requires("review", Action.WRITE)])
+async def revive(reference_id: int, body: CommentIn, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
+    """Вернуть забракованный в работу — главный редактор, с причиной (план 094)."""
+    return await _step(reference_id, "revive", request, db, body.comment)

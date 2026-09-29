@@ -118,6 +118,8 @@ async def add_version(
     card = await repo.get(db, reference_id)
     if card is None:
         raise NoSuchReference("референса с таким номером нет")
+    if card.status == "rejected":
+        raise Rejected("референс забракован — править его нельзя; вернуть в работу может главный редактор")
     await refuse_defects(db, image_digests)
     found = await _recognise(db, sheet_digest, image_digests, texts, exclude=reference_id)
     if author_id:
@@ -471,6 +473,10 @@ class NoReason(ValueError):
 
 class DefectInWork(ValueError):
     """В работе забракованная картинка — такой референс не сохраняется."""
+
+
+class Rejected(ValueError):
+    """Референс забракован (план 094): новые версии не принимаются — 409."""
 
 
 async def erase_forever(db: AsyncSession, reference_id: int, reason: str, by: str | None) -> str:
