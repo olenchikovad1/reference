@@ -189,10 +189,13 @@ async def search(db: AsyncSession, normalised: str, limit: int = 20) -> list[Ref
 
 
 async def latest(
-    db: AsyncSession, limit: int = 50, trashed: bool = False
+    db: AsyncSession, limit: int | None = None, trashed: bool = False
 ) -> list[tuple[Reference, ReferenceVersion]]:
     """Карточки с последней версией, свежие по ней первыми: открывают почти
-    всегда то, что сохраняли последним. `trashed` — корзина вместо витрины."""
+    всегда то, что сохраняли последним. `trashed` — корзина вместо витрины.
+
+    Предела по умолчанию нет: до 29.09 он стоял в 50, и витрина молча не
+    показывала всё, что старше пятидесятой карточки (замечено на 126)."""
     newest = (
         select(ReferenceVersion.reference_id, func.max(ReferenceVersion.number).label("number"))
         .group_by(ReferenceVersion.reference_id)

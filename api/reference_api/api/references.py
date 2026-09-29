@@ -183,7 +183,7 @@ async def search(q: str, db: AsyncSession = Depends(session)) -> list[FoundOut]:
 
 @router.get("", response_model=list[CardOut])
 async def latest(request: Request, db: AsyncSession = Depends(session)) -> list[CardOut]:
-    """Референсы, свежие по последней версии первыми."""
+    """Референсы, свежие по последней версии первыми — все, без предела."""
     return await _cards(db, await service.latest(db), _author(request))
 
 

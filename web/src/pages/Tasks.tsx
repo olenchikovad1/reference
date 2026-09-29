@@ -6,10 +6,21 @@
 import { buttonClass, EmptyState, PageHeader, Tabs } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
-import { dropAccidental, dropDraft, fetchMyDrafts, fetchTasks, STATUS_NAMES, type MyDraft, type Task } from '../shared/api/references'
-import { rememberDraft } from '../shared/cardCache'
+import { ReferenceCard } from '../candidates/ReferenceCard'
+import {
+  dropAccidental,
+  dropDraft,
+  fetchMyDrafts,
+  fetchTasks,
+  listReferences,
+  STATUS_NAMES,
+  type Card,
+  type MyDraft,
+  type Task,
+} from '../shared/api/references'
+import { prefetchCard, rememberDraft } from '../shared/cardCache'
 import { forgetBuffer } from '../shared/draftWriter'
 
 type TabId = 'mine' | 'waiting' | 'drafts'
@@ -54,22 +65,55 @@ export function Tasks() {
   )
 }
 
-function TaskList({ rows, empty }: { rows: Task[]; empty: string }) {
+/** Сетка карточек, как на витрине (US-0688): референс узнают по картинке,
+ *  а не по строке с номером. */
+function Grid({ children }: { children: React.ReactNode }) {
   return (
-    <section>
-      {rows.length === 0 && <EmptyState title="Пусто" description={empty} />}
-      <div className="flex flex-col gap-1">
-        {rows.map((t) => (
-          <Link key={t.id} to={`/references/${t.id}`} state={{ inApp: true }} className="rounded border border-line px-2 py-1 text-sm hover:bg-hover">
-            №{t.id} · {t.name}
-            <span className="ml-2 text-xs text-muted-foreground">
-              {t.reason === STATUS_NAMES[t.status] ? t.reason : `${STATUS_NAMES[t.status]} — ${t.reason}`}
-            </span>
-          </Link>
-        ))}
-      </div>
-    </section>
+    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+      {children}
+    </div>
   )
+}
+
+/** Карточки витрины по номерам — из того же списка, что и витрина. */
+function useCards(): Map<number, Card> {
+  const cards = useQuery({ queryKey: ['references'], queryFn: listReferences })
+  return new Map((cards.data ?? []).map((c) => [c.id, c]))
+}
+
+function TaskList({ rows, empty }: { rows: Task[]; empty: string }) {
+  const cards = useCards()
+  const open = useOpen()
+  if (rows.length === 0) return <EmptyState title="Пусто" description={empty} />
+  return (
+    <Grid>
+      {rows.map((t) => {
+        const card = cards.get(t.id)
+        const why = t.reason === STATUS_NAMES[t.status] ? t.reason : `${STATUS_NAMES[t.status]} — ${t.reason}`
+        // Статус карточка пишет сама; причина — только если она что-то добавляет.
+        const note = t.reason === STATUS_NAMES[t.status] ? undefined : [{ text: t.reason, tone: t.status === 'rework' ? ('warning' as const) : ('muted' as const) }]
+        return card ? (
+          <div key={t.id} className="grid h-64">
+            <ReferenceCard card={card} note={note} onOpen={() => open(t.id)} onHover={open.warm(t.id)} />
+          </div>
+        ) : (
+          <Link key={t.id} to={`/references/${t.id}`} state={{ inApp: true }} className="pf-card h-64 border border-line p-2 text-sm">
+            №{t.id} · {t.name}
+            <div className="text-xs text-muted-foreground">{why}</div>
+          </Link>
+        )
+      })}
+    </Grid>
+  )
+}
+
+/** Открыть окно поверх согласования: крестик вернёт на ту же вкладку. */
+function useOpen() {
+  const navigate = useNavigate()
+  const queries = useQueryClient()
+  const open = (id: number) => navigate(`/references/${id}`, { state: { inApp: true } })
+  open.warm = (id: number) => () => prefetchCard(queries, id)
+  return open
 }
 
 /** Мои черновики (US-0685): где у меня несохранённое и что в нём — словами.
@@ -79,6 +123,9 @@ function MyDrafts() {
   const queries = useQueryClient()
   const drafts = useQuery({ queryKey: ['my-drafts'], queryFn: fetchMyDrafts, refetchOnWindowFocus: true })
   const [error, setError] = useState<string | null>(null)
+  const cards = useCards()
+  const open = useOpen()
+  const navigate = useNavigate()
   const rows = drafts.data ?? []
   const accidental = rows.filter((d) => d.accidental && d.reference_id !== null)
   const forget = (ids: (number | null)[]) => {
@@ -108,30 +155,39 @@ function MyDrafts() {
       {drafts.data && rows.length === 0 && (
         <EmptyState title="Пусто" description="Несохранённого нигде нет: всё, что правили, — в версиях." />
       )}
-      <div className="flex flex-col gap-1">
+      <Grid>
         {rows.map((d) => (
-          <DraftRow key={d.reference_id ?? 'new'} d={d} onDrop={() => run(dropDraft(d.reference_id).then(() => forget([d.reference_id])))} />
+          <DraftCard key={d.reference_id ?? 'new'} d={d} card={d.reference_id === null ? undefined : cards.get(d.reference_id)}
+            onOpen={() => (d.reference_id === null ? navigate('/references/new', { state: { inApp: true } }) : open(d.reference_id))}
+            onDrop={() => run(dropDraft(d.reference_id).then(() => forget([d.reference_id])))} />
         ))}
-      </div>
+      </Grid>
     </section>
   )
 }
 
-function DraftRow({ d, onDrop }: { d: MyDraft; onDrop: () => void }) {
+function DraftCard({ d, card, onOpen, onDrop }: { d: MyDraft; card?: Card; onOpen: () => void; onDrop: () => void }) {
   const when = new Date(d.updated_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const note = [
+    ...(d.accidental ? [{ text: 'похоже на случайное', tone: 'warning' as const }] : []),
+    { text: d.changes.join('; ') },
+    { text: `правлено ${when}${d.base_number ? ` · поверх версии ${d.base_number}` : ''}` },
+  ]
+  if (card) return (
+    <div className="grid h-64">
+      <ReferenceCard card={card} note={note} onOpen={onOpen} onDiscard={onDrop} />
+    </div>
+  )
   return (
-    <div className="flex items-start gap-2 rounded border border-line px-2 py-1 text-sm">
-      <div className="flex-1">
-        <Link to={d.reference_id === null ? '/references/new' : `/references/${d.reference_id}`} state={{ inApp: true }} className="hover:underline">
-          {d.reference_id === null ? 'Новая работа' : `№${d.reference_id} · ${d.name}`}
-        </Link>
-        <span className="ml-2 text-xs text-muted-foreground">
-          {when}
-          {d.base_number ? ` · поверх версии ${d.base_number}` : ''}
-        </span>
-        {d.accidental && <span className="ml-2 rounded bg-warning/15 px-1 text-xs text-warning">похоже на случайное</span>}
-        <div className="text-xs text-muted-foreground">{d.changes.join('; ')}</div>
-      </div>
+    <div className="pf-card relative flex h-64 flex-col border border-line p-2 text-xs">
+      <button className="flex-1 text-left" onClick={onOpen}>
+        <div className="font-semibold">{d.name}</div>
+        {note.map((n) => (
+          <div key={n.text} className={n.tone === 'warning' ? 'text-warning' : 'text-muted-foreground'}>
+            {n.text}
+          </div>
+        ))}
+      </button>
       <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={onDrop}>
         выбросить
       </button>
