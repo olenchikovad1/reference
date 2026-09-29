@@ -396,12 +396,12 @@ export interface Remark {
   id: number
   /** Версия, на которой поставлено. */
   number: number
-  side: string
+  side: string | null
   element_id: string | null
   element_name: string | null
   /** Точка метки — доли кадра стороны. */
-  x: number
-  y: number
+  x: number | null
+  y: number | null
   text: string
   author_id: string | null
   author_name: string | null
@@ -444,7 +444,7 @@ export async function fetchRemarks(referenceId: number): Promise<Remark[]> {
 
 export async function addRemark(
   referenceId: number,
-  body: { side: string; x: number; y: number; text: string; element_id?: string | null },
+  body: { side?: string | null; x?: number | null; y?: number | null; text: string; element_id?: string | null },
 ): Promise<Remark> {
   const r = await fetch(`${BASE}references/${referenceId}/remarks`, {
     method: 'POST',
@@ -468,14 +468,17 @@ export async function sayRemark(referenceId: number, remarkId: number, kind: Rem
 /** Замечание голосом: запись уходит сразу, расшифровка — в фоне. */
 export async function addVoiceRemark(
   referenceId: number,
-  where: { side: string; x: number; y: number; element_id?: string | null },
+  where: { side?: string | null; x?: number | null; y?: number | null; element_id?: string | null },
   audio: Blob,
 ): Promise<Remark> {
   const form = new FormData()
   form.append('audio', audio, 'remark.webm')
-  form.append('side', where.side)
-  form.append('x', String(where.x))
-  form.append('y', String(where.y))
+  // Точка — по желанию (план 095): без неё замечание просто к референсу.
+  if (where.side) form.append('side', where.side)
+  if (where.x != null && where.y != null) {
+    form.append('x', String(where.x))
+    form.append('y', String(where.y))
+  }
   if (where.element_id) form.append('element_id', where.element_id)
   const r = await fetch(`${BASE}references/${referenceId}/remarks/voice`, { method: 'POST', body: form })
   if (!r.ok) throw await refusal(r, 'запись не сохранилась')

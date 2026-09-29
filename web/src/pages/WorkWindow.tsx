@@ -85,6 +85,7 @@ import { useCan, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
 import { WINDOW_KEYS, windowKey } from '../shared/keys'
 import { HotkeysHint } from '../candidates/HotkeysHint'
+import { weightText } from '../shared/percent'
 import { meaningClass, type Meaning } from '../candidates/meaning'
 import { moveToSide, newElementId, onSide, otherSide, sidesUsed, upgrade } from '../shared/sides'
 import { useFrameAlpha } from '../shared/frameAlpha'
@@ -249,21 +250,9 @@ export function WorkWindow() {
   // Панель обсуждения (US-0689): согласование, замечания, исполнитель — своей
   // колонкой по круглой кнопке, а не в длинной полосе справа. Открыта или нет
   // — помнит браузер; мой ход — открывается сама.
-  const [talkOpen, setTalkOpenRaw] = useState(() => {
-    try {
-      return localStorage.getItem(TALK_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
-  const setTalkOpen = (on: boolean) => {
-    setTalkOpenRaw(on)
-    try {
-      localStorage.setItem(TALK_KEY, on ? '1' : '0')
-    } catch {
-      // хранилище запрещено — выбор проживёт до перезагрузки
-    }
-  }
+  // Всплывающим окном и только по нажатию (план 095): открытое само или
+  // запомненное прятало правую полосу, и работать было нельзя.
+  const [talkOpen, setTalkOpen] = useState(false)
   const [pendingRemark, setPendingRemark] = useState<PendingRemark | null>(null)
   const [focusRemark, setFocusRemark] = useState<number | null>(null)
   const [viewing, setViewing] = useState<number | null>(null)
@@ -1484,10 +1473,10 @@ export function WorkWindow() {
   // Дропы референса — от цветомодели (US-0497): по ним выбор показывает
   // одобренное, а на изделии отмечено взятое не из одобренного.
   const openRemarks = (remarks.data ?? []).filter((r) => r.status === 'open').length
-  const myTurn = turnOf(current)
   useEffect(() => {
-    if (myTurn) setTalkOpenRaw(true)
-  }, [current?.id, myTurn])
+    setTalkOpen(false)
+    setPendingRemark(null)
+  }, [current?.id])
 
   const catalogue = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue, staleTime: 60_000 })
   const cmId = current?.colour_model_id ?? colourModelId
@@ -2447,7 +2436,7 @@ export function WorkWindow() {
                   imagesVersion={imagesVersion}
                 />
                 {(remarks.data ?? []).map((r, i) =>
-                  r.side === stateCode && r.status !== 'accepted' ? (
+                  r.side === stateCode && r.x !== null && r.y !== null && r.status !== 'accepted' ? (
                     <span
                       key={r.id}
                       data-remark-pin={r.id}
@@ -2521,6 +2510,64 @@ export function WorkWindow() {
             </div>
           )}
 
+          {current && talkOpen && (
+            <div
+              role="dialog"
+              aria-label="обсуждение"
+              className="pf-card absolute bottom-24 left-1/2 z-40 flex max-h-[65%] w-[440px] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-y-auto border border-line bg-background p-3 text-sm shadow-xl"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Обсуждение</h2>
+              <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => setTalkOpen(false)} aria-label="скрыть обсуждение">
+                ×
+              </button>
+            </div>
+          {current && (
+            <ReviewSection
+              card={current}
+              onChanged={(card) => {
+                setCurrent(card)
+                queries.setQueryData(cardKey(card.id), card)
+                void queries.invalidateQueries({ queryKey: ['references'] })
+                void queries.invalidateQueries({ queryKey: ['tasks'] })
+              }}
+            />
+          )}
+
+          {current && (
+            <RemarksSection
+              card={current}
+              side={stateCode}
+              sideName={(code) => product?.states.find((s) => s.code === code)?.display_name ?? code}
+              remarks={remarks.data ?? []}
+              focus={focusRemark}
+              onFocus={setFocusRemark}
+              placing={placing}
+              onPlacing={setPlacing}
+              pending={pendingRemark}
+              onPending={setPendingRemark}
+              onChanged={() => {
+                void queries.invalidateQueries({ queryKey: ['remarks', current.id] })
+                void queries.invalidateQueries({ queryKey: ['tasks'] })
+              }}
+            />
+          )}
+
+          {current && (
+            <ExecutorSection
+              card={current}
+              onChanged={(card) => {
+                setCurrent(card)
+                queries.setQueryData(cardKey(card.id), card)
+                void queries.invalidateQueries({ queryKey: ['references'] })
+              }}
+            />
+          )}
+
+            </div>
+          )}
+
           {current && (
             <DecisionBar
               card={current}
@@ -2529,7 +2576,7 @@ export function WorkWindow() {
               onTalk={setTalkOpen}
               onRemark={() => {
                 setTalkOpen(true)
-                setPlacing(true)
+                setPendingRemark(FREE_REMARK)
               }}
               onChanged={(card) => {
                 setCurrent(card)
@@ -2628,65 +2675,8 @@ export function WorkWindow() {
           </div>
         </div>
 
-        {current && talkOpen && (
-          <aside className="w-80 shrink-0 overflow-y-auto border-l border-line bg-background p-3 text-sm" aria-label="обсуждение">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Обсуждение</h2>
-              <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => setTalkOpen(false)} aria-label="скрыть обсуждение">
-                ×
-              </button>
-            </div>
-          {current && (
-            <ReviewSection
-              card={current}
-              onChanged={(card) => {
-                setCurrent(card)
-                queries.setQueryData(cardKey(card.id), card)
-                void queries.invalidateQueries({ queryKey: ['references'] })
-                void queries.invalidateQueries({ queryKey: ['tasks'] })
-              }}
-            />
-          )}
 
-          {current && (
-            <RemarksSection
-              card={current}
-              side={stateCode}
-              sideName={(code) => product?.states.find((s) => s.code === code)?.display_name ?? code}
-              remarks={remarks.data ?? []}
-              focus={focusRemark}
-              onFocus={setFocusRemark}
-              placing={placing}
-              onPlacing={setPlacing}
-              pending={pendingRemark}
-              onPending={setPendingRemark}
-              onChanged={() => {
-                void queries.invalidateQueries({ queryKey: ['remarks', current.id] })
-                void queries.invalidateQueries({ queryKey: ['tasks'] })
-              }}
-            />
-          )}
-
-          {current && (
-            <ExecutorSection
-              card={current}
-              onChanged={(card) => {
-                setCurrent(card)
-                queries.setQueryData(cardKey(card.id), card)
-                void queries.invalidateQueries({ queryKey: ['references'] })
-              }}
-            />
-          )}
-
-          </aside>
-        )}
-
-        {/* Обсуждение открыто — оно на месте полосы про принт, а не третьей
-            колонкой: холст не сжимается (владелец 29.09 — «не перегружай»). */}
-        <aside
-          className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 text-sm ${current && talkOpen ? 'hidden' : ''}`}
-          aria-label="теги и история"
-        >
+        <aside className="w-72 shrink-0 overflow-y-auto border-l border-line p-3 text-sm" aria-label="теги и история">
           <Section title="Теги">
             {!current && <p className="text-xs text-muted-foreground">свои теги — после первого сохранения</p>}
             {current && refTags && (
@@ -3174,7 +3164,6 @@ const NAME_SOURCES: Record<string, string> = { catalog: 'из каталога',
 /** Вес — доля слова среди десяти тысяч слов словаря, обычно от 0.0005 до
  *  0.05. Двумя знаками после запятой почти всё стало бы «0.00», поэтому —
  *  проценты с двумя значащими цифрами: «танк 0.50 %», «артиллерист 1.2 %». */
-const weightText = (score: number) => `${(score * 100).toPrecision(2)} %`
 
 /** Теги картинки: сильные видны сразу, остальные из двадцати — по раскрытию.
  *  Вес рядом с тегом: человек сам решает, верить ли «снег 0.31 %», — границу
@@ -3481,7 +3470,10 @@ function DecisionBar(props: {
   )
 }
 
-type PendingRemark = { x: number; y: number; element_id: string | null; element_name: string | null }
+type PendingRemark = { x: number | null; y: number | null; element_id: string | null; element_name: string | null }
+
+/** Замечание просто к референсу (план 095): без точки и без слоя. */
+const FREE_REMARK: PendingRemark = { x: null, y: null, element_id: null, element_name: null }
 
 /** Замечания (US-0511): на слое или месте изделия, на версии, с веткой.
  *  Открытые первыми; закрытые не пропадают — остаются в истории. */
@@ -3515,7 +3507,7 @@ function RemarksSection(props: {
     if (!props.pending || !text.trim()) return
     const p = props.pending
     done(
-      addRemark(card.id, { side: props.side, x: p.x, y: p.y, text, element_id: p.element_id }).then(() => {
+      addRemark(card.id, { side: p.x === null ? null : props.side, x: p.x, y: p.y, text, element_id: p.element_id }).then(() => {
         setText('')
         props.onPending(null)
       }),
@@ -3525,23 +3517,22 @@ function RemarksSection(props: {
     <Section title={`Замечания · ${open} открыто`}>
       <div className="flex flex-col gap-1 text-xs">
         {(card.can ?? []).includes('remark') && !props.pending && (
-          <button
-            className={buttonClass({ tone: props.placing ? 'accent' : 'neutral', variant: props.placing ? 'soft' : 'outline', small: true })}
-            onClick={() => props.onPlacing(!props.placing)}
-          >
-            {props.placing ? 'нажмите на принт, надпись или место изделия…' : '+ замечание'}
+          <button className={meaningClass('act', true)} onClick={() => props.onPending(FREE_REMARK)}>
+            + замечание
           </button>
         )}
         {props.pending && (
           <div className="flex flex-col gap-1 rounded border border-line p-1">
-            <span className="text-muted-foreground">
-              {props.pending.element_name ? `на слое ${props.pending.element_name}` : 'на месте изделия'}
-            </span>
+            {props.pending.x !== null && (
+              <span className="text-muted-foreground">
+                {props.pending.element_name ? `на слое ${props.pending.element_name}` : 'на месте изделия'}
+              </span>
+            )}
             <TextInput
               aria-label="текст замечания"
               autoFocus
               value={text}
-              placeholder="что поправить"
+              placeholder="что поправить: «ракету на спине — меньше»"
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 e.stopPropagation()
@@ -3553,7 +3544,7 @@ function RemarksSection(props: {
               onRecorded={(audio) => {
                 const p = props.pending!
                 done(
-                  addVoiceRemark(card.id, { side: props.side, x: p.x, y: p.y, element_id: p.element_id }, audio).then(() => {
+                  addVoiceRemark(card.id, { side: p.x === null ? null : props.side, x: p.x, y: p.y, element_id: p.element_id }, audio).then(() => {
                     setText('')
                     props.onPending(null)
                   }),
@@ -3582,7 +3573,7 @@ function RemarksSection(props: {
             <RemarkText card={card} remark={r} n={i + 1} onChanged={props.onChanged} onError={setError} />
             {r.audio && <RemarkAudio referenceId={card.id} remark={r} />}
             <div className="text-muted-foreground">
-              {r.element_name ? `слой ${r.element_name}` : 'место изделия'} · {props.sideName(r.side).toLowerCase()} · {r.author_name ?? 'без входа'}
+              {r.side ? `${r.element_name ? `слой ${r.element_name}` : 'место изделия'} · ${props.sideName(r.side).toLowerCase()} · ` : ''} {r.author_name ?? 'без входа'}
               {r.number < last ? ` · из версии ${r.number}` : ''}
               {r.status === 'fixed' && r.fixed_in ? ` · исправлено в ${r.fixed_in}` : ''}
               {r.status === 'accepted' ? ' · принято' : ''}
@@ -3806,15 +3797,3 @@ function probeImage(src: string): Promise<{ aspect: number; hasAlpha: boolean }>
   })
 }
 
-const TALK_KEY = 'reference.window.talk'
-
-/** Мой ли ход по этому референсу: редактору — на согласовании, исполнителю —
- *  вернули на доработку. Черновик — не ход: панель по нему сама не
- *  открывается, иначе она выезжала бы на каждой работе дизайнера. */
-function turnOf(card: FullCard | null): boolean {
-  const can = card?.can ?? []
-  if (card?.status === 'review') return can.includes('approve') || can.includes('return') || can.includes('approve-final')
-  if (card?.status === 'approved') return can.includes('approve-final')
-  if (card?.status === 'rework') return can.includes('submit')
-  return false
-}

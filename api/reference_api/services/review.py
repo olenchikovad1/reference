@@ -202,19 +202,20 @@ class BadRemark(ValueError):
     """Пустой текст, точка вне кадра, неизвестный вид сообщения — 422."""
 
 
-async def add_remark(db: AsyncSession, reference_id: int, who: str | None, side: str, x: float, y: float,
+async def add_remark(db: AsyncSession, reference_id: int, who: str | None, side: str | None, x: float | None,
+                     y: float | None,
                      text: str, element_id: str | None = None):
     """Замечание ставит редактор или главный редактор — нажатием на слой или
     на место изделия. Принадлежит последней версии."""
     body = " ".join((text or "").split())
     if not body:
-        raise BadRemark("нужен текст замечания и точка на изделии")
+        raise BadRemark("нужен текст замечания")
     number, name = await _placed(db, reference_id, who, x, y, element_id)
     return await repo.add_remark(db, reference_id=reference_id, number=number, side=side, element_id=element_id,
                                  element_name=name, x=x, y=y, text=body, author_id=who, status="open")
 
 
-async def _placed(db: AsyncSession, reference_id: int, who: str | None, x: float, y: float,
+async def _placed(db: AsyncSession, reference_id: int, who: str | None, x: float | None, y: float | None,
                   element_id: str | None) -> tuple[int, str | None]:
     """Общее у написанного и сказанного замечания: кто вправе, где точка,
     на какой версии и на каком слое."""
@@ -223,8 +224,8 @@ async def _placed(db: AsyncSession, reference_id: int, who: str | None, x: float
         raise NoSuchReference("референса с таким номером нет")
     if not (await _roles(db, card, who)) & {"editor", "chief"}:
         raise NotYourStep("замечания ставит редактор")
-    if not (0 <= x <= 1 and 0 <= y <= 1):
-        raise BadRemark("нужен текст замечания и точка на изделии")
+    if (x is None) != (y is None) or (x is not None and not (0 <= x <= 1 and 0 <= y <= 1)):
+        raise BadRemark("точка на изделии — обе доли от 0 до 1, или без точки вовсе")
     number = await repo.last_number(db, reference_id)
     name = None
     if element_id:
@@ -297,7 +298,8 @@ MAX_AUDIO_BYTES = 10 * 1024 * 1024
 AUDIO_TYPES = {"audio/webm", "audio/ogg", "audio/wav", "audio/x-wav", "audio/wave", "audio/mp4", "audio/mpeg"}
 
 
-async def add_voice_remark(db: AsyncSession, reference_id: int, who: str | None, side: str, x: float, y: float,
+async def add_voice_remark(db: AsyncSession, reference_id: int, who: str | None, side: str | None,
+                           x: float | None, y: float | None,
                            audio: bytes, content_type: str | None, element_id: str | None = None):
     """Замечание голосом: аудио сохраняется сразу и остаётся первоисточником,
     расшифровка — в фоне. Не дошло до брокера — не беда: при старте

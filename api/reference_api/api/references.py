@@ -549,8 +549,9 @@ async def remark_message(reference_id: int, remark_id: int, body: RemarkMessageI
 
 
 @router.post("/{reference_id}/remarks/voice", response_model=RemarkOut, dependencies=[requires("review", Action.WRITE)])
-async def add_voice_remark(reference_id: int, request: Request, audio: UploadFile, side: str = Form(...),
-                           x: float = Form(...), y: float = Form(...), element_id: str | None = Form(None),
+async def add_voice_remark(reference_id: int, request: Request, audio: UploadFile, side: str | None = Form(None),
+                           x: float | None = Form(None), y: float | None = Form(None),
+                           element_id: str | None = Form(None),
                            db: AsyncSession = Depends(session)) -> RemarkOut:
     """Замечание голосом (US-0512): запись сохраняется сразу, расшифровка —
     в фоне; пока её нет — voice_status pending."""

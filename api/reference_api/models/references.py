@@ -315,15 +315,17 @@ class ReferenceRemark(Base):
     reference_id: Mapped[int] = mapped_column(ForeignKey("reference_cards.id", ondelete="CASCADE"), nullable=False)
     #: Номер версии, на которой поставлено: в следующих — «из версии N».
     number: Mapped[int] = mapped_column(Integer, nullable=False)
-    side: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: Сторона и точка метки — по желанию (план 095): замечание пишут и просто
+    #: текстом к референсу.
+    side: Mapped[str | None] = mapped_column(String(32), nullable=True)
     #: Слой — id элемента работы; пусто — замечание на месте изделия.
     element_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: Имя слоя на момент замечания — слой могут переименовать и удалить.
     element_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
     #: Точка метки — доли кадра стороны, 0…1: только показ, не размещение (И-1
     #: про принт, а не про метку замечания).
-    x: Mapped[float] = mapped_column(Float, nullable=False)
-    y: Mapped[float] = mapped_column(Float, nullable=False)
+    x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    y: Mapped[float | None] = mapped_column(Float, nullable=True)
     text: Mapped[str] = mapped_column(String(2000), nullable=False)
     author_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: open — открыто, fixed — исправлено (ждёт автора), accepted — принято.

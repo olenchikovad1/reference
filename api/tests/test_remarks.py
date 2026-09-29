@@ -117,3 +117,14 @@ async def test_open_remarks_come_first_and_reach_my_tasks(client) -> None:
     await client.post(f"{API}/references/{ref}/return", headers=as_(PETROV), json={"comment": "см. замечания"})
     mine = (await client.get(f"{API}/tasks", headers=as_(IVANOVA))).json()["mine"]
     assert mine[0]["reason"] == "вернули с 2 замечаниями: «см. замечания»"
+
+
+async def test_remark_is_just_text_without_a_point(client) -> None:
+    """План 095: «картинку такую-то доделай так-то» — без нажатия на изделие."""
+    ref, _ = await reference(client)
+    r = await client.post(f"{API}/references/{ref}/remarks", headers=as_(PETROV), json={"text": "рукав: ракету меньше"})
+    assert r.status_code == 200, r.text
+    m = r.json()
+    assert (m["text"], m["side"], m["x"], m["element_id"]) == ("рукав: ракету меньше", None, None, None)
+    half = await client.post(f"{API}/references/{ref}/remarks", headers=as_(PETROV), json={"text": "а", "x": 0.3})
+    assert half.status_code == 422, "точка — обе доли или никакой"

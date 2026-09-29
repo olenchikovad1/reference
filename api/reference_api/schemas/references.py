@@ -270,12 +270,13 @@ class VersionOut(VersionMetaOut):
 
 
 class RemarkIn(BaseModel):
-    """Замечание (US-0511): на слое (element_id) или на месте изделия."""
+    """Замечание (US-0511): текстом к референсу; точка на изделии и слой —
+    по желанию (план 095: «картинку такую-то доделай так-то» — без привязки)."""
 
-    side: str
-    #: Точка метки — доли кадра стороны, 0…1.
-    x: float
-    y: float
+    side: str | None = None
+    #: Точка метки — доли кадра стороны, 0…1; пусто — без метки.
+    x: float | None = None
+    y: float | None = None
     text: str
     element_id: str | None = None
 
@@ -300,11 +301,11 @@ class RemarkOut(BaseModel):
     id: int
     #: Версия, на которой поставлено: в следующих — «из версии N».
     number: int
-    side: str
+    side: str | None
     element_id: str | None
     element_name: str | None
-    x: float
-    y: float
+    x: float | None
+    y: float | None
     text: str
     author_id: str | None
     author_name: str | None
