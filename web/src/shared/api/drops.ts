@@ -92,3 +92,24 @@ export async function decide(
   })
   if (!r.ok) throw new Error(r.status === 422 ? 'у отказа нужна причина' : `решение не записалось: ${r.status}`)
 }
+
+/** Поля дропа, которые заводят и правят (US-0719). */
+export type DropFields = Omit<Drop, 'id'>
+
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const r = await fetch(BASE + path, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!r.ok) {
+    // Отказ сервиса — словами: «уже есть», «удалить нельзя, можно погасить».
+    const detail = await r.json().then((j) => j?.detail).catch(() => null)
+    throw new Error(typeof detail === 'string' ? detail : `дропы: ${r.status}`)
+  }
+  return (r.status === 204 ? undefined : await r.json()) as T
+}
+
+export const createDrop = (d: DropFields) => send<Drop>('POST', 'drops', d)
+export const updateDrop = (id: number, d: DropFields) => send<Drop>('PUT', `drops/${id}`, d)
+export const deleteDrop = (id: number) => send<void>('DELETE', `drops/${id}`)

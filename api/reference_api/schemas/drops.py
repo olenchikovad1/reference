@@ -20,6 +20,18 @@ class DropOut(BaseModel):
     retired: bool
 
 
+class DropIn(BaseModel):
+    """Завести или поправить дроп (US-0719)."""
+
+    name: str
+    season: str
+    release_from: date
+    release_to: date
+    audience: str
+    theme: str = ""
+    retired: bool = False
+
+
 class ModelOut(BaseModel):
     id: int
     code: str

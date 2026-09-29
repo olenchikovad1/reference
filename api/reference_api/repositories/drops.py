@@ -3,10 +3,11 @@
 Слой: repositories. Как данные достаются. Бизнес-смысла здесь нет.
 """
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from reference_api.models.drops import ColourModel, Drop, HierarchyNode
+from reference_api.models.drops import ColourModel, Drop, DropItem, HierarchyNode
+from reference_api.models.library import LibraryDrop
 from reference_api.models.references import Reference
 
 
@@ -57,3 +58,26 @@ async def roots(db: AsyncSession) -> list[HierarchyNode]:
     """Верх товарной иерархии; дети, модели и цветомодели подгружаются связями."""
     q = select(HierarchyNode).where(HierarchyNode.parent_id.is_(None)).order_by(HierarchyNode.name)
     return list((await db.execute(q)).scalars())
+
+
+async def drop_by_name(db: AsyncSession, name: str) -> Drop | None:
+    return await db.scalar(select(Drop).where(func.lower(Drop.name) == name.lower()))
+
+
+async def save_drop(db: AsyncSession, drop: Drop) -> Drop:
+    db.add(drop)
+    await db.commit()
+    await db.refresh(drop)
+    return drop
+
+
+async def drop_use(db: AsyncSession, drop_id: int) -> tuple[int, int]:
+    """Сколько цветомоделей в ассортименте и сколько принтов и надписей предложено."""
+    items = await db.scalar(select(func.count()).select_from(DropItem).where(DropItem.drop_id == drop_id))
+    proposed = await db.scalar(select(func.count()).select_from(LibraryDrop).where(LibraryDrop.drop_id == drop_id))
+    return items or 0, proposed or 0
+
+
+async def delete_drop(db: AsyncSession, drop_id: int) -> None:
+    await db.execute(delete(Drop).where(Drop.id == drop_id))
+    await db.commit()

@@ -11,6 +11,7 @@
 import pathlib
 import re
 from dataclasses import dataclass
+from datetime import date
 from functools import lru_cache
 from typing import Any
 
@@ -304,3 +305,54 @@ async def match_drops(db: AsyncSession, query: str) -> list[DropMatch]:
             if cos >= threshold:
                 put(DropMatch(d, float(cos) * 0.7, f"дроп «{d.name}» — по смыслу"))
     return sorted(found.values(), key=lambda m: -m.score)
+
+
+class DropRefused(Exception):
+    """Дроп не заведён, не поправлен или не удалён — с причиной словами.
+    `status` — какой ответ: 404 нет такого, 409 мешает состояние, 422 данные."""
+
+    def __init__(self, status: int, reason: str) -> None:
+        super().__init__(reason)
+        self.status = status
+
+
+def _fill(d: Drop, name: str, season: str, release_from: date, release_to: date, audience: str, theme: str,
+          retired: bool) -> None:
+    if not name.strip() or not season.strip() or not audience.strip():
+        raise DropRefused(422, "нужны название, сезон и адресат")
+    if release_from > release_to:
+        raise DropRefused(422, "дата начала позже даты конца")
+    d.name, d.season, d.audience, d.theme = name.strip(), season.strip(), audience.strip(), theme.strip()
+    d.release_from, d.release_to, d.retired = release_from, release_to, retired
+
+
+async def create_drop(db: AsyncSession, **fields: Any) -> Drop:
+    """Завести дроп (US-0719). Название уникально без учёта регистра."""
+    if await repo.drop_by_name(db, fields["name"].strip()):
+        raise DropRefused(409, f"дроп «{fields['name'].strip()}» уже есть")
+    d = Drop(aliases=[])
+    _fill(d, **fields)
+    return await repo.save_drop(db, d)
+
+
+async def update_drop(db: AsyncSession, drop_id: int, **fields: Any) -> Drop:
+    """Поправить название, сезон, даты, адресата, тему или погасить."""
+    d = await repo.drop(db, drop_id)
+    if d is None:
+        raise DropRefused(404, "нет такого дропа")
+    same = await repo.drop_by_name(db, fields["name"].strip())
+    if same is not None and same.id != drop_id:
+        raise DropRefused(409, f"дроп «{fields['name'].strip()}» уже есть")
+    _fill(d, **fields)
+    return await repo.save_drop(db, d)
+
+
+async def delete_drop(db: AsyncSession, drop_id: int) -> None:
+    """Удалить заведённый по ошибке: только пустой. В непустом стоят
+    цветомодели или предложенное — такой гасят, а не стирают."""
+    if await repo.drop(db, drop_id) is None:
+        raise DropRefused(404, "нет такого дропа")
+    items, proposed = await repo.drop_use(db, drop_id)
+    if items or proposed:
+        raise DropRefused(409, f"в дропе цветомоделей: {items}, предложенного: {proposed} — удалить нельзя, можно погасить")
+    await repo.delete_drop(db, drop_id)

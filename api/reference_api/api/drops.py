@@ -4,7 +4,7 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from platform_client import requires_function
+from platform_client import Action, requires, requires_function
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
@@ -12,6 +12,7 @@ from reference_api.schemas.library import BoardItemOut, BoardOut, DecisionIn, Vi
 from reference_api.services import library, people
 from reference_api.models.drops import GarmentModel, HierarchyNode
 from reference_api.schemas.drops import (
+    DropIn,
     DropOut,
     MatrixOut,
     ModelOut,
@@ -33,6 +34,37 @@ def _model(m: GarmentModel) -> ModelOut:
 async def drops(active: bool = False, db: AsyncSession = Depends(session)) -> list[DropOut]:
     """Дропы по дате выхода. active=true — без погашенных: для нового референса."""
     return [DropOut.model_validate(d, from_attributes=True) for d in await service.drops(db, active)]
+
+
+def _refused(e: service.DropRefused) -> HTTPException:
+    return HTTPException(e.status, str(e))
+
+
+@router.post("/drops", response_model=DropOut, dependencies=[requires("drops", Action.WRITE)])
+async def create_drop(body: DropIn, db: AsyncSession = Depends(session)) -> DropOut:
+    """Завести дроп (US-0719)."""
+    try:
+        return DropOut.model_validate(await service.create_drop(db, **body.model_dump()), from_attributes=True)
+    except service.DropRefused as e:
+        raise _refused(e) from None
+
+
+@router.put("/drops/{drop_id}", response_model=DropOut, dependencies=[requires("drops", Action.WRITE)])
+async def update_drop(drop_id: int, body: DropIn, db: AsyncSession = Depends(session)) -> DropOut:
+    """Поправить дроп или погасить его (retired)."""
+    try:
+        return DropOut.model_validate(await service.update_drop(db, drop_id, **body.model_dump()), from_attributes=True)
+    except service.DropRefused as e:
+        raise _refused(e) from None
+
+
+@router.delete("/drops/{drop_id}", status_code=204, dependencies=[requires("drops", Action.DELETE)])
+async def delete_drop(drop_id: int, db: AsyncSession = Depends(session)) -> None:
+    """Удалить заведённый по ошибке — только пустой; непустой — 409 с причиной."""
+    try:
+        await service.delete_drop(db, drop_id)
+    except service.DropRefused as e:
+        raise _refused(e) from None
 
 
 @router.get("/drops/{drop_id}/matrix", response_model=MatrixOut)
