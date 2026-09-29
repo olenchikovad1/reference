@@ -486,3 +486,23 @@ export async function setRemarkText(referenceId: number, remarkId: number, text:
   if (!r.ok) throw await refusal(r, 'текст не поправился')
   return r.json()
 }
+
+/** Мой черновик (US-0685): что поменялось против версии, словами, и похоже
+ *  ли это на случайное. reference_id пусто — новая работа. */
+export interface MyDraft {
+  reference_id: number | null
+  name: string
+  base_number: number | null
+  updated_at: string
+  changes: string[]
+  accidental: boolean
+}
+
+export const fetchMyDrafts = () => get<MyDraft[]>('references/drafts/mine', 'Мои черновики')
+
+/** Выбросить все «похоже на случайное»; ответ — номера карточек. */
+export async function dropAccidental(): Promise<number[]> {
+  const r = await fetch(`${BASE}references/drafts/accidental`, { method: 'DELETE' })
+  if (!r.ok) throw await refusal(r, 'Черновики')
+  return r.json()
+}

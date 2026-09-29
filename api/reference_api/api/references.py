@@ -18,6 +18,7 @@ from reference_api.schemas.references import (
     RemarkMessageIn,
     RemarkMessageOut,
     RemarkOut,
+    MyDraftOut,
     RemarkTextIn,
     StatusEventOut,
     CommentIn,
@@ -329,6 +330,21 @@ async def new_draft(request: Request, db: AsyncSession = Depends(session)) -> Dr
     """Черновик новой, ещё не сохранённой работы смотрящего (US-0598)."""
     author = _author(request)
     return _draft(await service.draft(db, None, author)) if author else None
+
+
+@router.get("/drafts/mine", response_model=list[MyDraftOut])
+async def my_drafts(request: Request, db: AsyncSession = Depends(session)) -> list[MyDraftOut]:
+    """Мои черновики — что в каждом поменялось, свежие первыми (US-0685)."""
+    author = _author(request)
+    if author is None:
+        return []
+    return [MyDraftOut(**vars(m)) for m in await service.my_drafts(db, author)]
+
+
+@router.delete("/drafts/accidental", response_model=list[int], dependencies=[requires("references", Action.WRITE)])
+async def drop_accidental(request: Request, db: AsyncSession = Depends(session)) -> list[int]:
+    """Выбросить все мои черновики «похоже на случайное»; ответ — их номера."""
+    return await service.drop_accidental(db, _drafter(request))
 
 
 @router.put("/drafts/new", status_code=204, dependencies=[requires("references", Action.WRITE)])

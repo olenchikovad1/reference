@@ -329,3 +329,15 @@ class RemarkOut(BaseModel):
 
 class RemarkTextIn(BaseModel):
     text: str
+
+
+class MyDraftOut(BaseModel):
+    """Мой черновик (US-0685): что поменялось против версии и похоже ли на
+    случайное. reference_id пусто — новая, ни разу не сохранённая работа."""
+
+    reference_id: int | None
+    name: str
+    base_number: int | None
+    updated_at: datetime
+    changes: list[str]
+    accidental: bool

@@ -455,3 +455,16 @@ async def transfers(db: AsyncSession, reference_id: int) -> list[ReferenceTransf
     rows = await db.execute(select(ReferenceTransfer).where(ReferenceTransfer.reference_id == reference_id)
                             .order_by(ReferenceTransfer.at, ReferenceTransfer.id))
     return list(rows.scalars())
+
+
+async def drafts_of(db: AsyncSession, author_id: str) -> list[tuple[ReferenceDraft, Reference | None]]:
+    """Черновики человека с их карточками, свежие первыми (US-0685). Карточки
+    в корзине не в счёт: открыть черновик к ним нельзя."""
+    rows = await db.execute(
+        select(ReferenceDraft, Reference)
+        .outerjoin(Reference, Reference.id == ReferenceDraft.reference_id)
+        .where(ReferenceDraft.author_id == author_id)
+        .where(Reference.deleted_at.is_(None) | ReferenceDraft.reference_id.is_(None))
+        .order_by(ReferenceDraft.updated_at.desc())
+    )
+    return [(d, c) for d, c in rows.all()]

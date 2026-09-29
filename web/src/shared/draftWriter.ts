@@ -52,6 +52,12 @@ function writeBuffer(target: DraftTarget, body: DraftBody): void {
   }
 }
 
+/** Черновик выброшен снаружи окна (US-0685) — его браузерная копия тоже:
+ *  иначе окно подняло бы её как свежую работу. */
+export function forgetBuffer(target: DraftTarget): void {
+  clearBuffer(target)
+}
+
 /** Убрать браузерную копию — но только ту, что дошла: за время запроса могла
  *  лечь новая правка, и её стирать нельзя. */
 function clearBuffer(target: DraftTarget, sent?: DraftBody): void {

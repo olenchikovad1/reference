@@ -533,6 +533,13 @@ async def put_draft(
         card = await repo.get(db, reference_id)
         if card is None or card.deleted_at is not None:
             raise NoSuchReference("референса с таким номером нет")
+        # Правками вернулся к версии — черновика нет (US-0685): иначе
+        # «несохранённое» висит там, где ничего не поменялось.
+        base = await repo.version(db, reference_id, base_number) if base_number else None
+        if base is not None and not changes(base.work, work)[0]:
+            await repo.drop_draft(db, reference_id, author_id)
+            await db.commit()
+            return
     await repo.put_draft(db, reference_id, author_id, work, base_number)
 
 
@@ -586,3 +593,127 @@ async def pass_to(db: AsyncSession, reference_id: int, to_id: str, by_id: str | 
 
 async def transfers(db: AsyncSession, reference_id: int):
     return await repo.transfers(db, reference_id)
+
+
+
+# --- Мои черновики (US-0685) -------------------------------------------------
+
+#: До скольких правка считается «похоже на случайное»: задел мышью, пока
+#: листал. Сдвиг и ширина — в сантиметрах по ткани, поворот — в градусах.
+ACCIDENTAL_CM = 1.0
+ACCIDENTAL_DEG = 2.0
+_SIDES = {"front": "перед", "back": "спину"}
+
+
+def _elements(work: dict | None) -> dict[str, dict]:
+    comp = (work or {}).get("composition") or {}
+    return {e["id"]: e for e in comp.get("elements") or [] if e.get("id")}
+
+
+def _label(e: dict) -> str:
+    return f"надпись «{e.get('text')}»" if e.get("kind") == "text" else f"«{e.get('name') or 'принт'}»"
+
+
+def _cm(v: float) -> str:
+    return f"{abs(v):.1f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def changes(base: dict | None, draft: dict | None) -> tuple[list[str], bool]:
+    """Что черновик поменял против версии — словами — и похоже ли это на
+    случайное: ничего не добавлено и не убрано, текст, цвет и обработка те
+    же, а сдвиги, ширина и поворот — мелкие. Сторона, на которую смотрят,
+    и выбранное — не правка."""
+    said: list[str] = []
+    big = False
+    was, now = _elements(base), _elements(draft)
+    for i, e in now.items():
+        if i not in was:
+            said.append(f"добавлен{'а' if e.get('kind') == 'text' else ''} {_label(e)}")
+            big = True
+    for i, e in was.items():
+        if i not in now:
+            said.append(f"убран{'а' if e.get('kind') == 'text' else ''} {_label(e)}")
+            big = True
+    for i, e in now.items():
+        o = was.get(i)
+        if o is None or o == e:
+            continue
+        p, q = o.get("placement") or {}, e.get("placement") or {}
+        name = _label(e)
+        dx = float(q.get("dxCm") or 0) - float(p.get("dxCm") or 0)
+        dy = float(q.get("dyCm") or 0) - float(p.get("dyCm") or 0)
+        moved = []
+        if abs(dx) >= 0.05:
+            moved.append(f"на {_cm(dx)} см {'вправо' if dx > 0 else 'влево'}")
+        if abs(dy) >= 0.05:
+            moved.append(f"на {_cm(dy)} см {'ниже' if dy > 0 else 'выше'}")
+        if q.get("side") != p.get("side"):
+            said.append(f"{name} перенесён на {_SIDES.get(q.get('side'), q.get('side'))}")
+            big = True
+        if moved:
+            said.append(f"{name} сдвинут {', '.join(moved)}")
+            big |= abs(dx) > ACCIDENTAL_CM or abs(dy) > ACCIDENTAL_CM
+        dw = float(q.get("widthCm") or 0) - float(p.get("widthCm") or 0)
+        if abs(dw) >= 0.05:
+            said.append(f"{name} {'шире' if dw > 0 else 'уже'} на {_cm(dw)} см")
+            big |= abs(dw) > ACCIDENTAL_CM
+        dr = float(q.get("rotation") or 0) - float(p.get("rotation") or 0)
+        if abs(dr) >= 0.5:
+            said.append(f"{name} повёрнут на {_cm(dr)}°")
+            big |= abs(dr) > ACCIDENTAL_DEG
+        if e.get("text") != o.get("text"):
+            said.append(f"текст «{o.get('text')}» → «{e.get('text')}»")
+            big = True
+        rest = {k for k in set(e) | set(o) if k not in {"placement", "text"} and e.get(k) != o.get(k)}
+        rest_p = {k for k in set(p) | set(q) if k not in {"dxCm", "dyCm", "widthCm", "rotation", "side"}
+                  and p.get(k) != q.get(k)}
+        if rest or rest_p:
+            said.append(f"{name}: {'обработка' if 'look' in rest else 'другое'} изменено")
+            big = True
+    for key, what in (("colourCode", "цвет"), ("size", "размер")):
+        a, b = (base or {}).get(key), (draft or {}).get(key)
+        if a != b and b is not None:
+            said.append(f"{what} {a or '—'} → {b}")
+            big |= key == "colourCode"
+    # Две одинаковые надписи — одна строка «×2», а не две одинаковых.
+    counts = dict.fromkeys(said, 0)
+    for line in said:
+        counts[line] += 1
+    said = [line if n == 1 else f"{line} ×{n}" for line, n in counts.items()]
+    return said, bool(said) and not big
+
+
+@dataclass(frozen=True)
+class MyDraft:
+    reference_id: int | None
+    name: str
+    base_number: int | None
+    updated_at: datetime
+    changes: list[str]
+    accidental: bool
+
+
+async def my_drafts(db: AsyncSession, author_id: str) -> list[MyDraft]:
+    """Мои черновики — что в каждом поменялось против версии, поверх которой
+    правил. Черновик без отличий — не черновик: в список не идёт."""
+    out = []
+    for d, card in await repo.drafts_of(db, author_id):
+        base = None
+        if card is not None and d.base_number:
+            v = await repo.version(db, card.id, d.base_number)
+            base = v.work if v else None
+        said, accidental = changes(base, d.work)
+        if not said:
+            continue
+        out.append(MyDraft(card.id if card else None, card.name if card else "новая работа", d.base_number,
+                           d.updated_at, said, accidental))
+    return out
+
+
+async def drop_accidental(db: AsyncSession, author_id: str) -> list[int]:
+    """Выбросить все «похоже на случайное» разом. Версии не трогаются."""
+    gone = [m.reference_id for m in await my_drafts(db, author_id) if m.accidental and m.reference_id is not None]
+    for i in gone:
+        await repo.drop_draft(db, i, author_id)
+    await db.commit()
+    return gone
