@@ -1831,24 +1831,6 @@ export function WorkWindow() {
       >
         сравнить цвета
       </button>
-      {current && (
-        <button
-          className={`relative flex h-8 w-8 items-center justify-center rounded-full border ${
-            talkOpen ? 'border-primary bg-primary text-primary-foreground' : 'border-line bg-background'
-          }`}
-          onClick={() => setTalkOpen(!talkOpen)}
-          aria-pressed={talkOpen}
-          aria-label={`обсуждение: ${openRemarks} открытых замечаний${myTurn ? ', ваш ход' : ''}`}
-          title="Согласование, замечания, исполнитель — открыть или скрыть (Esc скрывает)"
-        >
-          <span aria-hidden>💬</span>
-          {openRemarks + (myTurn ? 1 : 0) > 0 && (
-            <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-destructive px-1 text-[10px] font-bold leading-4 text-white">
-              {openRemarks + (myTurn ? 1 : 0)}
-            </span>
-          )}
-        </button>
-      )}
       {/* Клавишу «?» разбирает само окно — подсказка её не слушает. */}
       <HotkeysHint rows={WINDOW_KEYS} label="Клавиши окна" open={helpOpen} onOpenChange={setHelpOpen} listen={false} />
       <button className={small()} onClick={close} title="Закрыть — Esc, когда ничего не выбрано" aria-label="закрыть окно">
@@ -2539,7 +2521,34 @@ export function WorkWindow() {
           )}
 
           {/* Виды — иконками изделия с принтом: что лежит на спине, видно до нажатия. */}
-          <div className="absolute right-3 top-3 flex gap-2" aria-label="виды изделия">
+          <div className="absolute right-3 top-3 flex items-end gap-2" aria-label="виды изделия">
+            {/* Согласование — левее видов (владелец 29.09): крупная белая
+                галочка на зелёном, как обычно рисуют согласование. Число —
+                открытые замечания и мой ход. */}
+            {current && (
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="text-[11px] text-muted-foreground">Согласование</span>
+                <button
+                  className={`relative flex h-14 w-14 items-center justify-center rounded-full shadow ${
+                    talkOpen ? 'ring-4 ring-success/40' : ''
+                  }`}
+                  style={{ background: 'var(--success)' }}
+                  onClick={() => setTalkOpen(!talkOpen)}
+                  aria-pressed={talkOpen}
+                  aria-label={`согласование: ${openRemarks} открытых замечаний${myTurn ? ', ваш ход' : ''}`}
+                  title="Согласование, замечания, исполнитель — открыть или скрыть (Esc скрывает)"
+                >
+                  <svg viewBox="0 0 24 24" className="h-8 w-8" aria-hidden fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
+                  {openRemarks + (myTurn ? 1 : 0) > 0 && (
+                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-destructive px-1 text-xs font-bold leading-5 text-white">
+                      {openRemarks + (myTurn ? 1 : 0)}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
             {product.states.map((s, i) => (
               <div key={s.code} className="flex flex-col items-center gap-0.5">
               {/* Подпись над иконкой: по картинке перед от спины отличают не все,
