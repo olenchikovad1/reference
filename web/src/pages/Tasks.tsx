@@ -3,11 +3,12 @@
 // «ответственный»: кто первым из редакторов решил — у остальных задача
 // пропадает сама.
 
-import { EmptyState, Hint, PageHeader, Tabs } from '@platform/ui'
+import { EmptyState, PageHeader, Tabs } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
+import { DropFilterBar } from '../candidates/DropFilter'
 import { ReferenceCard } from '../candidates/ReferenceCard'
 import { meaningClass } from '../candidates/meaning'
 import {
@@ -15,17 +16,17 @@ import {
   dropDraft,
   fetchMyDrafts,
   fetchTasks,
-  closeMeeting,
   fetchAgenda,
-  type AgendaEvent,
   listReferences,
   STATUS_NAMES,
   type Card,
+  type AgendaItem,
   type MyDraft,
   type Task,
 } from '../shared/api/references'
 import { prefetchCard, rememberDraft } from '../shared/cardCache'
 import { forgetBuffer } from '../shared/draftWriter'
+import { passes, useDropFilter } from '../shared/filters'
 
 type TabId = 'mine' | 'waiting' | 'drafts' | 'agenda'
 
@@ -36,10 +37,8 @@ type TabId = 'mine' | 'waiting' | 'drafts' | 'agenda'
 export function Tasks() {
   const tasks = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks, refetchInterval: 15_000 })
   const drafts = useQuery({ queryKey: ['my-drafts'], queryFn: fetchMyDrafts, refetchOnWindowFocus: true })
-  const agenda = useQuery({ queryKey: ['agenda-page', null], queryFn: () => fetchAgenda(null) })
-  const agendaCount = agenda.data
-    ? agenda.data.proposed.length + agenda.data.approved.length + agenda.data.rework.length + agenda.data.rejected.length + agenda.data.undone.length
-    : undefined
+  const agenda = useQuery({ queryKey: ['agenda-page'], queryFn: fetchAgenda })
+  const agendaCount = agenda.data?.length
   const [params, setParams] = useSearchParams()
   const counts = { mine: tasks.data?.mine.length, waiting: tasks.data?.waiting.length, drafts: drafts.data?.length, agenda: agendaCount }
   const asked = params.get('tab') as TabId | null
@@ -204,107 +203,59 @@ function DraftCard({ d, card, onOpen, onDrop }: { d: MyDraft; card?: Card; onOpe
   )
 }
 
-/** Повестка встречи (план 097): с прошлой встречи — выдвинутое на
- *  обсуждение первым, затем решения из пути по версиям. «Встреча прошла» —
- *  выдвинутое обсуждено, следующая повестка начинается с этого момента.
- *  Прошлые встречи — как было на каждой (?meeting=N в адресе). */
+/** Повестка (план 098): витрина того, что требует обсуждения, — по дропам,
+ *  с поводами на карточках, с теми же отборами, что на витрине. Встреч в
+ *  приложении нет (владелец: они идут в телемосте); с повестки референс
+ *  уходит решением по нему или «снять с обсуждения». */
 function AgendaTab() {
-  const queries = useQueryClient()
-  const [params, setParams] = useSearchParams()
-  const meeting = params.get('meeting') ? Number(params.get('meeting')) : null
-  const agenda = useQuery({ queryKey: ['agenda-page', meeting], queryFn: () => fetchAgenda(meeting) })
+  const agenda = useQuery({ queryKey: ['agenda-page'], queryFn: fetchAgenda })
   const cards = useCards()
   const open = useOpen()
-  const [error, setError] = useState<string | null>(null)
-  const when = (at: string) => new Date(at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-  const pick = (id: number | null) =>
-    setParams((p) => {
-      const next = Object.fromEntries(p)
-      if (id) next.meeting = String(id)
-      else delete next.meeting
-      return next
-    }, { replace: true })
-  const a = agenda.data
+  const drop = useDropFilter()
   if (agenda.isError) return <p className="text-sm text-destructive">{(agenda.error as Error).message}</p>
-  if (!a) return <p className="text-sm text-muted-foreground">Собираю повестку…</p>
-  const events = (title: string, rows: AgendaEvent[], verb: string) =>
-    rows.length > 0 && (
-      <section className="mb-4">
-        <h2 className="mb-1 text-sm font-semibold">{title} · {rows.length}</h2>
-        <Grid>
-          {rows.map((e, i) => {
-            const card = cards.get(e.reference_id)
-            const note = [{ text: `${verb}: ${e.by_name ?? 'без входа'}, ${when(e.at)}` }, ...(e.comment ? [{ text: `«${e.comment}»`, tone: 'warning' as const }] : [])]
-            return card ? (
-              <div key={`${e.reference_id}-${i}`} className="grid h-64 min-w-0">
-                <ReferenceCard card={card} note={note} onOpen={() => open(e.reference_id)} onHover={open.warm(e.reference_id)} />
-              </div>
-            ) : null
-          })}
-        </Grid>
-      </section>
+  if (!agenda.data) return <p className="text-sm text-muted-foreground">Собираю повестку…</p>
+  const when = (at: string) => new Date(at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  const rows = agenda.data
+    .map((item) => ({ item, card: cards.get(item.reference_id) }))
+    .filter((r): r is { item: AgendaItem; card: Card } => !!r.card)
+    .filter(({ card }) =>
+      passes(
+        { drops: card.drop_ids, audiences: card.audience ? [card.audience] : [], categories: card.category ? [card.category] : [] },
+        drop.filter,
+      ),
     )
-  const empty = a.proposed.length + a.approved.length + a.rework.length + a.rejected.length + a.undone.length === 0
+  // По дропам: референс, чья цветомодель выходит в нескольких, — в каждом.
+  const groups = new Map<string, typeof rows>()
+  for (const r of rows) for (const d of r.card.drops.length ? r.card.drops : ['без дропа']) groups.set(d, [...(groups.get(d) ?? []), r])
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted-foreground">
-          {a.meeting
-            ? `встреча ${when(a.meeting.held_at)}${a.meeting.by_name ? ` · закрыл ${a.meeting.by_name}` : ''}`
-            : a.since
-              ? `с прошлой встречи — ${when(a.since)}`
-              : 'встреч ещё не было — всё с начала'}
-        </span>
-        {!a.meeting && (
-          <Hint text="Выдвинутое станет обсуждённым и снимется с карточек; следующая повестка начнётся с этого момента">
-            <button
-              className={meaningClass('act', true, true)}
-              onClick={() =>
-                void closeMeeting()
-                  .then(() => {
-                    setError(null)
-                    void queries.invalidateQueries({ queryKey: ['agenda-page'] })
-                    void queries.invalidateQueries({ queryKey: ['references'] })
-                  })
-                  .catch((e: Error) => setError(e.message))
-              }
-            >
-              встреча прошла
-            </button>
-          </Hint>
-        )}
-        {a.meetings.length > 0 && <span className="ml-2 text-xs text-muted-foreground">прошлые встречи:</span>}
-        <button className={meaningClass('quiet', true, true)} aria-pressed={meeting === null} onClick={() => pick(null)}>
-          текущая
-        </button>
-        {a.meetings.slice(0, 8).map((m) => (
-          <button key={m.id} className={meaningClass('quiet', true, true)} aria-pressed={meeting === m.id} onClick={() => pick(m.id)}>
-            {when(m.held_at)}
-          </button>
-        ))}
-      </div>
-      {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
-      {empty && <EmptyState title="Пусто" description={a.meeting ? 'На этой встрече обсуждать было нечего.' : 'С прошлой встречи ничего не выдвинули и не решили.'} />}
-      {a.proposed.length > 0 && (
-        <section className="mb-4">
-          <h2 className="mb-1 text-sm font-semibold">Выдвинуто на обсуждение · {a.proposed.length}</h2>
+      <DropFilterBar {...drop} />
+      {rows.length === 0 && (
+        <EmptyState
+          title="Обсуждать нечего"
+          description="На повестку выдвигают из окна референса: «статус» → «выдвинуть на обсуждение», с поводом."
+        />
+      )}
+      {[...groups.entries()].map(([name, list]) => (
+        <section key={name} className="mb-4">
+          <h2 className="mb-1 text-sm font-semibold">
+            {name} · {list.length}
+          </h2>
           <Grid>
-            {a.proposed.map((p) => {
-              const card = cards.get(p.reference_id)
-              const note = p.reasons.map((r) => ({ text: `${r.by_name ?? 'без входа'}: ${r.reason}`, tone: 'warning' as const }))
-              return card ? (
-                <div key={p.reference_id} className="grid h-64 min-w-0">
-                  <ReferenceCard card={card} note={note} onOpen={() => open(p.reference_id)} onHover={open.warm(p.reference_id)} />
-                </div>
-              ) : null
-            })}
+            {list.map(({ item, card }) => (
+              <div key={item.reference_id} className="grid h-64 min-w-0">
+                <ReferenceCard
+                  // Повод — полной строкой ниже (кто, когда, что), без краткой метки карточки.
+                  card={{ ...card, agenda: [] }}
+                  note={item.reasons.map((r) => ({ text: `${r.by_name ?? 'без входа'}, ${when(r.at)}: ${r.reason}`, tone: 'warning' as const }))}
+                  onOpen={() => open(item.reference_id)}
+                  onHover={open.warm(item.reference_id)}
+                />
+              </div>
+            ))}
           </Grid>
         </section>
-      )}
-      {events('Согласовано', a.approved, 'согласовал')}
-      {events('На доработку', a.rework, 'вернул')}
-      {events('Забраковано', a.rejected, 'забраковал')}
-      {events('Отозвано и отменено', a.undone, 'отменил')}
+      ))}
     </div>
   )
 }

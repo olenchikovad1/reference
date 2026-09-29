@@ -17,22 +17,17 @@ async def test_propose_for_discussion_marks_the_card_without_changing_status(cli
     assert card["agenda"] == [], "снято вручную"
 
 
-async def test_agenda_since_last_meeting_and_meeting_closes_it(client) -> None:
-    liked, returned, talk = [await new_reference(client) for _ in range(3)]
-    await client.post(f"{API}/references/{liked}/approve", headers=as_(PETROV))
-    await client.post(f"{API}/references/{returned}/return", headers=as_(PETROV), json={"comment": "ракету меньше"})
-    await client.post(f"{API}/references/{talk}/agenda", headers=as_(PETROV), json={"reason": "спорный сюжет"})
 
+async def test_agenda_lists_what_needs_discussion_until_decided(client) -> None:
+    """План 098: повестка — выдвинутое на обсуждение; решили — ушло с неё.
+    Встреч в приложении нет."""
+    one, two = await new_reference(client), await new_reference(client)
+    await client.post(f"{API}/references/{one}/agenda", headers=as_(PETROV), json={"reason": "спорный сюжет"})
+    await client.post(f"{API}/references/{two}/agenda", headers=as_(IVANOVA), json={"reason": "цвет под вопросом"})
     a = (await client.get(f"{API}/agenda")).json()
-    assert [p["reference_id"] for p in a["proposed"]] == [talk]
-    assert [e["reference_id"] for e in a["approved"]] == [liked]
-    assert [(e["reference_id"], e["comment"]) for e in a["rework"]] == [(returned, "ракету меньше")]
+    assert sorted(p["reference_id"] for p in a) == sorted([one, two])
+    assert next(p for p in a if p["reference_id"] == one)["reasons"][0]["reason"] == "спорный сюжет"
 
-    assert (await client.post(f"{API}/agenda/meetings", headers=as_(IVANOVA))).status_code == 403, "закрывает редактор"
-    after = (await client.post(f"{API}/agenda/meetings", headers=as_(CHIEF))).json()
-    assert (after["proposed"], after["approved"], after["rework"]) == ([], [], []), "новая повестка пуста"
-    m = after["meetings"][0]["id"]
-    past = (await client.get(f"{API}/agenda?meeting={m}")).json()
-    assert [p["reference_id"] for p in past["proposed"]] == [talk] and [e["reference_id"] for e in past["approved"]] == [liked]
-    card = next(c for c in (await client.get(f"{API}/references")).json() if c["id"] == talk)
-    assert card["agenda"] == [], "обсуждённое снято"
+    assert (await client.post(f"{API}/references/{one}/approve", headers=as_(PETROV))).status_code == 200
+    assert [p["reference_id"] for p in (await client.get(f"{API}/agenda")).json()] == [two], "решили — ушло с повестки"
+    assert (await client.post(f"{API}/agenda/meetings", headers=as_(CHIEF))).status_code in (404, 405), "встреч нет"

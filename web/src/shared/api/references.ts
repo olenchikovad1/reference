@@ -551,42 +551,11 @@ export async function unpropose(id: number): Promise<void> {
   if (!r.ok) throw await refusal(r, 'не снят')
 }
 
-/** Решение из пути по версиям — для повестки (план 097). */
-export interface AgendaEvent {
+/** Повестка (план 098): выдвинутое на обсуждение и поводы — пока по
+ *  референсу не решили и не сняли вручную. Встреч в приложении нет. */
+export interface AgendaItem {
   reference_id: number
-  from: Status
-  to: Status
-  number: number
-  by_name: string | null
-  comment: string | null
-  at: string
+  reasons: AgendaReason[]
 }
 
-export interface Meeting {
-  id: number
-  held_at: string
-  by_name: string | null
-}
-
-/** Повестка: с прошлой встречи или как было на встрече `meeting`. */
-export interface Agenda {
-  meeting: Meeting | null
-  since: string | null
-  until: string | null
-  proposed: { reference_id: number; reasons: AgendaReason[] }[]
-  approved: AgendaEvent[]
-  rework: AgendaEvent[]
-  rejected: AgendaEvent[]
-  undone: AgendaEvent[]
-  meetings: Meeting[]
-}
-
-export const fetchAgenda = (meeting?: number | null) =>
-  get<Agenda>(`agenda${meeting ? `?meeting=${meeting}` : ''}`, 'Повестка')
-
-/** «Встреча прошла»: выдвинутое — обсуждено, повестка — с этого момента. */
-export async function closeMeeting(): Promise<Agenda> {
-  const r = await fetch(`${BASE}agenda/meetings`, { method: 'POST' })
-  if (!r.ok) throw await refusal(r, 'встреча не закрыта')
-  return r.json()
-}
+export const fetchAgenda = () => get<AgendaItem[]>('agenda', 'Повестка')

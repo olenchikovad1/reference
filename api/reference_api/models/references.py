@@ -363,21 +363,11 @@ class ReferenceRemarkMessage(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
-class ReferenceMeeting(Base):
-    """Встреча по согласованию (план 097): закрывается кнопкой «встреча
-    прошла». Повестка следующей начинается с её момента."""
-
-    __tablename__ = "reference_meetings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    held_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-
-
 class ReferenceAgendaItem(Base):
-    """Выдвинут на обсуждение (план 097): повод, кто и когда. Не статус —
-    решение остаётся в переходах; метка снимается встречей (meeting_id) или
-    вручную (removed_at). Выдвинуть второй раз — ещё один повод к тому же."""
+    """Выдвинут на обсуждение (план 097, 098): повод, кто и когда. Не статус —
+    решение остаётся в переходах. С повестки уходит решением по референсу
+    (шаг статуса) или вручную — чем именно, в resolution. Выдвинуть второй
+    раз — ещё один повод к тому же."""
 
     __tablename__ = "reference_agenda_items"
 
@@ -386,7 +376,8 @@ class ReferenceAgendaItem(Base):
     reason: Mapped[str] = mapped_column(String(2000), nullable=False)
     by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    #: Встреча, на которой обсуждено; пусто — ещё на повестке.
-    meeting_id: Mapped[int | None] = mapped_column(ForeignKey("reference_meetings.id"), nullable=True)
+    #: Ушло с повестки; пусто — ещё на ней.
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     removed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Чем закрыто: шаг статуса (approve, return, reject…) или manual.
+    resolution: Mapped[str | None] = mapped_column(String(16), nullable=True)

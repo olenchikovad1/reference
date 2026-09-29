@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from reference_api.models.references import (
     Reference,
     ReferenceAgendaItem,
-    ReferenceMeeting,
     ReferenceRemark,
     ReferenceRemarkMessage,
     ReferenceStatusEvent,
@@ -162,7 +161,7 @@ async def set_text(db: AsyncSession, remark_id: int, text: str) -> None:
 
 # --- Повестка (план 097) --------------------------------------------------
 
-_OPEN = (ReferenceAgendaItem.meeting_id.is_(None)) & (ReferenceAgendaItem.removed_at.is_(None))
+_OPEN = ReferenceAgendaItem.removed_at.is_(None)
 
 
 async def propose(db: AsyncSession, reference_id: int, reason: str, by_id: str | None) -> None:
@@ -170,11 +169,12 @@ async def propose(db: AsyncSession, reference_id: int, reason: str, by_id: str |
     await db.commit()
 
 
-async def unpropose(db: AsyncSession, reference_id: int, by_id: str | None) -> int:
+async def unpropose(db: AsyncSession, reference_id: int, by_id: str | None, resolution: str = "manual") -> int:
+    """Убрать с повестки: вручную или решением (шаг статуса)."""
     from sqlalchemy import func
 
     r = await db.execute(update(ReferenceAgendaItem).where(ReferenceAgendaItem.reference_id == reference_id, _OPEN)
-                         .values(removed_at=func.now(), removed_by=by_id))
+                         .values(removed_at=func.now(), removed_by=by_id, resolution=resolution))
     await db.commit()
     return r.rowcount
 
@@ -191,37 +191,3 @@ async def open_agenda(db: AsyncSession, ids: list[int] | None = None) -> dict[in
         out.setdefault(item.reference_id, []).append(item)
     return out
 
-
-async def meetings(db: AsyncSession) -> list[ReferenceMeeting]:
-    """Встречи, последняя первой."""
-    return list((await db.execute(select(ReferenceMeeting).order_by(ReferenceMeeting.held_at.desc(),
-                                                                    ReferenceMeeting.id.desc()))).scalars())
-
-
-async def events_between(db: AsyncSession, since, until) -> list[ReferenceStatusEvent]:
-    q = select(ReferenceStatusEvent)
-    if since is not None:
-        q = q.where(ReferenceStatusEvent.at > since)
-    if until is not None:
-        q = q.where(ReferenceStatusEvent.at <= until)
-    return list((await db.execute(q.order_by(ReferenceStatusEvent.at.desc(), ReferenceStatusEvent.id.desc()))).scalars())
-
-
-async def items_of_meeting(db: AsyncSession, meeting_id: int) -> dict[int, list[ReferenceAgendaItem]]:
-    out: dict[int, list[ReferenceAgendaItem]] = {}
-    rows = await db.execute(select(ReferenceAgendaItem).where(ReferenceAgendaItem.meeting_id == meeting_id)
-                            .order_by(ReferenceAgendaItem.at))
-    for item in rows.scalars():
-        out.setdefault(item.reference_id, []).append(item)
-    return out
-
-
-async def close_meeting(db: AsyncSession, by_id: str | None) -> ReferenceMeeting:
-    """Встреча прошла: всё выдвинутое — обсуждено на ней, одной транзакцией."""
-    m = ReferenceMeeting(by_id=by_id)
-    db.add(m)
-    await db.flush()
-    await db.execute(update(ReferenceAgendaItem).where(_OPEN).values(meeting_id=m.id))
-    await db.commit()
-    await db.refresh(m)
-    return m
