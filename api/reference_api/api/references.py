@@ -20,6 +20,8 @@ from reference_api.schemas.references import (
     RemarkOut,
     MyDraftOut,
     RemarkTextIn,
+    AgendaReasonOut,
+    ProposeIn,
     StatusEventOut,
     CommentIn,
     TaskOut,
@@ -198,6 +200,7 @@ async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[Card
     models = await drops.colour_models_of(db, [c.colour_model_id for c, _ in rows if c.colour_model_id])
     origins = await service.origins(db, [c for c, _ in rows])
     executors = await people.members_of(db, [c.executor_id for c, _ in rows if c.executor_id])
+    agenda = await review.agenda_of(db, [c.id for c, _ in rows])
     out = []
     for c, v in rows:
         cm = models.get(c.colour_model_id) if c.colour_model_id else None
@@ -214,6 +217,7 @@ async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[Card
             executor=_executor(executors.get(c.executor_id or "")),
             mine=viewer is not None and c.executor_id == viewer,
             status=c.status,
+            agenda=[i.reason for i in agenda.get(c.id, [])],
         ))
     return out
 
@@ -614,3 +618,39 @@ async def reject(reference_id: int, body: CommentIn, request: Request, db: Async
 async def revive(reference_id: int, body: CommentIn, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
     """Вернуть забракованный в работу — главный редактор, с причиной (план 094)."""
     return await _step(reference_id, "revive", request, db, body.comment)
+
+
+
+async def _agenda(db: AsyncSession, reference_id: int) -> list[AgendaReasonOut]:
+    items = (await review.agenda_of(db, [reference_id])).get(reference_id, [])
+    who = await people.names_of(db, [i.by_id for i in items if i.by_id])
+    return [AgendaReasonOut(reason=i.reason, by_id=i.by_id, by_name=who.get(i.by_id or ""), at=i.at) for i in items]
+
+
+@router.get("/{reference_id}/agenda", response_model=list[AgendaReasonOut], dependencies=[requires("references", Action.VIEW)])
+async def agenda(reference_id: int, db: AsyncSession = Depends(session)) -> list[AgendaReasonOut]:
+    """Поводы обсудить этот референс — пока встреча не прошла (план 097)."""
+    return await _agenda(db, reference_id)
+
+
+# Право — просмотр согласования: выдвинуть может любой участник, и дизайнер
+# тоже; кто участник — решают роли в согласовании (решение 0016).
+@router.post("/{reference_id}/agenda", response_model=list[AgendaReasonOut], dependencies=[requires("review", Action.VIEW)])
+async def propose(reference_id: int, body: ProposeIn, request: Request, db: AsyncSession = Depends(session)) -> list[AgendaReasonOut]:
+    """Выдвинуть на обсуждение с поводом (план 097). Статус не меняется."""
+    try:
+        await review.propose(db, reference_id, _author(request), body.reason)
+    except (review.NoSuchReference, review.NotYourStep) as e:
+        raise _refused(e) from None
+    except review.NoComment as e:
+        raise HTTPException(422, str(e)) from None
+    return await _agenda(db, reference_id)
+
+
+@router.delete("/{reference_id}/agenda", status_code=204, dependencies=[requires("review", Action.VIEW)])
+async def unpropose(reference_id: int, request: Request, db: AsyncSession = Depends(session)) -> None:
+    """Снять с обсуждения вручную (план 097)."""
+    try:
+        await review.unpropose(db, reference_id, _author(request))
+    except (review.NoSuchReference, review.NotYourStep) as e:
+        raise _refused(e) from None

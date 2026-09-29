@@ -171,6 +171,8 @@ class CardOut(Saver):
     others_drafts: list[str] = []
     #: Место в личном порядке смотрящего (US-0601); пусто — не расставлена.
     my_position: int | None = None
+    #: Выдвинут на обсуждение (план 097) — поводы, пока встреча не прошла.
+    agenda: list[str] = []
 
 
 class OrderIn(BaseModel):
@@ -342,3 +344,16 @@ class MyDraftOut(BaseModel):
     updated_at: datetime
     changes: list[str]
     accidental: bool
+
+
+class AgendaReasonOut(BaseModel):
+    """Повод обсудить (план 097): что, кто, когда."""
+
+    reason: str
+    by_id: str | None
+    by_name: str | None
+    at: datetime
+
+
+class ProposeIn(BaseModel):
+    reason: str

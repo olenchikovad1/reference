@@ -32,7 +32,8 @@ export const ReferenceCard = memo(
     !a.onTrash === !b.onTrash &&
     !a.onErase === !b.onErase &&
     !a.onDiscard === !b.onDiscard &&
-    a.note === b.note,
+    a.note === b.note &&
+    a.card.agenda === b.card.agenda,
   // Обработчики не сравниваются: они зовут свежие функции через ref (live).
 )
 
@@ -137,6 +138,11 @@ function ReferenceCardView({
             {[card.my_draft && 'мой черновик', card.others_drafts?.length && `несохранённое у: ${card.others_drafts.join(', ')}`]
               .filter(Boolean)
               .join(' · ')}
+          </div>
+        )}
+        {(card.agenda?.length ?? 0) > 0 && (
+          <div className="truncate font-semibold text-warning" title={card.agenda!.join('; ')}>
+            на обсуждении: {card.agenda![card.agenda!.length - 1]}
           </div>
         )}
         {note?.map((n) => (

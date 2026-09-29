@@ -387,3 +387,34 @@ async def edit_text(db: AsyncSession, reference_id: int, remark_id: int, who: st
     if not body:
         raise BadRemark("пустой текст")
     await repo.set_text(db, remark_id, body)
+
+
+# --- Выдвинуть на обсуждение (план 097) -----------------------------------
+
+
+async def propose(db: AsyncSession, reference_id: int, who: str | None, reason: str) -> None:
+    """Выдвинуть на обсуждение — любой участник согласования, с поводом.
+    Статус не меняется: это не решение, а «давайте обсудим»."""
+    card = await cards.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    if not await _roles(db, card, who):
+        raise NotYourStep("выдвигает на обсуждение участник согласования")
+    body = " ".join((reason or "").split())
+    if not body:
+        raise NoComment("скажите, что обсудить — без повода на встрече не поймут, зачем он здесь")
+    await repo.propose(db, reference_id, body, who)
+
+
+async def unpropose(db: AsyncSession, reference_id: int, who: str | None) -> None:
+    """Снять с обсуждения вручную — участник согласования."""
+    card = await cards.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    if not await _roles(db, card, who):
+        raise NotYourStep("снимает с обсуждения участник согласования")
+    await repo.unpropose(db, reference_id, who)
+
+
+async def agenda_of(db: AsyncSession, ids: list[int] | None = None):
+    return await repo.open_agenda(db, ids)

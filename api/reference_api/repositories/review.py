@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.models.references import (
     Reference,
+    ReferenceAgendaItem,
+    ReferenceMeeting,
     ReferenceRemark,
     ReferenceRemarkMessage,
     ReferenceStatusEvent,
@@ -156,3 +158,35 @@ async def voice_waiting(db: AsyncSession) -> list[int]:
 async def set_text(db: AsyncSession, remark_id: int, text: str) -> None:
     await db.execute(update(ReferenceRemark).where(ReferenceRemark.id == remark_id).values(text=text))
     await db.commit()
+
+
+# --- Повестка (план 097) --------------------------------------------------
+
+_OPEN = (ReferenceAgendaItem.meeting_id.is_(None)) & (ReferenceAgendaItem.removed_at.is_(None))
+
+
+async def propose(db: AsyncSession, reference_id: int, reason: str, by_id: str | None) -> None:
+    db.add(ReferenceAgendaItem(reference_id=reference_id, reason=reason, by_id=by_id))
+    await db.commit()
+
+
+async def unpropose(db: AsyncSession, reference_id: int, by_id: str | None) -> int:
+    from sqlalchemy import func
+
+    r = await db.execute(update(ReferenceAgendaItem).where(ReferenceAgendaItem.reference_id == reference_id, _OPEN)
+                         .values(removed_at=func.now(), removed_by=by_id))
+    await db.commit()
+    return r.rowcount
+
+
+async def open_agenda(db: AsyncSession, ids: list[int] | None = None) -> dict[int, list[ReferenceAgendaItem]]:
+    """Открытые поводы по карточкам; ids — только этих."""
+    q = select(ReferenceAgendaItem).where(_OPEN)
+    if ids is not None:
+        if not ids:
+            return {}
+        q = q.where(ReferenceAgendaItem.reference_id.in_(ids))
+    out: dict[int, list[ReferenceAgendaItem]] = {}
+    for item in (await db.execute(q.order_by(ReferenceAgendaItem.at))).scalars():
+        out.setdefault(item.reference_id, []).append(item)
+    return out

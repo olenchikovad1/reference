@@ -107,6 +107,8 @@ export interface Card extends Saver {
   mine?: boolean
   /** Статус согласования (US-0510). */
   status?: Status
+  /** Выдвинут на обсуждение (план 097) — поводы, пока встреча не прошла. */
+  agenda?: string[]
 }
 
 export type Status = 'draft' | 'review' | 'rework' | 'approved' | 'final' | 'rejected'
@@ -521,4 +523,30 @@ export async function dropAccidental(): Promise<number[]> {
   const r = await fetch(`${BASE}references/drafts/accidental`, { method: 'DELETE' })
   if (!r.ok) throw await refusal(r, 'Черновики')
   return r.json()
+}
+
+/** Повод обсудить (план 097). */
+export interface AgendaReason {
+  reason: string
+  by_id: string | null
+  by_name: string | null
+  at: string
+}
+
+export const fetchAgendaOf = (id: number) => get<AgendaReason[]>(`references/${id}/agenda`, 'Обсуждение')
+
+/** Выдвинуть на обсуждение — с поводом; статус не меняется. */
+export async function propose(id: number, reason: string): Promise<AgendaReason[]> {
+  const r = await fetch(`${BASE}references/${id}/agenda`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
+  if (!r.ok) throw await refusal(r, 'не выдвинут')
+  return r.json()
+}
+
+export async function unpropose(id: number): Promise<void> {
+  const r = await fetch(`${BASE}references/${id}/agenda`, { method: 'DELETE' })
+  if (!r.ok) throw await refusal(r, 'не снят')
 }

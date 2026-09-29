@@ -361,3 +361,32 @@ class ReferenceRemarkMessage(Base):
     #: Номер последней версии в момент сообщения.
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ReferenceMeeting(Base):
+    """Встреча по согласованию (план 097): закрывается кнопкой «встреча
+    прошла». Повестка следующей начинается с её момента."""
+
+    __tablename__ = "reference_meetings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    held_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class ReferenceAgendaItem(Base):
+    """Выдвинут на обсуждение (план 097): повод, кто и когда. Не статус —
+    решение остаётся в переходах; метка снимается встречей (meeting_id) или
+    вручную (removed_at). Выдвинуть второй раз — ещё один повод к тому же."""
+
+    __tablename__ = "reference_agenda_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reference_id: Mapped[int] = mapped_column(ForeignKey("reference_cards.id", ondelete="CASCADE"), nullable=False)
+    reason: Mapped[str] = mapped_column(String(2000), nullable=False)
+    by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    #: Встреча, на которой обсуждено; пусто — ещё на повестке.
+    meeting_id: Mapped[int | None] = mapped_column(ForeignKey("reference_meetings.id"), nullable=True)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    removed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)

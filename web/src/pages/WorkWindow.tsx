@@ -54,6 +54,9 @@ import {
   STATUS_NAMES,
   STEP_ASKS,
   moveToDrop,
+  fetchAgendaOf,
+  propose as proposeForDiscussion,
+  unpropose as unproposeDiscussion,
   STEP_NAMES,
   SAY_NAMES,
   addVoiceRemark,
@@ -3504,8 +3507,16 @@ function DecisionBar(props: {
   const { card } = props
   const canFinal = useCan(CODE, 'review', 'approve-final')
   const drops = useQuery({ queryKey: ['drops'], queryFn: fetchDrops, staleTime: 60_000 })
-  const [asking, setAsking] = useState<Step | null>(null)
+  const [asking, setAsking] = useState<Step | 'propose' | null>(null)
   const [comment, setComment] = useState('')
+  const queries = useQueryClient()
+  const agenda = useQuery({ queryKey: ['agenda', card.id], queryFn: () => fetchAgendaOf(card.id) })
+  const onAgenda = (agenda.data ?? []).length > 0
+  const agendaChanged = () => {
+    void queries.invalidateQueries({ queryKey: ['agenda', card.id] })
+    void queries.invalidateQueries({ queryKey: ['references'] })
+    void queries.invalidateQueries({ queryKey: ['agenda-page'] })
+  }
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [menu, setMenu] = useState(false)
@@ -3527,8 +3538,20 @@ function DecisionBar(props: {
     /not found/i.test(e.message)
       ? 'на это нет права в платформе — его выдают в «Доступах» платформы (набор «Суперредактор» или функция раздела «Согласование»)'
       : e.message
-  const act = (what: Step) => {
+  const act = (what: Step | 'propose') => {
     setBusy(true)
+    if (what === 'propose') {
+      void proposeForDiscussion(card.id, comment)
+        .then(() => {
+          setComment('')
+          setAsking(null)
+          setError(null)
+          agendaChanged()
+        })
+        .catch((e: Error) => setError(said(e)))
+        .finally(() => setBusy(false))
+      return
+    }
     void reviewStep(card.id, what, comment)
       .then(() => openReference(card.id))
       .then((fresh) => {
@@ -3570,10 +3593,10 @@ function DecisionBar(props: {
       {asking && (
         <div className="pf-card flex items-center gap-1 border border-line bg-background p-1">
           <TextInput
-            aria-label={STEP_ASKS[asking]}
+            aria-label={asking === 'propose' ? 'что обсудить' : STEP_ASKS[asking]}
             autoFocus
             value={comment}
-            placeholder={`${STEP_ASKS[asking]} — без этого «${STEP_NAMES[asking]}» нельзя`}
+            placeholder={asking === 'propose' ? 'что обсудить на встрече' : `${STEP_ASKS[asking]} — без этого «${STEP_NAMES[asking]}» нельзя`}
             onChange={(e) => setComment(e.target.value)}
             onKeyDown={(e) => {
               e.stopPropagation()
@@ -3581,8 +3604,8 @@ function DecisionBar(props: {
               if (e.key === 'Escape') setAsking(null)
             }}
           />
-          <button className={meaningClass(STEP_MEANING[asking], false, true)} disabled={!comment.trim() || busy} onClick={() => act(asking)}>
-            {STEP_NAMES[asking]}
+          <button className={meaningClass(asking === 'propose' ? 'act' : STEP_MEANING[asking], false, true)} disabled={!comment.trim() || busy} onClick={() => act(asking)}>
+            {asking === 'propose' ? 'выдвинуть' : STEP_NAMES[asking]}
           </button>
           <button className={meaningClass('quiet', false, true)} onClick={() => setAsking(null)}>
             отмена
@@ -3591,6 +3614,11 @@ function DecisionBar(props: {
       )}
       <div className="pf-card relative flex items-center gap-2 border border-line bg-background/95 p-2 shadow" aria-label="решения по референсу">
         <span className="px-1 text-xs text-muted-foreground">{STATUS_NAMES[status]}</span>
+        {onAgenda && (
+          <Hint text={(agenda.data ?? []).map((a) => `${a.by_name ?? 'без входа'}: ${a.reason}`).join(' · ')}>
+            <span className="rounded bg-warning/15 px-1.5 py-0.5 text-xs font-semibold text-warning">на обсуждении</span>
+          </Hint>
+        )}
         {(like || liked) && (
           <Hint text={like ? STEP_HINTS[like] : 'Уже согласован'}>
             <button
@@ -3636,6 +3664,25 @@ function DecisionBar(props: {
               <Hint text="Написать замечание к референсу — текстом или голосом; исполнитель увидит его в обсуждении" side="left">
                 <button className={meaningClass('act', true, true)} onClick={() => (setMenu(false), props.onRemark())}>
                   замечание
+                </button>
+              </Hint>
+            )}
+            <Hint text={onAgenda ? 'Добавить ещё повод к обсуждению этого референса на встрече' : 'Вынести на встречу: попадёт в повестку с поводом; статус не меняется'} side="left">
+              <button className={meaningClass('act', true, true)} onClick={() => (setMenu(false), setAsking('propose'), setComment(''))}>
+                {onAgenda ? 'ещё повод обсудить' : 'выдвинуть на обсуждение'}
+              </button>
+            </Hint>
+            {onAgenda && (
+              <Hint text="Убрать из повестки — обсуждать не нужно" side="left">
+                <button
+                  className={meaningClass('withdraw', true, true)}
+                  onClick={() =>
+                    void unproposeDiscussion(card.id)
+                      .then(() => (setMenu(false), agendaChanged()))
+                      .catch((e: Error) => setError(said(e)))
+                  }
+                >
+                  снять с обсуждения
                 </button>
               </Hint>
             )}
