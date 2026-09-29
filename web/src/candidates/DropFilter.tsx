@@ -9,6 +9,7 @@
 // страницах учат, что фильтр — не то же, что на соседней.
 
 import { Select, buttonClass } from '@platform/ui'
+import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 
@@ -32,11 +33,14 @@ export function DropFilterBar({
   set,
   reset,
   count,
+  children,
 }: {
   filter: DropFilter
   set: (patch: Partial<DropFilter>) => void
   reset: () => void
   count: number
+  /** Свои отборы экрана — в том же ряду, что дроп, адресат и вид одежды. */
+  children?: ReactNode
 }) {
   const drops = useQuery({ queryKey: ['drops'], queryFn: fetchDrops })
   const tree = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue })
@@ -73,6 +77,7 @@ export function DropFilterBar({
         onChange={(e) => set({ category: e.target.value || null })}
       />
 </div>
+      {children}
       {count > 0 && (
         <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={reset}>
           сбросить ({count})

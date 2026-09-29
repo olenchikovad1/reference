@@ -164,10 +164,13 @@ export function Showcase() {
 
   // В поиске — порядок совпадения (свой тег первым), без него — свежие первыми.
   const shownRef = useRef<Card[] | undefined>(undefined)
-  const [onlyMine, setOnlyMine] = useState(false)
+  // Отборы «только мои» и «мои черновики» (US-0686) — рядом с дропом и
+  // адресатом; выбор помнит браузер, как и порядок.
+  const [onlyMine, setOnlyMine] = useRemembered(MINE_KEY)
+  const [onlyDrafts, setOnlyDrafts] = useRemembered(DRAFTS_KEY)
   const filtered = (
     found.ids === null ? cards.data : found.ids.flatMap((id) => cards.data?.find((c) => c.id === id) ?? [])
-  )?.filter((c) => !onlyMine || c.mine).filter((c) =>
+  )?.filter((c) => (!onlyMine || c.mine) && (!onlyDrafts || c.my_draft)).filter((c) =>
     passes(
       { drops: c.drop_ids, audiences: c.audience ? [c.audience] : [], categories: c.category ? [c.category] : [] },
       drop.filter,
@@ -400,7 +403,7 @@ export function Showcase() {
         description={
           found.ids === null
             ? sortOwn
-              ? 'мой порядок: зажмите карточку или возьмите за ⠿ и перетащите; Ctrl+Z — вернуть'
+              ? 'порядок вручную: зажмите карточку или возьмите за ⠿ и перетащите; Ctrl+Z — вернуть'
               : 'последние сохранённые первыми'
             : `по запросу «${query.trim()}» — ${shown?.length ?? 0}`
         }
@@ -425,24 +428,30 @@ export function Showcase() {
           </div>
         }
       />
-      <DropFilterBar {...drop} />
-      <div className="mb-2 flex items-center gap-1 text-xs" role="group" aria-label="порядок карточек">
-        <span className="text-muted-foreground">порядок:</span>
-        <button className={buttonClass({ tone: sortOwn ? 'neutral' : 'accent', variant: sortOwn ? 'outline' : 'soft', small: true })} aria-pressed={!sortOwn} onClick={() => setSortOwn(false)}>
-          по дате
-        </button>
-        <button className={buttonClass({ tone: sortOwn ? 'accent' : 'neutral', variant: sortOwn ? 'soft' : 'outline', small: true })} aria-pressed={sortOwn} onClick={() => setSortOwn(true)}>
-          мой
-        </button>
-        {/* «Мои» (US-0509) — где смотрящий исполнитель. */}
-        <button
-          className={buttonClass({ tone: onlyMine ? 'accent' : 'neutral', variant: onlyMine ? 'soft' : 'outline', small: true })}
-          aria-pressed={onlyMine}
-          onClick={() => setOnlyMine((v) => !v)}
-          title="Только референсы, где я исполнитель"
-        >
-          мои
-        </button>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <DropFilterBar {...drop}>
+          <Chip on={onlyMine} set={setOnlyMine} title="Только референсы, где я исполнитель">
+            только мои
+          </Chip>
+          <Chip on={onlyDrafts} set={setOnlyDrafts} title="Где у меня несохранённое — подробно в «Моих задачах»">
+            мои черновики
+          </Chip>
+        </DropFilterBar>
+        {/* Порядок — отдельно от отборов и назван порядком (US-0686). */}
+        <label className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
+          порядок
+          <div className="w-36">
+            <Select
+              aria-label="порядок карточек"
+              options={[
+                { value: 'date', label: 'по дате' },
+                { value: 'own', label: 'вручную' },
+              ]}
+              value={sortOwn ? 'own' : 'date'}
+              onChange={(e) => setSortOwn(e.target.value === 'own')}
+            />
+          </div>
+        </label>
       </div>
       <div aria-live="polite" className="sr-only">
         {announce}
@@ -1004,3 +1013,40 @@ function useFreeHeight(): { value: number; measure: (el: HTMLElement | null) => 
 /** Шаг ленты отмены витрины: порядок целиком — до и после, или удалённые
  *  в корзину (одна карточка или пачка) — возвращаются тем же шагом. */
 type ShowcaseStep = { kind: 'order'; before: number[]; after: number[] } | { kind: 'trash'; ids: number[] }
+
+const MINE_KEY = 'reference.showcase.only-mine'
+const DRAFTS_KEY = 'reference.showcase.only-drafts'
+
+/** Включатель, который помнит браузер: удобство смотрящего, не данные. */
+function useRemembered(key: string): [boolean, (v: boolean | ((was: boolean) => boolean)) => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(key) === '1'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, on ? '1' : '0')
+    } catch {
+      // хранилище запрещено — выбор проживёт до перезагрузки
+    }
+  }, [key, on])
+  return [on, setOn]
+}
+
+/** Отбор-включатель в ряду отборов. */
+function Chip(props: { on: boolean; set: (v: (was: boolean) => boolean) => void; title: string; children: string }) {
+  return (
+    <button
+      className={buttonClass({ tone: props.on ? 'accent' : 'neutral', variant: props.on ? 'soft' : 'outline', small: true })}
+      aria-pressed={props.on}
+      onClick={() => props.set((v) => !v)}
+      title={props.title}
+    >
+      {props.on ? '✓ ' : ''}
+      {props.children}
+    </button>
+  )
+}
