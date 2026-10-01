@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "command": "py -X utf8 .cursor/hooks/rails.py postToolUse",
+        "timeout": 150
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "py -X utf8 .cursor/hooks/rails.py beforeShellExecution",
+        "matcher": "git"
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "py -X utf8 .cursor/hooks/rails.py sessionStart"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "py -X utf8 .cursor/hooks/rails.py beforeSubmitPrompt"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "py -X utf8 .cursor/hooks/rails.py afterAgentResponse"
+      }
+    ],
+    "stop": [
+      {
+        "command": "py -X utf8 .cursor/hooks/rails.py stop",
+        "loop_limit": 1
+      }
+    ]
+  }
+}

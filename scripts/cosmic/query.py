@@ -10,7 +10,7 @@ sandbox (25.09.2026): оттуда порт базы виден. Туннель 
 - строка подключения к базе (роль plmportal_ro и её пароль) — из
   `infra/.env` соседнего проекта plmportal, ключ `PLM_COSMIC_URL`;
 - через кого идёт туннель и где база внутри — из `infra/.env` этого проекта,
-  ключи `COSMIC_SSH` и `COSMIC_DB`. Значения — в `~/.claude/infra_ssh_hosts.md`
+  ключи `COSMIC_SSH` и `COSMIC_DB`. Значения — в `~/.cursor/infra_ssh_hosts.md`
   (sandbox и plm).
 
 Пароль в вывод не попадает. Запросы только на чтение: роль другого не умеет.

@@ -1,7 +1,7 @@
 # 0007. Работа идёт прямо в master, ветки задачи нет
 
 **Дата:** 23.09.2026
-**Касается:** `.claude/rails.json`, `.claude/skills/process-git/SKILL.md`
+**Касается:** `.cursor/rails.json`, `.cursor/skills/process-git/SKILL.md`
 
 ## Задача
 
@@ -13,7 +13,7 @@
 
 **Основная ветка — `master`. Работа идёт прямо в неё, пуш без вопросов.**
 
-`shared_branches` в `.claude/rails.json` пуст, поэтому `guard_shared_branch_push`
+`shared_branches` в `.cursor/rails.json` пуст, поэтому `guard_shared_branch_push`
 не срабатывает. Отступление записано в самом правиле `process-git`, в его
 разделе отступлений.
 
