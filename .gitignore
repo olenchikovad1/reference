@@ -35,3 +35,6 @@ dist/
 !/api/.env
 !/infra/.env
 !/web/.env
+
+# Личные настройки Claude Code — у каждого свои
+/.claude/settings.local.json

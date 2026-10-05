@@ -1,0 +1,29 @@
+{
+  "shared_branches": [],
+  "proof_commands": [
+    "pytest",
+    "ruff",
+    "mypy",
+    "vitest",
+    "npm test",
+    "npm run test",
+    "npm run build",
+    "tsc",
+    "eslint"
+  ],
+  "forbidden_trailers": [
+    "Co-Authored-By"
+  ],
+  "frontend_src": "web/src",
+  "ui_set_dir": "web/src/candidates",
+  "ui_root_dir": "web/src/candidates",
+  "component_libraries": [
+    "@radix-ui/",
+    "@tanstack/react-table",
+    "@headlessui/",
+    "antd",
+    "@mui/",
+    "@chakra-ui/",
+    "react-select"
+  ]
+}
