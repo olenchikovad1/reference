@@ -1,16 +1,16 @@
 ---
 name: frontend-ui
-description: Build screens from one shared component set with named tokens, mandatory empty, loading and error states, and a flow completable without a mouse — so screens behave the same way everywhere instead of each one re-inventing sorting, spacing and failure. Use when adding or changing a screen, when copying an existing component to tweak it, when picking a colour or spacing value, when a list can come back empty or fail, and when the main flow is used with a scanner or keyboard.
+description: Build screens from one shared component set with named tokens, mandatory empty, loading and error states, and a flow completable without a mouse — so screens behave the same way everywhere instead of each one re-inventing sorting, spacing and failure. Use when adding or changing a screen, when copying an existing component to tweak it, when picking a colour or spacing value, when a list can come back empty or fail, when the main flow is used with a scanner or keyboard, when text does not fit its column or tile, and when a button, icon or status needs a hover hint or shows a keyboard shortcut.
 source: projects_skills/skills/frontend/ui
 hooks: [guard_ui_boundary.py]
 adapted: 2026-09-23
 ---
 # Интерфейс
 
-Пакет про один момент — **делаю экран**. В нём четыре вопроса, которые
+Пакет про один момент — **делаю экран**. В нём пять вопросов, которые
 всплывают вместе: из чего экран собран, какими значениями он оформлен, что он
 показывает, когда показывать нечего, и можно ли им пользоваться, не касаясь
-мыши. Порознь они и расползаются: таблицу копируют, отступ подбирают на глаз, а
+мыши, и что человек узнает, наведя курсор. Порознь они и расползаются: таблицу копируют, отступ подбирают на глаз, а
 пустое состояние дописывают после жалобы.
 
 ## Правила
@@ -63,6 +63,25 @@ adapted: 2026-09-23
   обязана это выдерживать.
 - **Горячих клавиш немного и они предсказуемы:** закрытие и подтверждение
   диалога — обязательный минимум.
+
+### Подсказки и обрезка → [hints.md](hints.md)
+
+- **Длинное обрезается многоточием, полный текст — в подсказке.** Перенос
+  растит строку, и список из пятнадцати записей становится списком из трёх.
+- **Кнопка объясняет последствие, а не повторяет подпись:** что произойдёт
+  после нажатия.
+- **Горячая клавиша — в подсказке, отдельной строкой и другим видом:** о
+  клавише, которой нет на экране, не узнает никто.
+- **Недоступное объясняет, почему, и что сделать.** Выключенная кнопка без
+  причины читается как поломка.
+- **Значок без подписи всегда с подсказкой и доступным именем.**
+- **Общепринятое действие — значком, а не текстовой кнопкой:** удалить —
+  корзина, изменить — карандаш, повторить — круговая стрелка. Текстом
+  подписывается только то, у чего общепринятого значка нет.
+- **Состояние и ошибка при наведении говорят, что не так, с какого момента и
+  что делать;** разные причины одного вида различаются текстом.
+- **Подсказка открывается и по фокусу с клавиатуры** и не бывает единственным
+  путём к важному.
 
 ## Смежное
 
