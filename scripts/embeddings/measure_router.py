@@ -99,9 +99,9 @@ def run(label: str, enc, images, vectors) -> None:
         to_anime = [o[0] == anime or (b and o[1] == anime) for o, b in zip(order, both, strict=True)]
         to_general = [o[0] != anime or b for o, b in zip(order, both, strict=True)]
         is_anime = [im["kind"] == "anime" or im.get("also") == "anime" for im in images]
-        print(f"    {thr:.3f}: {sum(a and t for a, t in zip(is_anime, to_anime))}/{sum(is_anime)},"
-              f" чужих {sum(t and not a for a, t in zip(is_anime, to_anime))},"
-              f" общая {sum(g and not a for a, g in zip(is_anime, to_general))}/{sum(not a for a in is_anime)},"
+        print(f"    {thr:.3f}: {sum(a and t for a, t in zip(is_anime, to_anime, strict=True))}/{sum(is_anime)},"
+              f" чужих {sum(t and not a for a, t in zip(is_anime, to_anime, strict=True))},"
+              f" общая {sum(g and not a for a, g in zip(is_anime, to_general, strict=True))}/{sum(not a for a in is_anime)},"
               f" в обе {int(both.sum())}")
 
 

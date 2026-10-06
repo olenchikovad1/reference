@@ -44,7 +44,7 @@ async def references_by_colour_model(db: AsyncSession, ids: list[int]) -> dict[i
         .where(Reference.colour_model_id.in_(ids), Reference.deleted_at.is_(None))
         .group_by(Reference.colour_model_id)
     )
-    return {cm: n for cm, n in rows}
+    return {cm: n for cm, n in rows if cm is not None}
 
 
 async def nodes(db: AsyncSession) -> dict[int, HierarchyNode]:

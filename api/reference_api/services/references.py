@@ -338,8 +338,8 @@ async def find(db: AsyncSession, query: str) -> list[FoundReference]:
     for f in pictures:
         # Причина — тег картинки, совпавший с запросом по основе слова; нет
         # такого — сама картинка: модель нашла её по смыслу, а не по тегу.
-        tag = next((r for r in stored.get(f.digest, []) if drops_service.words_meet(q, r.name)), None)
-        seen = f"на картинке {tag.name}" if tag else f"картинка «{f.name}»"
+        hit = next((r for r in stored.get(f.digest, []) if drops_service.words_meet(q, r.name)), None)
+        seen = f"на картинке {hit.name}" if hit else f"картинка «{f.name}»"
         for card in f.references:
             if card.id not in hidden:
                 put(FoundReference(card.id, card.name, "picture", f.weight, f"{seen}, вес {f.weight:.1f}"))
@@ -661,7 +661,7 @@ def changes(base: dict | None, draft: dict | None) -> tuple[list[str], bool]:
         if abs(dy) >= 0.05:
             moved.append(f"на {_cm(dy)} см {'ниже' if dy > 0 else 'выше'}")
         if q.get("side") != p.get("side"):
-            said.append(f"{name} перенесён на {_SIDES.get(q.get('side'), q.get('side'))}")
+            said.append(f"{name} перенесён на {_SIDES.get(q.get('side') or '', q.get('side'))}")
             big = True
         if moved:
             said.append(f"{name} сдвинут {', '.join(moved)}")

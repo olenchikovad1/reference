@@ -24,8 +24,6 @@ from reference_api.schemas.references import (
     ProposeIn,
     StatusEventOut,
     CommentIn,
-    TaskOut,
-    TasksOut,
     TrashedOut,
     FoundReferenceOut,
     HiddenTagIn,
@@ -464,7 +462,7 @@ async def approve_final(reference_id: int, request: Request, db: AsyncSession = 
 async def _transfers(db: AsyncSession, reference_id: int) -> list[TransferOut]:
     rows = await service.transfers(db, reference_id)
     who = await people.members_of(db, sorted({x for t in rows for x in (t.from_id, t.to_id, t.by_id) if x}))
-    name = lambda i: who[i].name if i and i in who else None  # noqa: E731
+    name = lambda i: who[i].name if i and i in who else None
     return [TransferOut(from_id=t.from_id, from_name=name(t.from_id), to_id=t.to_id, to_name=name(t.to_id) or t.to_id,
                         by_id=t.by_id, by_name=name(t.by_id), at=t.at) for t in rows]
 

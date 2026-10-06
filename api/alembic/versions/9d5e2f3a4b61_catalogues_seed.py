@@ -53,15 +53,15 @@ ITEMS = [(1, 1), (1, 2), (1, 3), (1, 5), (1, 6), (2, 1), (2, 4), (2, 9), (3, 7),
 def upgrade() -> None:
     t, c = sa.table, sa.column
     op.bulk_insert(t("hierarchy_nodes", c("id"), c("parent_id"), c("level"), c("name")),
-                   [dict(zip(("id", "parent_id", "level", "name"), n)) for n in NODES])
+                   [dict(zip(("id", "parent_id", "level", "name"), n, strict=True)) for n in NODES])
     op.bulk_insert(t("garment_models", c("id"), c("code"), c("name"), c("category_id"), c("product_code")),
-                   [dict(zip(("id", "code", "name", "category_id", "product_code"), m)) for m in MODELS])
+                   [dict(zip(("id", "code", "name", "category_id", "product_code"), m, strict=True)) for m in MODELS])
     op.bulk_insert(t("colour_models", c("id"), c("model_id"), c("colour_code")),
-                   [dict(zip(("id", "model_id", "colour_code"), x)) for x in COLOURS])
+                   [dict(zip(("id", "model_id", "colour_code"), x, strict=True)) for x in COLOURS])
     op.bulk_insert(
         t("drops", c("id"), c("name"), c("season"), c("release_from"), c("release_to"), c("audience"),
           c("theme"), c("retired")),
-        [dict(zip(("id", "name", "season", "release_from", "release_to", "audience", "theme", "retired"), d))
+        [dict(zip(("id", "name", "season", "release_from", "release_to", "audience", "theme", "retired"), d, strict=True))
          for d in DROPS])
     op.bulk_insert(t("drop_items", c("drop_id"), c("colour_model_id")),
                    [{"drop_id": d, "colour_model_id": m} for d, m in ITEMS])

@@ -21,7 +21,7 @@ async def save(client, digest: str, name: str):
         "name": name, "sheet_digest": digest, "image_digests": [digest], "texts": [], "views": {"front": digest}})
 
 
-async def test_erase_forever_leaves_nothing_but_the_picture(stand) -> None:  # noqa: F811
+async def test_erase_forever_leaves_nothing_but_the_picture(stand) -> None:
     client, digests = stand
     heli = digests[HELI]
     ref = (await save(client, heli, "Санта на унитазе")).json()["id"]
@@ -39,7 +39,7 @@ async def test_erase_forever_leaves_nothing_but_the_picture(stand) -> None:  # n
     assert (await client.get(f"/reference/api/assets/{heli}/thumb")).status_code == 200, "файл картинки стёрт"
 
 
-async def test_defect_hides_the_picture_and_is_recognised_when_uploaded_again(stand) -> None:  # noqa: F811
+async def test_defect_hides_the_picture_and_is_recognised_when_uploaded_again(stand) -> None:
     client, digests = stand
     heli = digests[HELI]
     try:

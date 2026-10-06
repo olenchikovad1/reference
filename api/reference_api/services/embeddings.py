@@ -57,7 +57,8 @@ def preprocess(content: bytes) -> np.ndarray:
     и сведение на чёрное превратило бы светлый рисунок в тёмное пятно, то есть
     поменяло бы вектор до неузнаваемости.
     """
-    with Image.open(io.BytesIO(content)) as img:
+    with Image.open(io.BytesIO(content)) as opened:
+        img: Image.Image = opened
         if img.mode in ("RGBA", "LA", "P"):
             img = img.convert("RGBA")
             white = Image.new("RGBA", img.size, (255, 255, 255, 255))

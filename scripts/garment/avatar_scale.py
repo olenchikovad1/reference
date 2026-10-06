@@ -20,7 +20,7 @@ import sys
 import zlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import bw_source  # noqa: E402
+import bw_source
 
 
 def vertex_bounds(data: bytes) -> tuple[list[float], list[float], int] | None:

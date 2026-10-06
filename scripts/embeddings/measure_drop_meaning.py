@@ -39,7 +39,7 @@ async def main() -> None:
     # probe_words_centering, и мерим косинус остатков.
     _, vocab = words.vocabulary(2000, "{}")
     mean = vocab.mean(0)
-    norm = lambda x: x / np.linalg.norm(x, axis=-1, keepdims=True)  # noqa: E731
+    norm = lambda x: x / np.linalg.norm(x, axis=-1, keepdims=True)
     if "--centered" in __import__("sys").argv:
         dv, qv = norm(dv - mean), norm(qv - mean)
     cos = qv @ dv.T
@@ -47,7 +47,7 @@ async def main() -> None:
     print("запрос → косинус к дропам (ожидаемые помечены *)")
     for i, q in enumerate(queries):
         want = set(q["expect_drops"])
-        row = sorted(zip(names, cos[i]), key=lambda x: -x[1])
+        row = sorted(zip(names, cos[i], strict=True), key=lambda x: -x[1])
         print(f"  {q['q']!s:12} [{asked[i]}]: " + ", ".join(
             f"{'*' if n in want else ''}{n} {c:.3f}" for n, c in row[:4]))
 
@@ -56,7 +56,7 @@ async def main() -> None:
         hit = miss = extra = 0
         for i, q in enumerate(queries):
             want = set(q["expect_drops"])
-            got = {n for n, c in zip(names, cos[i]) if c >= t}
+            got = {n for n, c in zip(names, cos[i], strict=True) if c >= t}
             hit += len(want & got)
             miss += len(want - got)
             extra += len(got - want)

@@ -93,6 +93,6 @@ def taggers(v: Verdict) -> list[str]:
     """Модели, которые размечают картинку: своя, а у неуверенной — ещё и модель
     второго вида. Порядок — сначала модель первого вида."""
     out = [_TAGGER[v.shown]]
-    if v.both and _TAGGER[v.second] not in out:
+    if v.both and v.second is not None and _TAGGER[v.second] not in out:
         out.append(_TAGGER[v.second])
     return out

@@ -227,7 +227,7 @@ async def _placed(db: AsyncSession, reference_id: int, who: str | None, x: float
         raise NoSuchReference("референса с таким номером нет")
     if not (await _roles(db, card, who)) & {"editor", "chief"}:
         raise NotYourStep("замечания ставит редактор")
-    if (x is None) != (y is None) or (x is not None and not (0 <= x <= 1 and 0 <= y <= 1)):
+    if (x is None) != (y is None) or (x is not None and y is not None and not (0 <= x <= 1 and 0 <= y <= 1)):
         raise BadRemark("точка на изделии — обе доли от 0 до 1, или без точки вовсе")
     number = await repo.last_number(db, reference_id)
     name = None
@@ -336,7 +336,7 @@ async def hear(remark_id: int, transcribe=None) -> tuple[str, int]:
     digest, attempts = claimed
     async with session_factory() as db:
         try:
-            got = await asyncio.to_thread(asset_repo.get, digest, "audio")
+            got = await asyncio.to_thread(asset_repo.get, digest, "audio") if digest else None
             if got is None:
                 raise voice.Unheard("записи нет в хранилище")
             text, seconds = await asyncio.to_thread(transcribe, got[0])
@@ -345,7 +345,7 @@ async def hear(remark_id: int, transcribe=None) -> tuple[str, int]:
         except voice.Unheard as e:
             await repo.voice_state(db, remark_id, "failed", str(e)[:500])
             return "failed", attempts
-        except Exception as e:  # сбой среды: модель, хранилище, память
+        except Exception as e:  # noqa: BLE001 — сбой среды: модель, хранилище, память
             log.warning("расшифровка замечания %s, попытка %s: %s", remark_id, attempts, e)
             if attempts >= VOICE_ATTEMPTS:
                 await repo.voice_state(db, remark_id, "failed", f"не удалось за {attempts} попытки: {e}"[:500])

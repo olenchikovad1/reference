@@ -33,7 +33,7 @@ FILES = ROOT / "infra/stand/files"
 FIXTURES = ROOT / "infra/stand/fixtures"
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from fetch_models import inventory  # noqa: E402 — опись моделей одна (models.json), здесь не повторяется
+from fetch_models import inventory  # опись моделей одна (models.json), здесь не повторяется
 
 
 def sha256(path: pathlib.Path) -> str:

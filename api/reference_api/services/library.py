@@ -439,9 +439,9 @@ async def links(db: AsyncSession, kind: str) -> dict[str, Links]:
     assigned_drops, assigned_audiences = await repo.assigned(db, kind)
     by_id = {d.id: d for d in await drops_service.drops(db)}
     for key, drop_id, status, reason in assigned_drops:
-        d = by_id[drop_id]
+        drop = by_id[drop_id]
         out.setdefault(key, Links({}, {}, set())).drops[drop_id] = DropLink(
-            d.id, d.name, d.retired, None, status, reason)
+            drop.id, drop.name, drop.retired, None, status, reason)
     for key, audience in assigned_audiences:
         out.setdefault(key, Links({}, {}, set())).audiences[audience] = None
     return out

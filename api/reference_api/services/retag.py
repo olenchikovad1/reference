@@ -114,7 +114,7 @@ async def _run(run_id: int, todo: list[str] | None = None, resume: bool = False)
                 # Сколько осталось — только под блокировкой: иначе процесс,
                 # которому проход не достанется, успевал переписать «из скольких».
                 async with session_factory() as db:
-                    run = await db.get(RetagRun, run_id)
+                    run = await db.get_one(RetagRun, run_id)
                     left = len(await stale(db))
                     run.total = run.done + left
                     await db.commit()
@@ -132,18 +132,18 @@ async def _pass(run_id: int, todo: list[str] | None) -> None:
         reason = None
         try:
             await _one(digest)
-        except Exception as e:  # одна картинка не должна останавливать проход
+        except Exception as e:  # noqa: BLE001 — одна картинка не должна останавливать проход
             reason = f"{type(e).__name__}: {e}"
             log.warning("переразметка %s не удалась: %s", digest[:12], reason)
         async with session_factory() as db:
-            run = await db.get(RetagRun, run_id)
+            run = await db.get_one(RetagRun, run_id)
             run.done += 1
             if reason:
                 run.failed = [*run.failed, {"digest": digest, "name": names.get(digest, digest[:12]), "reason": reason}]
             await db.commit()
         await asyncio.sleep(0)
     async with session_factory() as db:
-        run = await db.get(RetagRun, run_id)
+        run = await db.get_one(RetagRun, run_id)
         # До конца «было» лежит по картинкам; в конце и оно, и «стало» —
         # по итоговому виду, рядом.
         before = run.before.get("по картинкам", {})

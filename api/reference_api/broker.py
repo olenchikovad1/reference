@@ -45,7 +45,7 @@ async def publish(queue: str, body: dict) -> bool:
                                    content_type="application/json")
         await channel.default_exchange.publish(message, routing_key=queue)
         return True
-    except Exception as e:  # брокер лёг — задача подберётся при старте
+    except Exception as e:  # noqa: BLE001 — брокер лёг — задача подберётся при старте
         log.warning("в очередь %s не поставлено: %s", queue, e)
         return False
 
@@ -68,6 +68,6 @@ async def consume(queue: str, handler: Callable[[dict], Awaitable[None]], prefet
                             await handler(json.loads(message.body))
         except asyncio.CancelledError:
             raise
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — обрыв связи любого вида лечится одним: переподключиться
             log.warning("очередь %s: %s — подключаюсь снова через 5 с", queue, e)
             await asyncio.sleep(5)

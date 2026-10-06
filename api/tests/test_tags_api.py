@@ -114,7 +114,7 @@ async def test_stored_tags_are_returned_without_recounting(client, monkeypatch) 
     monkeypatch.setattr(tagging, "tag", must_not_recount)
     got = await client.post("/reference/api/assets/tags", json=[digest])
     assert got.status_code == 200, got.text
-    key = lambda ts: [(t["name"], round(t["score"], 6), t["strong"]) for t in ts]  # noqa: E731
+    key = lambda ts: [(t["name"], round(t["score"], 6), t["strong"]) for t in ts]
     assert key(got.json()[0]["tags"]) == key(first)
 
 

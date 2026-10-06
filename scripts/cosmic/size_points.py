@@ -19,7 +19,7 @@ import sys
 from collections import defaultdict
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from query import run  # noqa: E402
+from query import run
 
 SIZES = ["98", "104", "110", "116", "122", "128", "134", "140", "146", "152", "158", "164"]
 NAME = "lower(coalesce(nullif(p.description_ru,''), p.description, p.name))"

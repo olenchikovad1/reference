@@ -412,7 +412,8 @@ async def drafters(db: AsyncSession, card_ids: list[int]) -> dict[int, list[str]
     )
     out: dict[int, list[str]] = {}
     for card_id, author in rows:
-        out.setdefault(card_id, []).append(author)
+        if card_id is not None:  # черновик новой карточки — без номера, сюда не относится
+            out.setdefault(card_id, []).append(author)
     return out
 
 
@@ -447,8 +448,9 @@ async def alive_ids(db: AsyncSession, card_ids: list[int]) -> set[int]:
 
 
 async def pass_to(db: AsyncSession, reference_id: int, to_id: str, by_id: str | None) -> None:
-    """Сменить исполнителя и записать передачу — одной транзакцией."""
-    card = await db.get(Reference, reference_id)
+    """Сменить исполнителя и записать передачу — одной транзакцией. Карточку
+    сервис уже проверил в этой же сессии."""
+    card = await db.get_one(Reference, reference_id)
     db.add(ReferenceTransfer(reference_id=reference_id, from_id=card.executor_id, to_id=to_id, by_id=by_id))
     card.executor_id = to_id
     await db.commit()

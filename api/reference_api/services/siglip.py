@@ -73,7 +73,8 @@ def embed_image(content: bytes) -> np.ndarray:
     side = int(pre.get("size", {}).get("height", 224))
     mean = np.array(pre.get("image_mean", [0.5] * 3), dtype=np.float32)
     std = np.array(pre.get("image_std", [0.5] * 3), dtype=np.float32)
-    with Image.open(io.BytesIO(content)) as img:
+    with Image.open(io.BytesIO(content)) as opened:
+        img: Image.Image = opened
         img = img.convert("RGBA")
         white = Image.new("RGBA", img.size, (255, 255, 255, 255))
         img = Image.alpha_composite(white, img).convert("RGB").resize((side, side), Image.Resampling.BILINEAR)

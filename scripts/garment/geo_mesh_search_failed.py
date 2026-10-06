@@ -22,7 +22,7 @@ import struct
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import bw_source  # noqa: E402
+import bw_source
 
 # Где: хост, нужен zstd (см. bw_source.py). py scripts/garment/geo_mesh_search_failed.py
 SNAPSHOTS = {

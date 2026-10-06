@@ -16,6 +16,7 @@ from reference_api.schemas.drops import (
     DropIn,
     DropOut,
     MatrixOut,
+    MatrixRowOut,
     ModelOut,
     TreeColourModelOut,
     TreeModelOut,
@@ -96,7 +97,7 @@ async def matrix(drop_id: int, db: AsyncSession = Depends(session)) -> MatrixOut
     return MatrixOut(
         drop=DropOut.model_validate(m["drop"], from_attributes=True),
         colours=m["colours"],
-        rows=[{"model": _model(r["model"]), "cells": r["cells"]} for r in m["rows"]],
+        rows=[MatrixRowOut(model=_model(r["model"]), cells=r["cells"]) for r in m["rows"]],
     )
 
 

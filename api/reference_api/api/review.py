@@ -22,7 +22,7 @@ async def my_tasks(request: Request, db: AsyncSession = Depends(session)) -> Tas
     # главному без «Окончательного принятия» согласованное не «ждёт его».
     can_final = bool(subject and subject.has(RequiredRight("review", "approve-final", "function")))
     mine, waiting = await review.tasks(db, subject.id if subject else None, can_final=can_final)
-    out = lambda ts: [TaskOut(id=t.id, name=t.name, status=t.status, reason=t.reason) for t in ts]  # noqa: E731
+    out = lambda ts: [TaskOut(id=t.id, name=t.name, status=t.status, reason=t.reason) for t in ts]
     return TasksOut(mine=out(mine), waiting=out(waiting))
 
 

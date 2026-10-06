@@ -15,8 +15,9 @@ from reference_api.models.references import (
 
 async def move(db: AsyncSession, reference_id: int, to: str, number: int, by_id: str | None,
                comment: str | None = None) -> None:
-    """Сменить статус и записать переход — одной транзакцией."""
-    card = await db.get(Reference, reference_id)
+    """Сменить статус и записать переход — одной транзакцией. Карточку
+    сервис уже проверил в этой же сессии: её отсутствие здесь — ошибка кода."""
+    card = await db.get_one(Reference, reference_id)
     db.add(ReferenceStatusEvent(reference_id=reference_id, from_status=card.status, to_status=to, number=number,
                                 by_id=by_id, comment=comment))
     card.status = to
@@ -90,7 +91,7 @@ async def say(db: AsyncSession, remark_id: int, kind: str, text: str | None, aut
     """Сообщение в ветку и, если оно меняет состояние, новое состояние
     замечания — одной транзакцией."""
     db.add(ReferenceRemarkMessage(remark_id=remark_id, kind=kind, text=text, author_id=author_id, number=number))
-    row = await db.get(ReferenceRemark, remark_id)
+    row = await db.get_one(ReferenceRemark, remark_id)
     if status is not None:
         row.status = status
     if fixed_in is not _KEEP:
@@ -113,7 +114,7 @@ async def open_counts(db: AsyncSession, ids: list[int]) -> dict[int, int]:
 # --- Голос (US-0512) -----------------------------------------------------
 
 
-async def claim_voice(db: AsyncSession, remark_id: int) -> tuple[str, int] | None:
+async def claim_voice(db: AsyncSession, remark_id: int) -> tuple[str | None, int] | None:
     """Взять расшифровку в работу: pending → working одним условным
     обновлением. Повтор сообщения или вторая копия сервиса получают None —
     второй раз не расшифровывается."""
@@ -135,8 +136,11 @@ async def voice_state(db: AsyncSession, remark_id: int, status: str, error: str 
 
 async def voice_done(db: AsyncSession, remark_id: int, heard: str, seconds: float) -> None:
     """Расшифровка готова. Текст замечания становится расшифровкой, только
-    если его ещё никто не вписал руками."""
+    если его ещё никто не вписал руками. Пока модель слушала, замечание
+    могли стереть вместе с референсом из корзины — тогда писать некуда."""
     row = await db.get(ReferenceRemark, remark_id)
+    if row is None:
+        return
     row.heard, row.audio_seconds, row.voice_status, row.voice_error = heard, seconds, "done", None
     if not row.text:
         row.text = heard
@@ -169,14 +173,13 @@ async def propose(db: AsyncSession, reference_id: int, reason: str, by_id: str |
     await db.commit()
 
 
-async def unpropose(db: AsyncSession, reference_id: int, by_id: str | None, resolution: str = "manual") -> int:
+async def unpropose(db: AsyncSession, reference_id: int, by_id: str | None, resolution: str = "manual") -> None:
     """Убрать с повестки: вручную или решением (шаг статуса)."""
     from sqlalchemy import func
 
-    r = await db.execute(update(ReferenceAgendaItem).where(ReferenceAgendaItem.reference_id == reference_id, _OPEN)
+    await db.execute(update(ReferenceAgendaItem).where(ReferenceAgendaItem.reference_id == reference_id, _OPEN)
                          .values(removed_at=func.now(), removed_by=by_id, resolution=resolution))
     await db.commit()
-    return r.rowcount
 
 
 async def open_agenda(db: AsyncSession, ids: list[int] | None = None) -> dict[int, list[ReferenceAgendaItem]]:

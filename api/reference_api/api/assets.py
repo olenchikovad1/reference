@@ -194,8 +194,10 @@ async def retag_status(db: AsyncSession = Depends(session)) -> RetagOut | None:
 
 
 def _kind_out(v: kinds.Verdict | None) -> KindOut | None:
-    if v is None:
-        return None
+    return None if v is None else _kind(v)
+
+
+def _kind(v: kinds.Verdict) -> KindOut:
     return KindOut(kind=v.shown, name=kinds.NAMES.get(v.shown, v.shown), second=v.second if v.both else None,
                    both=v.both, manual=v.manual is not None)
 
@@ -209,7 +211,7 @@ async def set_kind(digest: str, body: KindIn, request: Request, db: AsyncSession
     if done is None:
         raise HTTPException(404, "картинку ещё не узнавали — размечать нечем")
     verdict, tags = done
-    return KindTagsOut(kind=_kind_out(verdict), tags=[_tag_out(x) for x in tags.tags])
+    return KindTagsOut(kind=_kind(verdict), tags=[_tag_out(x) for x in tags.tags])
 
 
 def _tag_out(x: library.TagView) -> TagOut:

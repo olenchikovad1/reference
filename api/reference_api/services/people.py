@@ -118,8 +118,9 @@ async def everyone(db: AsyncSession) -> list[Member]:
     snapshot = {p.id: p for p in await repo.listing(db)}
     out = []
     for sid in set(with_role) | set(snapshot):
-        r, s = with_role.get(sid), snapshot.get(sid)
-        out.append(Member(sid, r.full_name if r else s.display_name, r.full_name if r else None,
+        # sid взят из объединения ключей: нет роли — значит есть в снимке.
+        r = with_role.get(sid)
+        out.append(Member(sid, r.full_name if r else snapshot[sid].display_name, r.full_name if r else None,
                           r.role if r else None, _has_access(sid, snapshot)))
     return sorted(out, key=lambda m: m.name.lower())
 

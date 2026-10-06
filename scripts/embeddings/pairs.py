@@ -44,7 +44,7 @@ def main() -> None:
         got = [round(min(by[lvl]), 3), round(max(by[lvl]), 3)] if by[lvl] else None
         print(f"  {lvl}: {got}, записано {measured.get(key)}"
               + ("" if lvl == "чужое" else " (в записи — «танки между собой», включая пары одного объекта)"))
-    for s, lvl, a, b in rows:
+    for s, lvl, a, _b in rows:
         if lvl == "тот же объект":
             print(f"  тот же объект: {prints[a]['subject']} {s:.3f}")
 

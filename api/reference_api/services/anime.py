@@ -106,7 +106,8 @@ def model_name(model_id: str | None = None) -> str:
 def preprocess(content: bytes, side: int) -> np.ndarray:
     """Как учили модель: квадрат с белыми полями, BGR, 0…255, без нормировки.
     Прозрачность — на белое: у принтов прозрачный фон."""
-    with Image.open(io.BytesIO(content)) as img:
+    with Image.open(io.BytesIO(content)) as opened:
+        img: Image.Image = opened
         img = img.convert("RGBA")
         white = Image.new("RGBA", img.size, (255, 255, 255, 255))
         img = Image.alpha_composite(white, img).convert("RGB")
@@ -125,7 +126,7 @@ def tag(content: bytes, model_id: str | None = None) -> Result:
         probs = session.run(None, {inp.name: preprocess(content, inp.shape[1])})[0][0]
     tr = _translation()
     ratings = {n: float(p) for (n, c), p in zip(labels, probs, strict=True) if c == 9}
-    rating = max(ratings, key=ratings.get)
+    rating = max(ratings, key=ratings.__getitem__)
     tags: list[Tag] = []
     chars: list[tuple[str, float]] = []
     adult = [f"рейтинг {rating}"] if rating in ADULT_RATINGS else []
@@ -140,7 +141,7 @@ def tag(content: bytes, model_id: str | None = None) -> Result:
                 untranslated.append(name)
             elif t == "!":
                 adult.append(name)
-            elif t != "~":
+            elif isinstance(t, tuple):  # «~» — перевод намеренно пропущен
                 tags.append(Tag(name, t[0], t[1], p))
     return Result(tags, chars, rating, adult, untranslated)
 

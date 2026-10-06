@@ -51,6 +51,26 @@ def inventory() -> list[dict]:
     return [f for m in data["models"] for f in m["files"]]
 
 
+#: Уже сверенные файлы: путь → (размер, время правки) на момент сверки.
+#: Старт приложения в процессе бывает не один — тесты поднимают его на
+#: каждый тест, — и пересчёт 760 МБ на каждый старт копил потоки хеширования,
+#: которые нельзя отменить: минута на тест вместо секунд (06.10.2026). Файл,
+#: не менявшийся с прошлой сверки, второй раз не читается; новый процесс
+#: сверяет заново.
+_verified: dict[pathlib.Path, tuple[int, int]] = {}
+
+
+def _matches(path: pathlib.Path, sha256: str) -> bool:
+    st = path.stat()
+    stamp = (st.st_size, st.st_mtime_ns)
+    if _verified.get(path) == stamp:
+        return True
+    if _sha256(path) != sha256:
+        return False
+    _verified[path] = stamp
+    return True
+
+
 def _sha256(path: pathlib.Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -68,7 +88,7 @@ def problems(full: bool) -> list[Problem]:
         path = root / f["path"]
         if not path.is_file():
             out.append(Problem(f["path"], "нет"))
-        elif path.stat().st_size != f["size"] or (full and _sha256(path) != f["sha256"]):
+        elif path.stat().st_size != f["size"] or (full and not _matches(path, f["sha256"])):
             out.append(Problem(f["path"], "не тот"))
     return out
 

@@ -29,7 +29,7 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-import rgba_png  # noqa: E402
+import rgba_png
 
 API = "https://commons.wikimedia.org/w/api.php"
 PRINTS = pathlib.Path(__file__).resolve().parents[2] / "infra/stand/files/prints"

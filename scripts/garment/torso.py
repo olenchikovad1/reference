@@ -19,7 +19,7 @@ import sys
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-import rgba_png  # noqa: E402
+import rgba_png
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 FILES = ROOT / "infra/stand/files"

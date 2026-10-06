@@ -18,7 +18,7 @@ COPY pyproject.toml ./
 # Инструменты прогона ставятся в тот же образ. Стенд целиком в докере, и второе,
 # локальное окружение ради pytest означало бы второй способ всё запускать.
 RUN uv pip install --system --no-cache -r pyproject.toml && \
-    uv pip install --system --no-cache pytest pytest-asyncio httpx
+    uv pip install --system --no-cache pytest pytest-asyncio httpx ruff mypy
 
 COPY alembic.ini ./
 COPY alembic ./alembic

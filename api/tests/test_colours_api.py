@@ -52,7 +52,7 @@ def test_colours_are_contrasting_enough_to_tell_apart(client: TestClient) -> Non
         (a, b)
         for i, a in enumerate(colors)
         for b in colors[i + 1 :]
-        if sum(abs(x - y) for x, y in zip(a["rgb"], b["rgb"])) < 60
+        if sum(abs(x - y) for x, y in zip(a["rgb"], b["rgb"], strict=True)) < 60
     ]
     assert pairs == [], f"слишком близкие цвета: {[(a['code'], b['code']) for a, b in pairs]}"
 

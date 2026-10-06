@@ -34,7 +34,7 @@ async def board(client, drop_id: int) -> dict:
     return r.json()
 
 
-async def test_proposed_approved_rejected_with_reason(stand) -> None:  # noqa: F811
+async def test_proposed_approved_rejected_with_reason(stand) -> None:
     client, digests = stand
     tanks = [digests[n] for n in ("t72-winter-print.png", "is3-winter-print.png", "td-winter-camo-print.png")]
     await forget_proposals(NEW_YEAR, tanks)
@@ -64,7 +64,7 @@ async def test_proposed_approved_rejected_with_reason(stand) -> None:  # noqa: F
     assert feb.get(tanks[2]) != "rejected"
 
 
-async def test_via_reference_is_shown_apart_and_gets_no_approval(stand) -> None:  # noqa: F811
+async def test_via_reference_is_shown_apart_and_gets_no_approval(stand) -> None:
     client, digests = stand
     heli = digests["mi8-cloud-sharp-clean-print.png"]
     r = await client.post("/reference/api/references", json={

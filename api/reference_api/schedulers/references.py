@@ -28,5 +28,5 @@ async def purge_expired() -> None:
                 erased = await references.purge_expired(db)
             if erased:
                 log.info("корзина: стёрто по сроку %s", erased)
-        except Exception:  # noqa: BLE001 — сбой одного прохода не должен остановить очистку навсегда
+        except Exception:  # сбой одного прохода не должен остановить очистку навсегда
             log.exception("корзина: проход очистки не удался, повторю через %s с", cfg.trash_check_seconds)

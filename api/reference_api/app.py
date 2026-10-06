@@ -83,7 +83,7 @@ class _StandSubject(BaseHTTPMiddleware):
     """Запрос без субъекта получает стендового. Стоит ВНУТРИ посредника
     платформы: сначала тот разбирает токен, потом пустое место заполняется."""
 
-    async def dispatch(self, request: Request, call_next):  # type: ignore[no-untyped-def]
+    async def dispatch(self, request: Request, call_next):
         if getattr(request.state, "subject", None) is None:
             request.state.subject = _stand_subject(request.headers.get("x-stand-as") or None)
         return await call_next(request)

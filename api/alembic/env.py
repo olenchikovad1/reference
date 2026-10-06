@@ -18,8 +18,8 @@ config.set_main_option("sqlalchemy.url", settings().database_url)
 # Модели импортируются ЦЕЛИКОМ, а не выборочно: автогенерация видит только то,
 # что успело зарегистрироваться в метаданных, и забытый импорт даёт не ошибку, а
 # миграцию без половины таблиц.
-from reference_api.models.base import Base  # noqa: E402
-from reference_api.models import drops, library, people, references  # noqa: E402,F401
+from reference_api.models.base import Base
+from reference_api.models import drops, library, people, references  # noqa: F401
 
 target_metadata = Base.metadata
 

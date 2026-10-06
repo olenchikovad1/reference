@@ -20,7 +20,7 @@ def drops_of(item: dict) -> dict[int, int | None]:
     return {d["id"]: d["via"] for d in item["drops"]}
 
 
-async def test_seeded_links_winter_tanks_are_in_winter(stand) -> None:  # noqa: F811
+async def test_seeded_links_winter_tanks_are_in_winter(stand) -> None:
     client, digests = stand
     items = await library(client)
     for name in ("is3-winter-print.png", "t72-winter-print.png", "td-winter-camo-print.png"):
@@ -29,7 +29,7 @@ async def test_seeded_links_winter_tanks_are_in_winter(stand) -> None:  # noqa: 
         assert {"code": "boys", "via": None} in item["audiences"]
 
 
-async def test_used_in_a_reference_joins_its_drop_and_leaves_with_it(stand) -> None:  # noqa: F811
+async def test_used_in_a_reference_joins_its_drop_and_leaves_with_it(stand) -> None:
     client, digests = stand
     heli = digests["mi8-cloud-sharp-clean-print.png"]
     assert NEW_YEAR not in drops_of((await library(client))[heli]), "Ми-8 в «Новом годе» до референса"
@@ -54,7 +54,7 @@ async def test_used_in_a_reference_joins_its_drop_and_leaves_with_it(stand) -> N
     assert heli in {i["digest"] for i in (await client.get("/reference/api/assets/search", params={"q": "вертолёт"})).json()}
 
 
-async def test_assigning_several_at_once_and_retired_is_refused(stand) -> None:  # noqa: F811
+async def test_assigning_several_at_once_and_retired_is_refused(stand) -> None:
     client, digests = stand
     keys = [digests[n] for n in ("pizza.png", "rocket.png", "robot-kawaii.png")]
     r = await client.post("/reference/api/library/images/links", json={"keys": keys, "drop_id": FEB23})
@@ -69,7 +69,7 @@ async def test_assigning_several_at_once_and_retired_is_refused(stand) -> None: 
     assert all(FEB23 not in drops_of(i) for k, i in (await library(client)).items() if k in keys)
 
 
-async def test_texts_are_assigned_by_their_words(stand) -> None:  # noqa: F811
+async def test_texts_are_assigned_by_their_words(stand) -> None:
     client, _ = stand
     await client.post("/reference/api/library/texts", json={"text": "ЗАЩИТНИКАМ"})
     r = await client.post("/reference/api/library/texts/links", json={"keys": ["защитникам"], "audience": "boys"})

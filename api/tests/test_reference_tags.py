@@ -21,7 +21,7 @@ async def find(client, q: str) -> list[dict]:
     return r.json()
 
 
-async def test_own_tag_is_found_by_part_and_other_form(stand) -> None:  # noqa: F811
+async def test_own_tag_is_found_by_part_and_other_form(stand) -> None:
     client, digests = stand
     ref = await reference(client, digests["pizza.png"], "пицца")
     r = await client.post(f"/reference/api/references/{ref}/tags", json={"name": "Школьная линейка"})
@@ -33,7 +33,7 @@ async def test_own_tag_is_found_by_part_and_other_form(stand) -> None:  # noqa: 
     assert names == ["Школьная линейка"], "подсказка не предложила заведённый тег"
 
 
-async def test_own_tag_outranks_what_the_model_found(stand) -> None:  # noqa: F811
+async def test_own_tag_outranks_what_the_model_found(stand) -> None:
     """Свой «снег» у пиццы выше, чем зимний танк, найденный моделью по «снег»."""
     client, digests = stand
     tank = await reference(client, digests["is3-winter-print.png"], "зимний танк")
@@ -43,7 +43,7 @@ async def test_own_tag_outranks_what_the_model_found(stand) -> None:  # noqa: F8
     assert found[:2] == [pizza, tank], f"свой тег не первым: {found}"
 
 
-async def test_hidden_autotag_stops_finding_the_reference(stand) -> None:  # noqa: F811
+async def test_hidden_autotag_stops_finding_the_reference(stand) -> None:
     """Скрытый автотег перестаёт находить референс. Запрос — имя самого
     автотега картинки, по которому референс находился до скрытия: какие слова
     модель находит на этой картинке, решает она, а не тест."""
@@ -61,7 +61,7 @@ async def test_hidden_autotag_stops_finding_the_reference(stand) -> None:  # noq
     assert opened["tags"]["hidden"] == [{"code": tag["code"], "name": tag["name"]}]
 
 
-async def test_same_tag_twice_is_one_tag_and_removal_works(stand) -> None:  # noqa: F811
+async def test_same_tag_twice_is_one_tag_and_removal_works(stand) -> None:
     client, digests = stand
     ref = await reference(client, digests["pizza.png"], "пицца")
     await client.post(f"/reference/api/references/{ref}/tags", json={"name": "зима"})

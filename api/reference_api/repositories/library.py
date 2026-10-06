@@ -149,10 +149,10 @@ async def link(
             elif not remove and found is None:
                 db.add(LibraryDrop(kind=kind, key=key, drop_id=drop_id, author_id=author_id))
         if audience is not None:
-            found = await db.get(LibraryAudience, (kind, key, audience))
-            if remove and found is not None:
-                await db.delete(found)
-            elif not remove and found is None:
+            placed = await db.get(LibraryAudience, (kind, key, audience))
+            if remove and placed is not None:
+                await db.delete(placed)
+            elif not remove and placed is None:
                 db.add(LibraryAudience(kind=kind, key=key, audience=audience, author_id=author_id))
     await db.commit()
 

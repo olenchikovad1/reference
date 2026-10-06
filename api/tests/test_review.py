@@ -173,8 +173,8 @@ async def test_submit_rings_editors_and_return_rings_the_executor(client, rung) 
 
 async def test_recall_unapprove_reject_and_revive_follow_the_table(client) -> None:
     ref = await new_reference(client)
-    post = lambda what, who, **body: client.post(f"{API}/references/{ref}/{what}", headers=as_(who), json=body or None)  # noqa: E731
-    status = lambda: client.get(f"{API}/references/{ref}")  # noqa: E731
+    post = lambda what, who, **body: client.post(f"{API}/references/{ref}/{what}", headers=as_(who), json=body or None)
+    status = lambda: client.get(f"{API}/references/{ref}")
 
     assert (await post("submit", IVANOVA)).status_code == 200
     assert (await post("recall", PETROV)).status_code == 403, "отзывает исполнитель"
