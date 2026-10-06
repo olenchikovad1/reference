@@ -22,11 +22,11 @@
   доменов, на токенах, а не на своих цветах и отступах;
 - прямой импорт Radix и прочих библиотек примитивов законен **только здесь** —
   экраны их не видят. Стережёт `guard_ui_boundary`, раскладка задана в
-  `.cursor/rails.json`;
+  `.claude/rails.json`;
 - появление третьей папки с компонентами — нарушение, а не вариант.
 
 ## Проверка
 
 ```bash
-py -X utf8 .cursor/hooks/guard_ui_boundary.py --scan
+py -X utf8 .claude/hooks/guard_ui_boundary.py --scan
 ```

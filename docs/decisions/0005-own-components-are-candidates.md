@@ -1,7 +1,7 @@
 # 0005. Свои компоненты — только чего нет в платформе, и только как кандидаты
 
 **Дата:** 23.09.2026
-**Касается:** `web/src/candidates/README.md`, `.cursor/rails.json`, инвариант платформы И-9
+**Касается:** `web/src/candidates/README.md`, `.claude/rails.json`, инвариант платформы И-9
 
 ## Задача
 
@@ -17,7 +17,7 @@
 
 Прямой импорт Radix и прочих библиотек примитивов законен только внутри этой
 папки. Экраны их не видят. Стережёт `guard_ui_boundary`, раскладка задана в
-`.cursor/rails.json` (`ui_set_dir`, `ui_root_dir`).
+`.claude/rails.json` (`ui_set_dir`, `ui_root_dir`).
 
 ## Почему
 
