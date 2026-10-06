@@ -89,6 +89,7 @@ import {
 import { CODE } from '../app/shell'
 import { useCan, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { readDropped } from '../shared/dropped'
+import { decisions, moveTargets, type Rights } from '../shared/decisions'
 import { WINDOW_KEYS, windowKey } from '../shared/keys'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { ThumbsUp } from '../candidates/ThumbsUp'
@@ -2661,6 +2662,7 @@ export function WorkWindow() {
           {current && (
             <DecisionBar
               card={current}
+              currentDrops={refDropIds}
               openRemarks={openRemarks}
               talkOpen={talkOpen}
               onTalk={setTalkOpen}
@@ -3508,9 +3510,16 @@ function DecisionBar(props: {
   onTalk: (on: boolean) => void
   onRemark: () => void
   onChanged: (card: FullCard) => void
+  /** Дропы, где референс уже лежит: переносить в них нечего. */
+  currentDrops: number[]
 }) {
   const { card } = props
-  const canFinal = useCan(CODE, 'review', 'approve-final')
+  const rights: Rights = {
+    writeReferences: useCan(CODE, 'references', 'write'),
+    writeReview: useCan(CODE, 'review', 'write'),
+    viewReview: useCan(CODE, 'review', 'view'),
+    approveFinal: useCan(CODE, 'review', 'approve-final'),
+  }
   const drops = useQuery({ queryKey: ['drops'], queryFn: fetchDrops, staleTime: 60_000 })
   const [asking, setAsking] = useState<Step | 'propose' | null>(null)
   const [comment, setComment] = useState('')
@@ -3533,12 +3542,8 @@ function DecisionBar(props: {
   useDismiss(menu, closeMenu, [menuRef], '[data-status-toggle]')
   const [moving, setMoving] = useState(false)
   const status = card.status ?? 'draft'
-  const steps = (card.can ?? []).filter((w): w is Step => w !== 'remark' && (w !== 'approve-final' || canFinal))
-  // «Нравится» — следующее «да»: согласовать, а согласованное главному —
-  // принять окончательно.
-  const like: Step | null = steps.includes('approve') ? 'approve' : status === 'approved' && steps.includes('approve-final') ? 'approve-final' : null
-  const liked = status === 'approved' || status === 'final'
-  const rest = steps.filter((w) => w !== like && w !== 'return')
+  // Кнопка — только если её разрешают и роль, и право платформы.
+  const { like, liked, canReturn, menu: rest, canRemark, canPropose, canMove } = decisions(status, card.can ?? [], rights)
   const said = (e: Error) =>
     /not found/i.test(e.message)
       ? 'на это нет права в платформе — его выдают в «Доступах» платформы (набор «Суперредактор» или функция раздела «Согласование»)'
@@ -3634,18 +3639,18 @@ function DecisionBar(props: {
           <Hint text={like ? STEP_HINTS[like] : 'Уже согласован'}>
             <button
               className={big('agree')}
-              // Не disabled: у отключённой кнопки нет наведения — не всплыла бы подсказка.
-            disabled={busy}
-            aria-disabled={!like}
+              // Без хода — aria-disabled, а не disabled: у отключённой кнопки
+              // нет наведения, и подсказка «уже согласован» не всплыла бы.
+              disabled={busy}
+              aria-disabled={!like}
               aria-pressed={liked}
-              
               onClick={() => like && press(like)}
             >
               <ThumbsUp /> {like === 'approve-final' ? 'окончательно' : liked ? 'нравится ✓' : 'нравится'}
             </button>
           </Hint>
         )}
-        {steps.includes('return') && (
+        {canReturn && (
           <Hint text={STEP_HINTS.return}>
             <button className={big('object')} disabled={busy} onClick={() => press('return')}>
               <Icon name="x" size={20} /> на доработку
@@ -3671,19 +3676,21 @@ function DecisionBar(props: {
                 </button>
               </Hint>
             ))}
-            {(card.can ?? []).includes('remark') && (
+            {canRemark && (
               <Hint text="Написать замечание к референсу — текстом или голосом; исполнитель увидит его в обсуждении" side="left">
                 <button className={meaningClass('act', true, true)} onClick={() => (setMenu(false), props.onRemark())}>
                   замечание
                 </button>
               </Hint>
             )}
+            {canPropose && (
             <Hint text={onAgenda ? 'Добавить ещё повод к обсуждению этого референса на встрече' : 'Вынести на встречу: попадёт в повестку с поводом; статус не меняется'} side="left">
               <button className={meaningClass('act', true, true)} onClick={() => (setMenu(false), setAsking('propose'), setComment(''))}>
                 {onAgenda ? 'ещё повод обсудить' : 'выдвинуть на обсуждение'}
               </button>
             </Hint>
-            {onAgenda && (
+            )}
+            {canPropose && onAgenda && (
               <Hint text="Убрать из повестки — обсуждать не нужно" side="left">
                 <button
                   className={meaningClass('withdraw', true, true)}
@@ -3697,7 +3704,7 @@ function DecisionBar(props: {
                 </button>
               </Hint>
             )}
-            {!moving ? (
+            {canMove && (!moving ? (
               <Hint text="Перевести на цветомодель той же модели в ассортименте другого дропа" side="left">
                 <button className={meaningClass('quiet', true, true)} onClick={() => setMoving(true)}>
                   перенести в дроп…
@@ -3705,16 +3712,14 @@ function DecisionBar(props: {
               </Hint>
             ) : (
               <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
-                {(drops.data ?? [])
-                  .filter((d) => !d.retired)
-                  .map((d) => (
+                {moveTargets(drops.data ?? [], props.currentDrops).map((d) => (
                     <button key={d.id} className={meaningClass('act', true, true)} disabled={busy} onClick={() => moveTo(d.id)}>
                       {d.name}
                     </button>
-                  ))}
+                ))}
               </div>
-            )}
-            {rest.length === 0 && !(card.can ?? []).includes('remark') && (
+            ))}
+            {rest.length === 0 && !canRemark && !canPropose && !canMove && (
               <span className="text-xs text-muted-foreground">других переходов у вас сейчас нет</span>
             )}
           </div>
