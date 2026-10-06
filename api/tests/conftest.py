@@ -11,8 +11,11 @@
 """
 
 import asyncio
-import pathlib
+import io
 import os
+import pathlib
+
+import pytest_asyncio
 
 _SUFFIX = "_test"
 
@@ -96,3 +99,59 @@ def _switch_to_test_bucket() -> None:
 _switch_to_test_database()
 _switch_to_test_bucket()
 _bring_schema_up()
+
+
+# --- Набор стенда для поиска, дропов и тегов -------------------------------
+
+PRINTS = pathlib.Path("/srv/reference/files/prints")
+_FIX = pathlib.Path("/srv/reference/fixtures")
+
+
+@pytest_asyncio.fixture
+async def stand():
+    """Клиент и библиотека из всего набора: вес картинки считается относительно
+    остальных, и на трёх картинках он меряет не то же, что на тридцати.
+
+    Разметка набора моделями — около тридцати секунд, а результат зависит
+    только от файлов и модели. Поэтому она держится между тестами: в
+    библиотеке оставляется ровно набор (чужие картинки других тестов
+    убираются — они сдвигали бы вес), и моделями размечается только то, чего
+    в ней нет. Карточки референсов чистятся каждый раз, как и раньше."""
+    import hashlib
+
+    import httpx
+    import yaml
+    from sqlalchemy import text
+
+    from reference_api.app import create_app
+    from reference_api.db import engine
+    from reference_api.services.embeddings import MODEL_NAME
+
+    fx = yaml.safe_load((_FIX / "prints.yaml").read_text(encoding="utf-8"))
+    names = [e["name"] for e in fx["files"] + fx["tuning_set"]]
+    content = {n: (PRINTS / n).read_bytes() for n in names}
+    keys = sorted({hashlib.sha256(b).hexdigest() for b in content.values()})
+
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        async with engine.begin() as conn:
+            await conn.execute(text("truncate table reference_cards cascade"))
+            await conn.execute(text("delete from asset_tags where not (digest = any(:k))"), {"k": keys})
+            await conn.execute(text("delete from asset_embeddings where not (digest = any(:k))"), {"k": keys})
+            have = set((await conn.execute(
+                text("select digest from asset_embeddings where model = :m and digest = any(:k)"),
+                {"m": MODEL_NAME, "k": keys},
+            )).scalars())
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://stand") as c:
+            # Файлы кладутся всегда: хранилище тестов общее с другими наборами,
+            # а повторная загрузка того же содержимого ничего не меняет.
+            r = await c.post("/reference/api/assets", files=[
+                ("files", (n, io.BytesIO(content[n]), "image/png")) for n in names])
+            assert r.status_code == 200, r.text
+            digests = {a["name"]: a["digest"] for a in r.json()}
+            missing = [d for d in digests.values() if d not in have]
+            if missing:
+                rec = await c.post("/reference/api/assets/recognise", json=missing)
+                assert rec.status_code == 200, rec.text
+            yield c, digests
+    await engine.dispose()

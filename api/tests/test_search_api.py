@@ -6,42 +6,13 @@
 выбраны замером scripts/embeddings/search_rule.py (25.09.2026).
 """
 
-import io
 import pathlib
 
-import httpx
-import pytest_asyncio
-import yaml
 
-from reference_api.app import create_app
 
 PRINTS = pathlib.Path("/srv/reference/files/prints")
 FIX = pathlib.Path("/srv/reference/fixtures")
 
-
-@pytest_asyncio.fixture
-async def stand():
-    """Клиент и библиотека из всего набора: вес картинки считается относительно
-    остальных, и на трёх картинках он меряет не то же, что на тридцати."""
-    from sqlalchemy import text
-
-    from reference_api.db import engine
-
-    app = create_app()
-    async with app.router.lifespan_context(app):
-        async with engine.begin() as conn:
-            await conn.execute(text("truncate table asset_embeddings, asset_tags, reference_cards cascade"))
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://stand") as c:
-            fx = yaml.safe_load((FIX / "prints.yaml").read_text(encoding="utf-8"))
-            names = [e["name"] for e in fx["files"] + fx["tuning_set"]]
-            r = await c.post("/reference/api/assets", files=[
-                ("files", (n, io.BytesIO((PRINTS / n).read_bytes()), "image/png")) for n in names])
-            assert r.status_code == 200, r.text
-            digests = {a["name"]: a["digest"] for a in r.json()}
-            rec = await c.post("/reference/api/assets/recognise", json=list(digests.values()))
-            assert rec.status_code == 200, rec.text
-            yield c, digests
-    await engine.dispose()
 
 
 async def search(client, q: str) -> list[dict]:

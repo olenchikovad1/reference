@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from reference_api.app import create_app
 from tests.test_rights import FixedKeys, bearer
-from tests.test_search_api import stand  # noqa: F401 — оснастка: библиотека из набора стенда
 
 NEW_YEAR, FEB23 = 2, 3
 HOODIE_RED = 4

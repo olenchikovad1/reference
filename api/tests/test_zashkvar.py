@@ -11,7 +11,7 @@ from PIL import Image
 
 from reference_api.app import create_app
 from tests.test_rights import FixedKeys, bearer
-from tests.test_search_api import PRINTS, stand  # noqa: F401 — оснастка: библиотека из набора стенда
+from tests.test_search_api import PRINTS
 
 HELI = "mi8-cloud-sharp-clean-print.png"
 

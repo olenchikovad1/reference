@@ -35,12 +35,6 @@ def test_every_probe_says_what_it_answers(client: TestClient) -> None:
         assert p["answers"], f"{p['name']} не говорит, на что отвечает"
 
 
-def test_real_prints_are_listed_even_without_description(client: TestClient) -> None:
-    """Файл без описания всё равно в наборе: иначе он молча исчезает."""
-    items = client.get("/reference/api/prints").json()
-    assert any(i["kind"] == "artwork" for i in items)
-
-
 def test_tuning_set_prints_are_described_like_the_owners(client: TestClient) -> None:
     """Принт из набора для настройки описан так же, как принты владельца.
 

@@ -5,7 +5,6 @@
 найденного моделью» не проверить.
 """
 
-from tests.test_search_api import stand  # noqa: F401 — оснастка: библиотека из набора стенда
 
 
 async def reference(client, digest: str, name: str) -> int:
