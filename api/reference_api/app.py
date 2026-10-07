@@ -17,6 +17,7 @@ from platform_client.tokens import KeySet, Subject, Visibility
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from reference_api.api import assets, colours, drops, health, library, people, platform, prints, products, references, review
+from reference_api import assistant
 from reference_api.config import settings
 from reference_api.consumers import review as review_consumer
 from reference_api.schedulers import people as people_schedule
@@ -126,6 +127,8 @@ def create_app(without_platform: bool | None = None) -> FastAPI:
     root.include_router(library.router)
     root.include_router(review.router)
     root.include_router(review.agenda_router)
+    # Четвёртый вход — инструменты для ИИ-помощника (план 119).
+    root.include_router(assistant.router)
     app.include_router(root)
     if stand:
         # Добавлен раньше посредника платформы — значит, исполняется после него.

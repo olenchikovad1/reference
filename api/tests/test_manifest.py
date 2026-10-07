@@ -26,8 +26,10 @@ def test_manifest_is_served_as_the_platform_reads_it(client: TestClient) -> None
     assert r.status_code == 200
     m = r.json()
     assert m["code"] == "reference" and m["contract"] == "1"
-    assert [s["code"] for s in m["sections"]] == [
-        "references", "prints", "texts", "products", "drops", "review", "dictionaries", "archive"]
+    # Отдаётся ровно файл манифеста — список разделов здесь не повторяется:
+    # константа в тесте падала бы от каждого нового раздела, не ловя дефекта.
+    assert m == publishing.manifest()
+    assert "/api/mcp" in m["machine_entrances"], "вход помощника объявлен (план 119)"
 
 
 def _core(status: int, body: dict) -> httpx.MockTransport:
