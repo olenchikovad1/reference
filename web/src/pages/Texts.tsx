@@ -192,7 +192,6 @@ export function Texts() {
           columns={columns}
           rowKey={(r) => r.text}
           isLoading={texts.isPending}
-          pagination="off"
           empty={
             asked
               ? 'Такой надписи не было — ни дословно, ни похожей. Можно завести её заранее.'

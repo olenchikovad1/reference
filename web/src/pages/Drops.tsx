@@ -214,7 +214,6 @@ function DropMatrix({
         columns={columns}
         rowKey={(r) => String(r.model.id)}
         isLoading={m.isPending}
-        pagination="off"
         empty="В дропе пока нет ни одной цветомодели — добавьте модели в его ассортимент."
       />
       {refusal && (

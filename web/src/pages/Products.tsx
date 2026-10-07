@@ -115,6 +115,7 @@ function ProductCard({ model, onClose }: { model: Model; onClose: () => void }) 
           title="Цветомодели и дропы"
           about="Модель в конкретном цвете — на ней рисуется референс; дроп — выпуск, в ассортименте которого она стоит. Ассортимент правится на странице «Дропы»."
         >
+          {/* Постраничность выключена: цвета одной модели — десяток строк, листать нечего. */}
           <DataTable rows={model.colour_models} columns={COLOUR_COLUMNS} rowKey={(cm) => String(cm.id)} pagination="off" empty="Цветомоделей нет." />
           <p className="mt-1 text-xs text-muted-foreground">Всего референсов на модели: {refs}.</p>
         </Block>
@@ -185,6 +186,7 @@ function Described({ product }: { product: Product }) {
         title="Поля печати по размерам, см"
         about="Ограничение: куда физически можно печатать на этом размере, ширина × высота. Не масштаб принта — выход за поле линтер референса называет ошибкой."
       >
+        {/* Постраничность выключена: ряд размеров 98–164 — дюжина строк, весь виден сразу. */}
         <DataTable rows={fieldRows} columns={fieldColumns} rowKey={(r) => r.size} pagination="off" empty="Полей печати в описании нет — проверки поля не работают." />
         {fields?.provisional && <p className="mt-1 text-xs text-muted-foreground">Числа предварительные.</p>}
       </Block>

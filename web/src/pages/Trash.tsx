@@ -90,7 +90,6 @@ export function Trash() {
           columns={columns}
           rowKey={(r) => String(r.id)}
           isLoading={trash.isPending}
-          pagination="off"
           empty="Корзина пуста — удалённое с витрины попадает сюда на 30 дней."
         />
       )}
