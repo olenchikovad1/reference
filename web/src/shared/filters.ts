@@ -89,7 +89,6 @@ export function useDropFilter(): {
     const next = new URLSearchParams(params)
     new URLSearchParams(remembered).forEach((v, k) => next.set(k, v))
     setParams(next, { replace: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function write(f: DropFilter) {

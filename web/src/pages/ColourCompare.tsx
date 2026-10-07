@@ -92,7 +92,6 @@ export function ColourCompare({
       if (w > 0) out.set(el.src, [r / w, g / w, b / w])
     }
     return out
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composition, imagesVersion])
 
   const toggleShown = (code: string) =>

@@ -25,6 +25,5 @@ export function useDismiss(open: boolean, close: () => void, inside: RefObject<H
       document.removeEventListener('keydown', onKey, true)
     }
     // Список ref-ов стабилен по смыслу: сравниваются ref-объекты, а не их содержимое.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, close])
 }

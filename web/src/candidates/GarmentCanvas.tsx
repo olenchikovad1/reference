@@ -201,7 +201,6 @@ export function GarmentCanvas(props: CanvasProps) {
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameSrc, state.zones])
 
   /** Размер развёрток: половина обхвата по ткани и высота кадра над низом. */
@@ -302,7 +301,6 @@ export function GarmentCanvas(props: CanvasProps) {
     lookupBuffer.current = buildLookup(torso, state.code, W, H, renderScale, lookupBuffer.current)
     r.setLookup(lookupBuffer.current, W, H)
     drawAll()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [torso, state.code, W, H, renderScale, wrapped])
 
   /** Композиция принта в отдельный холст, потом текстурой в шейдер. */
@@ -390,7 +388,6 @@ export function GarmentCanvas(props: CanvasProps) {
 
   useEffect(() => {
     drawAll()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composition, props.params, renderScale, calibration, props.images, surface, props.clips, props.imagesVersion])
 
   function toFrame(e: { clientX: number; clientY: number }): [number, number] {
