@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Поднять тег «Референса» на sandbox (план 120): модели по описи, база,
-# хранилище, брокер, схема, сервис. Выполняется на sandbox в /opt/reference.
+# брокер, схема, сервис. Картинки — в Yandex Object Storage. Выполняется на sandbox в /opt/reference.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 tag="${1:?нужен тег — его печатает build.sh}"
@@ -12,9 +12,8 @@ docker image inspect "reference-api:$tag" >/dev/null 2>&1 || {
 }
 echo "сверяю и докачиваю модели по описи (первый раз — ~1.9 ГБ)"
 python3 scripts/stand/fetch_models.py
-echo "поднимаю базу, хранилище и брокер"
-compose up -d postgres minio rabbitmq
-compose up minio-init
+echo "поднимаю базу и брокер"
+compose up -d postgres rabbitmq
 echo "накатываю схему"
 compose --profile migrate run --rm migrate
 echo "поднимаю сервис"
