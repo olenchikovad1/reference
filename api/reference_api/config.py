@@ -7,6 +7,7 @@
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -137,6 +138,19 @@ class Settings(BaseSettings):
     # Префикс, под которым приложение живёт в платформе. В разработке он
     # отличается от боевого намеренно: так зашитый корень виден до выкладки.
     base_path: str = "/reference/api"
+
+    @model_validator(mode="after")
+    def _stand_mode_only_on_the_stand(self) -> "Settings":
+        """Стенд без платформы — только с локальным ядром (план 120, US-0882).
+
+        В бою ядро — публичный адрес по https; включённый там WITHOUT_PLATFORM
+        дал бы запросу без токена все гранты манифеста, мимо входа платформы.
+        Отказ — при старте, а не тихая работа без прав."""
+        if self.without_platform and (self.platform_core_url or "").startswith("https://"):
+            raise ValueError(
+                "стенд без платформы (WITHOUT_PLATFORM=true) при боевом ядре "
+                f"{self.platform_core_url}: в бою вход только через платформу")
+        return self
 
 
 @lru_cache
