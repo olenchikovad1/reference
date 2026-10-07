@@ -1,3 +1,4 @@
+import { buttonClass } from '@platform/ui'
 
 
 import { S } from './styles'
@@ -82,3 +83,10 @@ export function Section({ title, children }: { title: string; children: React.Re
     </section>
   )
 }
+
+
+/** Кнопка окна: мелкая, тон — по смыслу. */
+export const small = (tone: 'neutral' | 'accent' | 'danger' = 'neutral') =>
+  buttonClass({ tone, variant: tone === 'accent' ? 'solid' : 'outline', small: true })
+/** Кнопка-переключатель: нажатая — мягким акцентом. */
+export const on = (active: boolean) => buttonClass({ tone: active ? 'accent' : 'neutral', variant: active ? 'soft' : 'outline', small: true })
