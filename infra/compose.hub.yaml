@@ -1,0 +1,34 @@
+# «Референс» в бою: часть на hub (план 120) — статика фронтенда и туннель до
+# сервиса на sandbox. Шлюз платформы ходит сюда по имени reference-web в сети
+# platform_default, как на стенде. Значения — infra/hub.env, его кладёт
+# установка (local/secrets/reference/).
+name: reference
+services:
+  web:
+    image: reference-web:${REFERENCE_TAG:?тег сборки не задан}
+    restart: unless-stopped
+    networks:
+      default: {}
+      platform:
+        aliases: [reference-web]
+    mem_limit: 64m
+
+  reference-tunnel:
+    image: reference-tunnel:${REFERENCE_TAG:?тег сборки не задан}
+    restart: unless-stopped
+    environment:
+      TUNNEL_HOST: ${REFERENCE_TUNNEL_HOST:?}
+      TUNNEL_USER: ${REFERENCE_TUNNEL_USER:-reference-tunnel}
+    volumes:
+      - ../tunnel:/tunnel:ro
+    mem_limit: 32m
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "8031"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  platform:
+    external: true
+    name: platform_default

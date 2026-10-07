@@ -138,6 +138,8 @@ services:
     build:
       context: ../web
       dockerfile: Dockerfile
+      # Стенд — дев-сервер; боевая ступень prod собирается выкаткой (план 120).
+      target: dev
       args:
         PLATFORM_NPM_REGISTRY: ${PLATFORM_NPM_REGISTRY}
     env_file: ["../web/.env"]

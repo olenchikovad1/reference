@@ -156,7 +156,7 @@ scripts/
 py scripts/stand/fetch_models.py && cp api/.env.example api/.env && cp web/.env.example web/.env && cp infra/.env.example infra/.env && docker compose -f infra/compose.yaml up -d --build
 ```
 
-**Модели качаются до подъёма, а не лежат в репозитории:** около 760 МБ по
+**Модели качаются до подъёма, а не лежат в репозитории:** около 1,9 ГБ по
 описи `infra/stand/fixtures/models.json` (ревизия, sha256, память), с
 которыми история перестала бы клонироваться. Пропустить шаг нельзя — стенд
 соберётся, а разметка ответит 503 с именем файла и командой. Повторный запуск

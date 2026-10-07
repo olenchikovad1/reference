@@ -1,0 +1,98 @@
+# «Референс» в бою: основная часть на sandbox (план 120, решение владельца
+# 07.10.2026) — сервис с моделями, база с векторами, хранилище картинок, брокер.
+# Наружу — только 127.0.0.1:8031 для туннеля с hub. Значения — .env, его кладёт
+# установка вместе с удостоверением платформы (.credential.env).
+#
+# Тома: pgdata — база; miniodata — картинки и производные (хранилище —
+# здесь, рядом с сервисом, а не через туннель); derived — кэш превью.
+# Файлы изделий, принтов и модели — infra/stand/files рядом, как в репозитории
+# (models/ в нём качает
+# scripts/stand/fetch_models.py по описи). Чистое состояние — только
+# осознанно: docker compose down -v стирает работу людей.
+name: reference
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+    volumes: ["miniodata:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio: {condition: service_healthy}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:?}
+    entrypoint: >
+      /bin/sh -c "mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/$${S3_BUCKET}"
+
+  rabbitmq:
+    image: rabbitmq:4.0.5-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # Схема — отдельным шагом до сервиса: откат поднимает прежний тег без миграций.
+  migrate:
+    image: reference-api:${REFERENCE_TAG:?тег сборки не задан}
+    env_file: ["../.env"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    command: ["alembic", "upgrade", "head"]
+    profiles: [migrate]
+
+  api:
+    image: reference-api:${REFERENCE_TAG:?тег сборки не задан}
+    restart: unless-stopped
+    env_file: ["../.env"]
+    # Разметка нейросетями — до ~2.6 ГБ на пике (замер стенда, US-0880).
+    mem_limit: 3g
+    depends_on:
+      postgres: {condition: service_healthy}
+      minio-init: {condition: service_completed_successfully}
+      rabbitmq: {condition: service_healthy}
+    ports: ["127.0.0.1:8031:8000"]
+    volumes:
+      - "../infra/stand/files:/srv/reference/files:ro"
+      - "../infra/stand/fixtures:/srv/reference/fixtures:ro"
+      - "../manifest.reference.yaml:/app/manifest.reference.yaml:ro"
+      - "derived:/srv/reference/cache"
+    command: ["uvicorn", "reference_api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/reference/api/health/live').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  pgdata:
+  miniodata:
+  derived:

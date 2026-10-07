@@ -1,0 +1,47 @@
+# Контракт выкатки «Референса» приложением installation (план 120). Установка
+# внутрь «Референса» не заглядывает: выполняет эти команды в чистом клоне ветки.
+# Поля — CONTRACT.md установки. Значения и подключения — в установке,
+# local/secrets/reference/, кладутся ею в клон перед выкаткой.
+#
+# Основная машина — sandbox (решение владельца 07.10.2026 по разведке US-0880:
+# на hub не хватает памяти и диска): сервис с моделями, база, хранилище,
+# брокер. На hub — только фронтенд и туннель до sandbox, потому что шлюз
+# платформы стоит там. Удостоверение платформы установка кладёт на основную
+# машину — туда, где его читает сервис.
+
+[unit]
+branch = "master"
+test = "bash deploy/release/test.sh"
+build = "bash deploy/release/build.sh"
+ship = "bash deploy/release/ship-sandbox.sh {tag}"
+apply = "./deploy/server/apply-sandbox.sh {tag}"
+rollback = "./deploy/server/rollback-sandbox.sh"
+# Сервис слушает только 127.0.0.1:8031 на sandbox — проверка из сети хоста.
+ready = "http://127.0.0.1:8031/reference/api/health/live"
+ready_network = "host"
+connection = "deploy/sandbox.env"
+secrets = ["deploy/sandbox.env", "infra/sandbox.env", "deploy/hub.env", "infra/hub.env",
+           "infra/tunnel-keys/id_ed25519", "infra/tunnel-keys/known_hosts"]
+images = ["reference-api"]
+archives = "images/reference-api-{tag}.tar.gz"
+transport = "archive"
+# Подключение к платформе — после готовности: описание ядро читает по адресу
+# приложения в своей сети (фронтенд на hub → туннель → сервис), удостоверение
+# уходит на sandbox переменной PLATFORM_CREDENTIAL.
+manifest = "http://reference-web:5173/manifest"
+credential_variable = "PLATFORM_CREDENTIAL"
+
+# Часть на hub: статика фронтенда под именем reference-web в сети платформы и
+# туннель до sandbox. Таблица стоит последней: в TOML всё ниже заголовка
+# таблицы принадлежит ей.
+[unit.targets.hub]
+connection = "deploy/hub.env"
+secrets = ["deploy/hub.env", "infra/hub.env", "infra/tunnel-keys/id_ed25519", "infra/tunnel-keys/known_hosts"]
+ship = "bash deploy/release/ship-hub.sh {tag}"
+apply = "./deploy/server/apply-hub.sh {tag}"
+rollback = "./deploy/server/rollback-hub.sh"
+ready = "http://reference-web:5173/reference/"
+ready_network = "platform_default"
+images = ["reference-web", "reference-tunnel"]
+archives = "images/reference-hub-{tag}.tar.gz"
+transport = "archive"

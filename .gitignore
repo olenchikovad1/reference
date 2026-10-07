@@ -38,3 +38,11 @@ dist/
 
 # Личные настройки Claude Code — у каждого свои
 /.claude/settings.local.json
+
+# Машинные файлы выкатки (план 120): их кладёт установка в чистый клон из своего
+# local/secrets/reference/ — в репозиторий «Референса» они не едут.
+/deploy/sandbox.env
+/deploy/hub.env
+/infra/sandbox.env
+/infra/hub.env
+/infra/tunnel-keys/
