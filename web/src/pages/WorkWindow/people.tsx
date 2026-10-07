@@ -88,7 +88,8 @@ export function ReviewSection({ card }: { card: FullCard; onChanged?: (card: Ful
         )}
         {(card.status_events ?? []).slice(wholePath ? 0 : -2).map((e, i) => (
           <div key={i} className="text-muted-foreground">
-            версия {e.number} · {when(e.at)} · {e.by_name ?? 'без входа'}: {STATUS_NAMES[e.to]}
+            версия {e.number} · {when(e.at)} · {e.by_name ?? 'без входа'}
+            {e.bot_name ? ` через «${e.bot_name}»` : ''}: {STATUS_NAMES[e.to]}
             {e.comment ? ` — «${e.comment}»` : ''}
           </div>
         ))}

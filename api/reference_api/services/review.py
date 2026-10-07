@@ -110,7 +110,10 @@ async def can_say(db: AsyncSession, card, row, who: str | None) -> list[str]:
     return out
 
 
-async def step(db: AsyncSession, reference_id: int, action: str, who: str | None, comment: str | None = None) -> None:
+async def step(db: AsyncSession, reference_id: int, action: str, who: str | None, comment: str | None = None,
+               bot_name: str | None = None) -> None:
+    """Шаг согласования. `bot_name` — шаг сделал ИИ-помощник правами `who`:
+    в пути согласования это видно (план 119)."""
     card = await cards.get(db, reference_id)
     if card is None:
         raise NoSuchReference("референса с таким номером нет")
@@ -123,7 +126,7 @@ async def step(db: AsyncSession, reference_id: int, action: str, who: str | None
     if action in NEEDS_COMMENT and not text:
         raise NoComment(NEEDS_COMMENT[action])
     number = await repo.last_number(db, reference_id)
-    await repo.move(db, reference_id, to, number, who, text)
+    await repo.move(db, reference_id, to, number, who, text, bot_name)
     # Решили — обсуждать больше нечего: референс уходит с повестки (план 098).
     await repo.unpropose(db, reference_id, who, action)
     await _ring(db, card, action, number, who, text)

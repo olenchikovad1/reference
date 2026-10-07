@@ -150,6 +150,8 @@ export interface StatusEvent {
   by_id: string | null
   by_name: string | null
   comment: string | null
+  /** Шаг сделал ИИ-помощник правами этого человека — имя бота (план 119). */
+  bot_name?: string | null
   at: string
 }
 

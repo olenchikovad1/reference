@@ -301,6 +301,9 @@ class ReferenceStatusEvent(Base):
     by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: Замечание при возврате; у остальных переходов — пусто.
     comment: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    #: Имя бота, если шаг сделал ИИ-помощник правами человека `by_id`
+    #: (решение платформы 0034); пусто — сам человек.
+    bot_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

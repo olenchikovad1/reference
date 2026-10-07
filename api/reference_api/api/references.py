@@ -416,13 +416,16 @@ async def _status_events(db: AsyncSession, reference_id: int) -> list[StatusEven
     rows = await review.events(db, reference_id)
     who = await people.members_of(db, sorted({e.by_id for e in rows if e.by_id}))
     return [StatusEventOut(from_=e.from_status, to=e.to_status, number=e.number, by_id=e.by_id,
-                           by_name=who[e.by_id].name if e.by_id in who else None, comment=e.comment, at=e.at)
+                           by_name=who[e.by_id].name if e.by_id in who else None, comment=e.comment,
+                           bot_name=e.bot_name, at=e.at)
             for e in rows]
 
 
 async def _step(reference_id: int, action: str, request: Request, db: AsyncSession, comment: str | None = None) -> list[StatusEventOut]:
     try:
-        await review.step(db, reference_id, action, _author(request), comment)
+        subject = getattr(request.state, "subject", None)
+        await review.step(db, reference_id, action, _author(request), comment,
+                          getattr(subject, "bot_name", None))
     except review.NoSuchReference as e:
         raise HTTPException(404, str(e)) from None
     except review.WrongStatus as e:

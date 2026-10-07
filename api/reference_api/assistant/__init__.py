@@ -22,7 +22,7 @@ tools = AssistantTools(name="Референс")
 
 # Регистрация инструментов — импортом модулей доменов: объявление идёт при
 # импорте, и инструмент без права роняет подъём сервиса.
-from reference_api.assistant import drops, references  # noqa: F401
+from reference_api.assistant import drops, references, review  # noqa: F401
 
 router = APIRouter(tags=["помощник"])
 

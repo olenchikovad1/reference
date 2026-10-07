@@ -112,6 +112,8 @@ class StatusEventOut(BaseModel):
     by_id: str | None
     by_name: str | None
     comment: str | None
+    #: Шаг сделал ИИ-помощник правами `by_id` — имя бота; иначе пусто.
+    bot_name: str | None = None
     at: datetime
 
     model_config = {"populate_by_name": True}

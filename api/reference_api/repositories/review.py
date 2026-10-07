@@ -14,12 +14,12 @@ from reference_api.models.references import (
 
 
 async def move(db: AsyncSession, reference_id: int, to: str, number: int, by_id: str | None,
-               comment: str | None = None) -> None:
+               comment: str | None = None, bot_name: str | None = None) -> None:
     """Сменить статус и записать переход — одной транзакцией. Карточку
     сервис уже проверил в этой же сессии: её отсутствие здесь — ошибка кода."""
     card = await db.get_one(Reference, reference_id)
     db.add(ReferenceStatusEvent(reference_id=reference_id, from_status=card.status, to_status=to, number=number,
-                                by_id=by_id, comment=comment))
+                                by_id=by_id, comment=comment, bot_name=bot_name))
     card.status = to
     await db.commit()
 

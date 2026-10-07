@@ -78,3 +78,72 @@ async def test_references_are_what_the_showcase_shows(client) -> None:
 async def test_without_a_token_there_is_no_entrance(client) -> None:
     r = await client.post(MCP, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     assert r.status_code == 404
+
+
+# --- Согласование словами (US-0897) -----------------------------------------
+
+REVIEWER = (*EVERYTHING, "review:write", "dictionaries:write")
+
+
+def bot_bearer(*grants: str) -> dict[str, str]:
+    """Токен человека, выданный боту: страж меняет ключ бота на такой токен
+    с пометкой (решение платформы 0034)."""
+    import datetime
+
+    import jwt
+
+    from tests.test_rights import KEY
+
+    now = datetime.datetime.now(datetime.UTC)
+    claims = {"sub": "01SOMEONE", "aud": "reference", "exp": now + datetime.timedelta(minutes=5),
+              "org": "01ORG", "vis": "own", "grants": list(grants),
+              "act": "bot", "bot": "01BOT", "bot_name": "помощник Алексея"}
+    return {"Authorization": "Bearer " + jwt.encode(claims, KEY, algorithm="RS256", headers={"kid": "t1"})}
+
+
+async def bot_call(client, name: str, arguments: dict, *grants: str) -> dict:
+    r = await client.post(MCP, headers=bot_bearer(*grants), json={
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def chief_reference(client) -> int:
+    """Референс и я — главный в согласовании: роль — своя таблица (решение 0016)."""
+    r = await client.put("/reference/api/people/01SOMEONE", headers=bearer(*REVIEWER),
+                         json={"full_name": "Оленчиков Алексей", "role": "chief"})
+    assert r.status_code == 200, r.text
+    saved = await client.post("/reference/api/references", headers=bearer(*REVIEWER), json={
+        "name": "мишка", "sheet_digest": "a" * 64, "image_digests": [], "texts": []})
+    return saved.json()["id"]
+
+
+async def test_return_needs_a_reason_and_the_path_shows_the_bot(client) -> None:
+    ref = await chief_reference(client)
+    silent = await bot_call(client, "review_decision", {"id": ref, "action": "return"}, *REVIEWER)
+    assert silent["result"]["isError"] and "замечани" in silent["result"]["content"][0]["text"], \
+        "без причины — тот же отказ словами, что у кнопки"
+
+    done = await bot_call(client, "review_decision",
+                          {"id": ref, "action": "return", "comment": "мишка вылезает за молнию"}, *REVIEWER)
+    assert not done["result"]["isError"], done
+    card = (await client.get(f"/reference/api/references/{ref}", headers=bearer(*REVIEWER))).json()
+    last = card["status_events"][-1]
+    assert (card["status"], last["comment"], last["bot_name"]) == ("rework", "мишка вылезает за молнию",
+                                                                    "помощник Алексея")
+
+
+async def test_a_decision_needs_the_review_right(client) -> None:
+    ref = await chief_reference(client)
+    refused = await bot_call(client, "review_decision", {"id": ref, "action": "approve"}, *EVERYTHING)
+    assert refused["error"]["code"] == -32602, "без права записи в согласовании инструмента нет"
+
+
+async def test_remark_and_agenda(client) -> None:
+    ref = await chief_reference(client)
+    said = await bot_call(client, "remark", {"id": ref, "text": "поднять на 2 см"}, *REVIEWER)
+    assert not said["result"]["isError"], said
+    remarks = (await client.get(f"/reference/api/references/{ref}/remarks", headers=bearer(*REVIEWER))).json()
+    assert [r["text"] for r in remarks] == ["поднять на 2 см"]
+    proposed = await bot_call(client, "propose_for_discussion", {"id": ref, "reason": "сюжет спорный"}, *REVIEWER)
+    assert not proposed["result"]["isError"], proposed
