@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     #: Манифест для платформы: файл в корне репозитория, в контейнер подключён
     #: томом — одно описание на всех, второго в коде нет.
     manifest_path: str = "/app/manifest.reference.yaml"
+    #: Hub PLM: базовый URL с приставкой приложения (`https://…/plm`) и ключ
+    #: машинного входа (US-0883). Пусто — каталог PLM не читается, стенд
+    #: живёт на локальных фикстурах.
+    plm_base_url: str | None = None
+    plm_machine_key: str | None = None
 
     s3_region: str = "ru-central1"
     amqp_url: str | None = None
