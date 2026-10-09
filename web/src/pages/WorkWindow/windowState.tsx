@@ -402,7 +402,18 @@ export function useWindowState() {
           const sideField = fieldFor(product?.print_fields ?? null, size ?? 0, s.code, s.zones?.print, calibration)
           const sideFieldCm = fieldSize(product?.print_fields ?? null, size, s.code)
           return [
-            ...checkZones(side, s, calibration, sideField, torso ? { torso, anchors: s.anchors, fieldCm: sideFieldCm } : null, hoodDownScale),
+            ...checkZones(
+              side,
+              s,
+              calibration,
+              sideField,
+              torso ? { torso, anchors: s.anchors, fieldCm: sideFieldCm } : null,
+              hoodDownScale,
+              {
+                printField: product?.checks?.print_field,
+                hood: product?.checks?.hood,
+              },
+            ),
             ...check(
               side,
               rules

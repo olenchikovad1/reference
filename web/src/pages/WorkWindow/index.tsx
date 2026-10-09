@@ -378,6 +378,8 @@ export function WorkWindow() {
                   field={fieldOutline}
                   fieldLabel={size ? `поле ${size}` : null}
                   hoodDownScale={hoodDownScale}
+                  showPrintField={product.checks?.print_field !== false}
+                  showHood={product.checks?.hood !== false}
                   showAnchors={overlay === 'anchors' || overlay === 'all'}
                   onSelect={(id) => setComposition((c) => select(c, id))}
                   onMove={(id, dxCm, dyCm) => setComposition((c) => placeSized(c, id, { dxCm, dyCm }))}

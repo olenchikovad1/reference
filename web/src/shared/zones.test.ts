@@ -249,6 +249,44 @@ describe('боковой шов', () => {
   })
 })
 
+describe('выключатели checks изделия (US-0884)', () => {
+  // Код проверок остаётся: флаги только решают, звать ли его. Иначе
+  // предварительные поля учили дизайнера игнорировать красные находки.
+  it('print_field: false — выхода за поле нет, шов и молния остаются', () => {
+    const out = add(EMPTY, picture('вылез', 9, 0, 6))
+    expect(checkZones(out, STATE, CAL, null, null, 1, { printField: false }).map((f) => f.rule)).not.toContain(
+      'out-of-print-field',
+    )
+    expect(checkZones(out, STATE, CAL).map((f) => f.rule)).toContain('out-of-print-field')
+    const across = add(EMPTY, picture('через-молнию', 0, 5, 6))
+    expect(
+      checkZones(across, STATE, CAL, null, null, 1, { printField: false }).map((f) => f.rule),
+    ).toContain('crosses-line')
+  })
+
+  it('hood: false — ни надетый, ни опущенный капюшон', () => {
+    const withHood = {
+      ...STATE,
+      zones: {
+        ...STATE.zones,
+        hood: [[0, 0], [200, 0], [200, 60], [0, 60]] as [number, number][],
+        hood_down: [[40, 100], [160, 100], [160, 160], [40, 160]] as [number, number][],
+      },
+    }
+    // dy=-6 — под надетым; dy=3 — под опущенным (см. тесты US-0519).
+    const under = add(EMPTY, picture('под-капюшоном', 0, -6, 4))
+    const lowered = add(EMPTY, picture('под-опущенным', 0, 3, 4))
+    expect(checkZones(under, withHood, CAL, null, null, 1, { hood: false }).map((f) => f.rule)).not.toContain(
+      'under-hood',
+    )
+    expect(checkZones(lowered, withHood, CAL, null, null, 1, { hood: false }).map((f) => f.rule)).not.toContain(
+      'under-lowered-hood',
+    )
+    expect(checkZones(under, withHood, CAL).map((f) => f.rule)).toContain('under-hood')
+    expect(checkZones(lowered, withHood, CAL).map((f) => f.rule)).toContain('under-lowered-hood')
+  })
+})
+
 describe('опущенный капюшон (US-0519)', () => {
   // Зона от горловины (y=100) вниз на 6 см — куда ляжет опущенный капюшон.
   const withHoodDown = {

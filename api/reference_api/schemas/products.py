@@ -73,6 +73,18 @@ class PrintRules(BaseModel):
     max_colours: int
 
 
+class CheckFlags(BaseModel):
+    """Какие проверки зоны включены у изделия (US-0884).
+
+    Нет ключа — включено: иначе старые описания молча выключили бы всё.
+    Код проверок остаётся; флаг только решает, звать ли его.
+    """
+
+    print_field: bool = True
+    hood: bool = True
+
+
+
 class SizeGrid(BaseModel):
     """Размерная сетка: во сколько раз размер больше базового.
 
@@ -147,6 +159,9 @@ class Product(BaseModel):
     states_absent: list[str] = Field(default_factory=list)
     print_fields: PrintFields | None = None
     print_rules: PrintRules | None = None
+    #: Выключатели проверок зоны. Нет — всё включено (см. CheckFlags).
+    checks: CheckFlags | None = None
     torso: Torso | None = None
     size_grid: SizeGrid | None = None
     hood_down: HoodDown | None = None
+

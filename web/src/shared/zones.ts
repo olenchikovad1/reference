@@ -344,6 +344,13 @@ export function clipOutline(
  * По иллюстративному ракурсу не считаются вовсе: силуэт на нём сокращён, и
  * находка по нему сообщала бы о проблеме, которой нет.
  */
+/** Какие проверки зоны включены. Нет ключа — включено: иначе старые описания
+ *  изделий молча выключили бы всё (US-0884). */
+export interface ZoneCheckFlags {
+  readonly printField?: boolean
+  readonly hood?: boolean
+}
+
 export function checkZones(
   c: Composition,
   state: FrameState,
@@ -358,8 +365,12 @@ export function checkZones(
    *  кадре (нарисована для отрендеренного). Капюшон растёт медленнее груди, и
    *  на кадре, который показывает любой размер, его доля меняется (US-0519). */
   hoodDownScale = 1,
+  /** Выключатели из описания изделия. Код проверок остаётся — только зов. */
+  flags: ZoneCheckFlags = {},
 ): Finding[] {
   if (state.kind === 'illustrative') return []
+  const printFieldOn = flags.printField !== false
+  const hoodOn = flags.hood !== false
   const found: Finding[] = []
   const { onFabric, panel, bounds, lines, hood, hoodDown } = zonesFor(state, field, surface, hoodDownScale)
 
@@ -384,7 +395,7 @@ export function checkZones(
     }
 
     // Обрезанное по полю за поле не выходит по построению — не спрашиваем.
-    if (clip !== 'field' && bounds && bounds.length >= 3) {
+    if (printFieldOn && clip !== 'field' && bounds && bounds.length >= 3) {
       const inside = coverage(bounds, rect)
       if (inside < 0.999) {
         const outside = Math.max(1, Math.round((1 - inside) * 100))
@@ -442,7 +453,7 @@ export function checkZones(
       }
     }
 
-    if (hood && hood.length >= 3 && coverage(hood, rect) > 0.01) {
+    if (hoodOn && hood && hood.length >= 3 && coverage(hood, rect) > 0.01) {
       found.push({
         rule: 'under-hood',
         // Предупреждение: печатается нормально, просто не видно. Решает
@@ -453,7 +464,7 @@ export function checkZones(
       })
     }
 
-    const underLowered = hoodDown && hoodDown.length >= 3 ? coverage(hoodDown, rect) : 0
+    const underLowered = hoodOn && hoodDown && hoodDown.length >= 3 ? coverage(hoodDown, rect) : 0
     if (underLowered > 0.01) {
       found.push({
         rule: 'under-lowered-hood',

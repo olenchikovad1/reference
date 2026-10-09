@@ -38,6 +38,16 @@ def test_calibration_says_it_is_provisional(client: TestClient) -> None:
     assert body["rendered_size"] is None
 
 
+def test_zone_checks_can_be_switched_off(client: TestClient) -> None:
+    """Поле и капюшон у B-HDY-14 выключены одной строкой описания (US-0884).
+
+    Числа предварительные — красные находки по ним учили дизайнера их не читать.
+    Код проверок остаётся; включить обратно — true или убрать ключ.
+    """
+    body = client.get("/reference/api/products/B-HDY-14").json()
+    assert body["checks"] == {"print_field": False, "hood": False}
+
+
 def test_side_view_is_marked_illustrative(client: TestClient) -> None:
     """Боковой ракурс нельзя использовать для размещения, и это видно из данных.
 

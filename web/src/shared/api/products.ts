@@ -67,6 +67,8 @@ export interface Product {
     min_stroke_cm: number
     max_colours: number
   } | null
+  /** Выключатели проверок зоны. Нет — всё включено (US-0884). */
+  checks?: { print_field?: boolean; hood?: boolean } | null
 }
 
 export async function fetchProduct(code: string): Promise<Product> {

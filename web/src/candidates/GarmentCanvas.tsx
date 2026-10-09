@@ -93,8 +93,12 @@ export interface CanvasProps {
   readonly fieldLabel?: string | null
   /** Масштаб зоны опущенного капюшона на выбранном размере — от горловины. */
   readonly hoodDownScale?: number
+  /** Рамки поля / капюшона. false — не рисовать (US-0884). Нет — рисовать. */
+  readonly showPrintField?: boolean
+  readonly showHood?: boolean
   readonly showAnchors: boolean
   readonly onSelect: (id: string | null) => void
+
   readonly onMove: (id: string, dxCm: number, dyCm: number) => void
   readonly onResize: (id: string, widthCm: number) => void
   readonly onRotate: (id: string, degrees: number) => void
@@ -650,8 +654,16 @@ export function GarmentCanvas(props: CanvasProps) {
         })}
 
         {props.showZones && (
-          <Zones state={state} field={props.field ?? null} fieldLabel={props.fieldLabel ?? null} hoodDownScale={props.hoodDownScale ?? 1} />
+          <Zones
+            state={state}
+            field={props.showPrintField === false ? null : (props.field ?? null)}
+            fieldLabel={props.fieldLabel ?? null}
+            hoodDownScale={props.hoodDownScale ?? 1}
+            showPrintField={props.showPrintField !== false}
+            showHood={props.showHood !== false}
+          />
         )}
+
         {props.showAnchors && <Anchors state={state} />}
       </svg>
       )}
@@ -664,11 +676,15 @@ function Zones({
   field,
   fieldLabel,
   hoodDownScale,
+  showPrintField,
+  showHood,
 }: {
   state: State
   field: Polygon | null
   fieldLabel: string | null
   hoodDownScale: number
+  showPrintField: boolean
+  showHood: boolean
 }) {
   // Опущенный капюшон — отдельным цветом от надетого: это два разных положения,
   // и путать их нельзя (US-0519).
@@ -678,6 +694,10 @@ function Zones({
   const neck = state.anchors.neck
   const zones = Object.entries(state.zones)
     .filter(([name]) => !(field && name === 'print'))
+    // Выключенные проверки — без рамки: иначе учили бы читать то, чему нельзя
+    // верить (US-0884).
+    .filter(([name]) => showPrintField || name !== 'print')
+    .filter(([name]) => showHood || (name !== 'hood' && name !== 'hood_down'))
     // Зона опущенного капюшона — на выбранном размере, как и в проверке.
     .map(([name, points]) =>
       name === 'hood_down' && neck
