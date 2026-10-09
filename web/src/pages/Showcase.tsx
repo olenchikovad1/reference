@@ -39,8 +39,16 @@ import {
   trashReference,
   type Card,
 } from '../shared/api/references'
-import { fetchDrops } from '../shared/api/drops'
-import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, plmImageUrl, rgbCss, type PlmColorway } from '../shared/api/plm'
+import { fetchDrops, type Drop } from '../shared/api/drops'
+import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, plmImageUrl, rgbCss, type PlmColorway, type PlmDrop } from '../shared/api/plm'
+import {
+  inSeasonDates,
+  inSeasonWeeks,
+  profileFromDates,
+  profileFromWeeks,
+  untilDateLabel,
+  untilWeekLabel,
+} from '../shared/season'
 
 /** Где браузер помнит выбранный порядок витрины. */
 const SORT_KEY = 'reference.showcase.sort'
@@ -83,6 +91,9 @@ export function Showcase() {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkReport, setBulkReport] = useState<string | null>(null)
   const drops = useQuery({ queryKey: ['drops'], queryFn: fetchDrops })
+  const plmStatus = useQuery({ queryKey: ['plm-status'], queryFn: fetchPlmStatus })
+  const usePlm = Boolean(plmStatus.data?.configured && plmStatus.data.reachable)
+  const plmDrops = useQuery({ queryKey: ['plm-drops'], queryFn: () => fetchPlmDrops(), enabled: usePlm })
   // Свой порядок (US-0601): «по дате» или «мой». Выбор помнит браузер —
   // это удобство смотрящего, а не данные.
   const [sortOwn, setSortOwn] = useState(() => {
@@ -177,7 +188,8 @@ export function Showcase() {
       { drops: c.drop_ids, audiences: c.audience ? [c.audience] : [], categories: c.category ? [c.category] : [] },
       drop.filter,
     ),
-  )
+  // Вне сезона по умолчанию не на витрине (US-0888); фильтр «вне сезона» — US-0889.
+  ).filter((c) => cardInSeason(c, drops.data, usePlm ? plmDrops.data : undefined))
   // В поиске — порядок совпадения всегда: там важнее, что нашлось первым.
   const shown = filtered && found.ids === null && sortOwn ? ownOrder(filtered) : filtered
   // Во время переноса — предварительный порядок: переносимые на месте курсора.
@@ -574,8 +586,10 @@ export function Showcase() {
               onCopy={canCopy ? () => void act(() => copyReference(c.id)) : undefined}
               onTrash={canTrash ? () => setTrashing(c) : undefined}
               onErase={canErase ? () => setErasing(c) : undefined}
+              note={seasonNote(c, drops.data, usePlm ? plmDrops.data : undefined)}
             />
           ))}
+
           {cards.data?.length === 0 && (
             <p className="self-center text-sm text-muted-foreground">
               Пока ни одного — «+» начинает первый.
@@ -931,3 +945,41 @@ function scrollerOf(el: HTMLElement): { scrollBy: (x: number, y: number) => void
   }
   return window
 }
+
+/** Карточка в сезоне, если хоть один её дроп в окне продаж (или дропов нет). */
+function cardInSeason(card: Card, local: Drop[] | undefined, plm: PlmDrop[] | undefined): boolean {
+  if (plm?.length) {
+    const mine = plm.filter((d) => card.drops.includes(d.code) || card.drops.includes(d.description ?? ''))
+    if (mine.length) return mine.some((d) => inSeasonWeeks(d.intake_week, d.exit_week))
+  }
+  if (local?.length && card.drop_ids.length) {
+    const mine = local.filter((d) => card.drop_ids.includes(d.id))
+    if (mine.length) return mine.some((d) => inSeasonDates(d.release_from, d.release_to))
+  }
+  return true
+}
+
+/** На остросезонном — срок «до ДД.ММ» (US-0888). */
+function seasonNote(
+  card: Card,
+  local: Drop[] | undefined,
+  plm: PlmDrop[] | undefined,
+): { text: string; tone?: 'warning' | 'muted' }[] | undefined {
+  if (plm?.length) {
+    const sharp = plm.filter(
+      (d) =>
+        (card.drops.includes(d.code) || card.drops.includes(d.description ?? '')) &&
+        profileFromWeeks(d.intake_week, d.exit_week) === 'sharp' &&
+        d.exit_week != null,
+    )
+    if (sharp[0]?.exit_week != null) return [{ text: untilWeekLabel(sharp[0].exit_week), tone: 'muted' }]
+  }
+  if (local?.length && card.drop_ids.length) {
+    const sharp = local.filter(
+      (d) => card.drop_ids.includes(d.id) && profileFromDates(d.release_from, d.release_to) === 'sharp',
+    )
+    if (sharp[0]) return [{ text: untilDateLabel(sharp[0].release_to), tone: 'muted' }]
+  }
+  return undefined
+}
+

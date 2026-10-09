@@ -28,6 +28,7 @@ import {
 } from '../shared/api/drops'
 import { DropBoard } from './DropBoard'
 import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, plmImageUrl, rgbCss } from '../shared/api/plm'
+import { PROFILE_LABEL, profileFromDates, profileFromWeeks, untilDateLabel, untilWeekLabel } from '../shared/season'
 
 const dateRu = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 
@@ -61,14 +62,23 @@ export function Drops() {
         <nav aria-label="дропы plm">
           <h1 style={S.h1}>Дропы</h1>
           <p style={{ ...S.dim, marginBottom: 12 }}>из plm · без копии в базе</p>
-          {(plmDrops.data ?? []).map((d) => (
-            <button key={d.code} onClick={() => setPlmDrop(d.code)} style={{ ...S.drop, ...(d.code === currentPlm ? S.dropOn : {}) }}>
-              <b>{d.code}</b>
-              <span style={S.dim}>
-                {[d.season, d.subseason, d.description].filter(Boolean).join(' · ')}
-              </span>
-            </button>
-          ))}
+          {(plmDrops.data ?? []).map((d) => {
+            const profile = profileFromWeeks(d.intake_week, d.exit_week)
+            const window =
+              d.intake_week != null && d.exit_week != null
+                ? `нед. ${d.intake_week}–${d.exit_week}` +
+                  (profile === 'sharp' ? ` · ${untilWeekLabel(d.exit_week)}` : '')
+                : 'без окна продаж'
+            return (
+              <button key={d.code} onClick={() => setPlmDrop(d.code)} style={{ ...S.drop, ...(d.code === currentPlm ? S.dropOn : {}) }}>
+                <b>{d.code}</b>
+                <span style={S.dim}>
+                  {[PROFILE_LABEL[profile], window, d.season, d.subseason, d.description].filter(Boolean).join(' · ')}
+                </span>
+              </button>
+            )
+          })}
+
         </nav>
         {currentPlm ? <PlmAssortment dropCode={currentPlm} /> : null}
       </main>
@@ -84,15 +94,21 @@ export function Drops() {
             + завести дроп
           </button>
         )}
-        {(drops.data ?? []).map((d) => (
-          <button key={d.id} onClick={() => setPicked(d.id)} style={{ ...S.drop, ...(d.id === current ? S.dropOn : {}) }}>
-            <b>{d.name}</b>
-            <span style={S.dim}>
-              {d.season} · {dateRu(d.release_from)}–{dateRu(d.release_to)} · {d.audience}
-              {d.retired ? ' · погашен' : ''}
-            </span>
-          </button>
-        ))}
+        {(drops.data ?? []).map((d) => {
+          const profile = profileFromDates(d.release_from, d.release_to)
+          return (
+            <button key={d.id} onClick={() => setPicked(d.id)} style={{ ...S.drop, ...(d.id === current ? S.dropOn : {}) }}>
+              <b>{d.name}</b>
+              <span style={S.dim}>
+                {PROFILE_LABEL[profile]}
+                {profile === 'sharp' ? ` · ${untilDateLabel(d.release_to)}` : ''} · {d.season} ·{' '}
+                {dateRu(d.release_from)}–{dateRu(d.release_to)} · {d.audience}
+                {d.retired ? ' · погашен' : ''}
+              </span>
+            </button>
+          )
+        })}
+
       </nav>
       {current !== null && drops.data ? (
         <DropMatrix
