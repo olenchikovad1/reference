@@ -13,14 +13,15 @@ import { cropSummary } from './work'
 import { Slider, Section } from './controls'
 import { TagChips, NameChip, DefectPrint } from './recognised'
 import { S } from './styles'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { WorkWindowState } from './useWorkWindow'
 import { on, small } from './controls'
 
-// Панель выбранного элемента — принта или надписи (план 114, US-0894):
-// размер, положение, поворот, градация, обрезка, краски, текст и шрифт. Всё
-// состояние — у окна (useWorkWindow), здесь только показ и вызовы.
+// Панель выбранного элемента (план 114 / US-0026): размещение на виду;
+// тяжёлые краски и полная таблица градации — за отдельным входом.
 export function ElementPanel({ w, placement }: { w: WorkWindowState; placement: ReactNode }) {
+  const [inksOpen, setInksOpen] = useState(false)
+  const [gradeOpen, setGradeOpen] = useState(false)
   const {
     product,
     stateCode,
@@ -261,6 +262,11 @@ export function ElementPanel({ w, placement }: { w: WorkWindowState; placement: 
         </Modal>
       )}
       {selected.kind === 'image' && (
+        <button className={`${small()} mb-1`} aria-expanded={inksOpen} onClick={() => setInksOpen((v) => !v)}>
+          {inksOpen ? 'свернуть краски' : 'краски принта'}
+        </button>
+      )}
+      {selected.kind === 'image' && inksOpen && (
         <Section title="Краски">
           {/* Многоцветный принт (US-0503): основные краски находятся сами, каждая
               меняется на краску палитры; тон и дуотон — поверх. Исходник тот же. */}
@@ -459,6 +465,11 @@ export function ElementPanel({ w, placement }: { w: WorkWindowState; placement: 
         </button>
       )}
       {grid && (
+        <button className={`${small()} mb-1`} aria-expanded={gradeOpen} onClick={() => setGradeOpen((v) => !v)}>
+          {gradeOpen ? 'свернуть градацию' : 'градация по размерам'}
+        </button>
+      )}
+      {grid && gradeOpen && (
         <Section title="Градация">
           {/* Таблица по всем размерам сразу: технолог сверяет её с размерной
               сеткой, а не перебирает размеры по одному. */}

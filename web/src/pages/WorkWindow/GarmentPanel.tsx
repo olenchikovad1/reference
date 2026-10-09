@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import { type Overlay } from './constants'
 import { toCss } from '../../shared/api/colours'
 import { sizesWithField } from '../../shared/fields'
@@ -8,7 +10,8 @@ import type { WorkWindowState } from './useWorkWindow'
 import { on, small } from './controls'
 import { PlmPassport, plmColorwayFromUrl } from './PlmPassport'
 
-// Панель изделия (план 114, US-0894): цвет, размер, показ. Состояние — у окна.
+// Панель изделия (план 114, US-0894 / US-0026): цвет и размер на виду;
+// гамма, блики, смещение, FPS — за «для показа».
 export function GarmentPanel({ w }: { w: WorkWindowState }) {
   const {
     product,
@@ -28,6 +31,7 @@ export function GarmentPanel({ w }: { w: WorkWindowState }) {
     state,
     field,
   } = w
+  const [techShow, setTechShow] = useState(false)
   const plmColorway = plmColorwayFromUrl()
   // Изделие загружено: окно раньше уже показало «загружаю» или ошибку.
   if (!product || !state) return null
@@ -96,53 +100,58 @@ export function GarmentPanel({ w }: { w: WorkWindowState }) {
             : `предположительно ${product.rendered_size_assumed} — в именах кадров размера нет`}
         </p>
       </Section>
-      <Section title="Показ">
-        <div className="flex flex-wrap gap-1">
-          <button onClick={() => setParams((p) => ({ ...p, effects: !p.effects }))} className={on(params.effects)}>
-            {params.effects ? 'с эффектами' : 'без эффектов'}
-          </button>
-          <button
-            onClick={() => setParams((p) => ({ ...p, through: !p.through }))}
-            className={on(params.through)}
-            title="Часть принта, которую закрывает капюшон. Обычно скрыта — как на изделии. Включите, чтобы увидеть бледно, где она лежит"
-          >
-            {params.through ? 'под капюшоном: видно бледно' : 'под капюшоном: скрыто'}
-          </button>
-        </div>
-        <Slider label="гамма базы" hint="насколько темнеет ткань в складках: меньше — складки глубже" value={params.baseGamma} min={0.3} max={1.5} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, baseGamma: v }))} />
-        <Slider label="блики" hint="сколько света ткань отражает на выпуклостях: 0 — совсем матовая" value={params.specAmount} min={0} max={1} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, specAmount: v }))} />
-        <Slider label="смещение" hint="насколько принт изгибается по складкам: 0 — лежит плоско, как наклейка" value={params.displace} min={0} max={1} step={0.01} digits={2} onChange={(v) => setParams((p) => ({ ...p, displace: v }))} />
-        <Slider label="затенение" hint="насколько тени складок ложатся на сам принт: 0 — принт ровный, без теней" value={params.shade} min={0} max={1} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, shade: v }))} />
-        <Slider label="гамма тени" hint="где кончается тень: больше — тени короче и только в глубоких складках" value={params.shadeGamma} min={0.4} max={2.5} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, shadeGamma: v }))} />
-        <div className="flex flex-wrap gap-1">
-          {(['all', 'anchors', 'zones', 'none'] as Overlay[]).map((o) => (
-            <button key={o} onClick={() => setOverlay(o)} className={on(o === overlay)}>
-              {{ all: 'всё', anchors: 'ориентиры', zones: 'зоны', none: 'ничего' }[o]}
+      <button className={`${small()} mb-2`} aria-expanded={techShow} onClick={() => setTechShow((v) => !v)}>
+        {techShow ? 'скрыть показ' : 'для показа'}
+      </button>
+      {techShow && (
+        <Section title="Показ">
+          <div className="flex flex-wrap gap-1">
+            <button onClick={() => setParams((p) => ({ ...p, effects: !p.effects }))} className={on(params.effects)}>
+              {params.effects ? 'с эффектами' : 'без эффектов'}
             </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1">
-          <button onClick={() => download(params)} className={small()} title="Подбор показа — файлом, чтобы вернуть его на другом компьютере">
-            выгрузить подбор
-          </button>
-          <label className={small()}>
-            вернуть подбор
-            <input
-              type="file"
-              accept="application/json"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) void upload(f).then(setParams).catch(() => undefined)
-                e.target.value = ''
-              }}
-            />
-          </label>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          отрисовка {Math.round(state.frame.width * renderScale)} px{fps !== null && ` · ${fps} кадр/с`}
-        </p>
-      </Section>
+            <button
+              onClick={() => setParams((p) => ({ ...p, through: !p.through }))}
+              className={on(params.through)}
+              title="Часть принта, которую закрывает капюшон. Обычно скрыта — как на изделии. Включите, чтобы увидеть бледно, где она лежит"
+            >
+              {params.through ? 'под капюшоном: видно бледно' : 'под капюшоном: скрыто'}
+            </button>
+          </div>
+          <Slider label="гамма базы" hint="насколько темнеет ткань в складках: меньше — складки глубже" value={params.baseGamma} min={0.3} max={1.5} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, baseGamma: v }))} />
+          <Slider label="блики" hint="сколько света ткань отражает на выпуклостях: 0 — совсем матовая" value={params.specAmount} min={0} max={1} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, specAmount: v }))} />
+          <Slider label="смещение" hint="насколько принт изгибается по складкам: 0 — лежит плоско, как наклейка" value={params.displace} min={0} max={1} step={0.01} digits={2} onChange={(v) => setParams((p) => ({ ...p, displace: v }))} />
+          <Slider label="затенение" hint="насколько тени складок ложатся на сам принт: 0 — принт ровный, без теней" value={params.shade} min={0} max={1} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, shade: v }))} />
+          <Slider label="гамма тени" hint="где кончается тень: больше — тени короче и только в глубоких складках" value={params.shadeGamma} min={0.4} max={2.5} step={0.05} digits={2} onChange={(v) => setParams((p) => ({ ...p, shadeGamma: v }))} />
+          <div className="flex flex-wrap gap-1">
+            {(['all', 'anchors', 'zones', 'none'] as Overlay[]).map((o) => (
+              <button key={o} onClick={() => setOverlay(o)} className={on(o === overlay)}>
+                {{ all: 'всё', anchors: 'ориентиры', zones: 'зоны', none: 'ничего' }[o]}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <button onClick={() => download(params)} className={small()} title="Подбор показа — файлом, чтобы вернуть его на другом компьютере">
+              выгрузить подбор
+            </button>
+            <label className={small()}>
+              вернуть подбор
+              <input
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) void upload(f).then(setParams).catch(() => undefined)
+                  e.target.value = ''
+                }}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            отрисовка {Math.round(state.frame.width * renderScale)} px{fps !== null && ` · ${fps} кадр/с`}
+          </p>
+        </Section>
+      )}
     </>
   )
 }
