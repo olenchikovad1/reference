@@ -83,6 +83,11 @@ export function useWindowState() {
     const v = new URLSearchParams(window.location.search).get('colour_model')
     return v ? Number(v) : null
   })
+  // Дроп семьи из ячейки матрицы (US-0890); пусто — сервер возьмёт первый дроп цвета.
+  const [dropId, setDropId] = useState<number | null>(() => {
+    const v = new URLSearchParams(window.location.search).get('drop')
+    return v ? Number(v) : null
+  })
   const [fontsReady, setFontsReady] = useState(false)
   const [prints, setPrints] = useState<PrintItem[]>(() => queries.getQueryData<PrintItem[]>(['prints']) ?? [])
   // Кэш картинок один на страницу: им пользуются и холст, и печатный лист.
@@ -496,6 +501,8 @@ export function useWindowState() {
     setColourCode,
     colourModelId,
     setColourModelId,
+    dropId,
+    setDropId,
     fontsReady,
     setFontsReady,
     prints,

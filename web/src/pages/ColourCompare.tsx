@@ -1,8 +1,7 @@
-// «Сравнить цвета» (US-0500): тот же принт на двух–четырёх цветомоделях
-// рядом, спереди и сзади, — чтобы выбрать, на какой худи он смотрится, не
-// держа прошлый вид в памяти. На каждом цвете — своя проверка: принт, который
-// на белой читается, а на чёрной пропадает, отмечен. Выбранные сохраняются
-// референсами — по одному на цветомодель, одной командой.
+// «Сравнить цвета» (US-0500 / US-0890): тот же принт на двух–четырёх
+// цветомоделях рядом. На каждом цвете — своя проверка контраста. Выбранные
+// остаются в семье; остальные исключаются (одна карточка, решение 0019) —
+// раньше плодились референсы «по одному на цвет».
 
 import { Checkbox, buttonClass } from '@platform/ui'
 import { useMemo, useRef, useState } from 'react'
@@ -116,9 +115,9 @@ export function ColourCompare({
           className={buttonClass({ tone: 'accent', variant: 'solid', small: true })}
           disabled={picked.size === 0 || saving}
           onClick={() => onSave(choices.filter((c) => picked.has(c.code)), canvases.current)}
-          title="По референсу на каждый выбранный цвет — одной командой"
+          title="Оставить в семье только выбранные цвета — остальные исключить"
         >
-          {saving ? 'сохраняю…' : `сохранить выбранные (${picked.size})`}
+          {saving ? 'сохраняю…' : `оставить в семье (${picked.size})`}
         </button>
         <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={onClose} aria-label="закрыть сравнение">
           ×

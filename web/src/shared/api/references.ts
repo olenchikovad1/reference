@@ -51,12 +51,37 @@ async function post(path: string, body: unknown): Promise<Saved> {
 /** Новый референс с первой версией. С forked_from — «Сохранить как». */
 export function saveReference(
   body: VersionBody & {
-    /** Цветомодель, на которой референс (US-0489). */
+    /** Основной взгляд семьи (US-0489 / решение 0019). */
     colour_model_id?: number | null
+    /** Дроп семьи; пусто — первый дроп цветомодели (US-0890). */
+    drop_id?: number | null
     forked_from?: { reference_id: number; number: number } | null
   },
 ): Promise<Saved> {
   return post('references', body)
+}
+
+/** Цвет семьи: в ассортименте модели×дропа, минус исключения (US-0890). */
+export interface FamilyColour {
+  colour_model_id: number
+  colour_code: string
+  in_family: boolean
+}
+
+export async function fetchFamily(referenceId: number): Promise<FamilyColour[]> {
+  const r = await fetch(`${BASE}references/${referenceId}/family`)
+  if (!r.ok) throw new Error(`семья не пришла: ${r.status}`)
+  return r.json()
+}
+
+export async function excludeFamilyColour(referenceId: number, colourModelId: number): Promise<void> {
+  const r = await fetch(`${BASE}references/${referenceId}/family/${colourModelId}/exclude`, { method: 'POST' })
+  if (!r.ok) throw await refusal(r, 'не удалось исключить цвет')
+}
+
+export async function includeFamilyColour(referenceId: number, colourModelId: number): Promise<void> {
+  const r = await fetch(`${BASE}references/${referenceId}/family/${colourModelId}/include`, { method: 'POST' })
+  if (!r.ok) throw await refusal(r, 'не удалось вернуть цвет')
 }
 
 /** «Сохранить»: новая версия поверх последней, прежние не меняются. */

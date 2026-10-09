@@ -265,7 +265,9 @@ function DropMatrix({
               setRefusal(null)
               // Референс начинается на этой цветомодели: примерка открывается в
               // её цвете и запомнит цветомодель при сохранении.
-              navigate(`/references/new?colour_model=${cell.colour_model_id}&colour=${encodeURIComponent(c.code)}`)
+              navigate(
+                `/references/new?colour_model=${cell.colour_model_id}&colour=${encodeURIComponent(c.code)}&drop=${dropId}`,
+              )
             }}
           >
             {cell.references === 0 ? 'ещё не нарисовано' : `референсов: ${cell.references}`}

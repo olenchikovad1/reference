@@ -31,9 +31,14 @@ class Reference(Base):
     #: Имя последней сохранённой версии: витрина и список показывают его.
     #: Меняется с каждым сохранением — это карточка, а не версия (И-6 про версии).
     name: Mapped[str] = mapped_column(String(512), nullable=False, default="")
-    #: На какой цветомодели референс — изделие в цвете; от неё он берёт дроп и
-    #: адресата (US-0489). Пусто — сохранён до справочников.
+    #: Основной цвет взгляда семейства (решение 0019 / US-0890). Пусто —
+    #: сохранён до справочников. Состав семьи — цвета модели в дропе минус
+    #: исключения, не эта одна цветомодель.
     colour_model_id: Mapped[int | None] = mapped_column(ForeignKey("colour_models.id", ondelete="RESTRICT"))
+    #: Модель (артикул) семейства; дроп — в каком ассортименте живут цвета.
+    garment_model_id: Mapped[int | None] = mapped_column(ForeignKey("garment_models.id", ondelete="RESTRICT"))
+    drop_id: Mapped[int | None] = mapped_column(ForeignKey("drops.id", ondelete="RESTRICT"))
+
     #: «Сохранить как»: от какой версии другого референса пошёл. Пусто — начат
     #: с чистого листа.
     forked_from_version_id: Mapped[int | None] = mapped_column(
@@ -68,7 +73,22 @@ class Reference(Base):
     )
 
 
+class ReferenceColourExclusion(Base):
+    """Цвет, исключённый из семейства (US-0890). Состав = ассортимент модели
+    в дропе минус эти строки; новый цвет в дропе входит сам."""
+
+    __tablename__ = "reference_colour_exclusions"
+
+    reference_id: Mapped[int] = mapped_column(
+        ForeignKey("reference_cards.id", ondelete="CASCADE"), primary_key=True
+    )
+    colour_model_id: Mapped[int] = mapped_column(
+        ForeignKey("colour_models.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
 class ReferenceVersion(Base):
+
     """Сохранённое состояние референса. Неизменяема (И-6): правка — это новая
     версия с номером на единицу больше последней, пути обновления нет.
 

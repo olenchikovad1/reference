@@ -26,6 +26,7 @@ from reference_api.schemas.references import (
     CommentIn,
     TrashedOut,
     RejectedOut,
+    FamilyColourOut,
     FoundReferenceOut,
     HiddenTagIn,
     TagIn,
@@ -85,6 +86,7 @@ async def create(body: SaveIn, request: Request, db: AsyncSession = Depends(sess
         saved = await service.create(
             db, body.name, body.sheet_digest, body.image_digests, body.texts, body.work,
             author_id=_author(request), colour_model_id=body.colour_model_id,
+            drop_id=body.drop_id,
             forked_from=(body.forked_from.reference_id, body.forked_from.number) if body.forked_from else None,
             views=body.views,
         )
@@ -92,6 +94,8 @@ async def create(body: SaveIn, request: Request, db: AsyncSession = Depends(sess
         raise HTTPException(status_code=422, detail=str(missing)) from None
     except service.DefectInWork as refusal:
         raise HTTPException(status_code=422, detail=str(refusal)) from None
+    except ValueError as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from None
     return _saved(saved)
 
 
@@ -629,6 +633,44 @@ async def recall(reference_id: int, request: Request, db: AsyncSession = Depends
 async def unapprove(reference_id: int, body: CommentIn, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
     """Отменить согласование — редактор или главный, с причиной (план 094)."""
     return await _step(reference_id, "unapprove", request, db, body.comment)
+
+
+@router.get("/{reference_id}/family", response_model=list[FamilyColourOut], dependencies=[requires("references", Action.VIEW)])
+async def family(reference_id: int, db: AsyncSession = Depends(session)) -> list[FamilyColourOut]:
+    """Цвета семьи: ассортимент модели в дропе минус исключения (US-0890)."""
+    try:
+        rows = await service.family_colours(db, reference_id)
+    except service.NoSuchReference as missing:
+        raise HTTPException(status_code=404, detail=str(missing)) from None
+    return [FamilyColourOut(colour_model_id=i, colour_code=c, in_family=on) for i, c, on in rows]
+
+
+@router.post(
+    "/{reference_id}/family/{colour_model_id}/exclude",
+    status_code=204,
+    dependencies=[requires("references", Action.WRITE)],
+)
+async def exclude_colour(reference_id: int, colour_model_id: int, db: AsyncSession = Depends(session)) -> None:
+    """Исключить цвет из семьи (US-0890)."""
+    try:
+        await service.exclude_colour(db, reference_id, colour_model_id)
+    except service.NoSuchReference as missing:
+        raise HTTPException(status_code=404, detail=str(missing)) from None
+    except ValueError as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from None
+
+
+@router.post(
+    "/{reference_id}/family/{colour_model_id}/include",
+    status_code=204,
+    dependencies=[requires("references", Action.WRITE)],
+)
+async def include_colour(reference_id: int, colour_model_id: int, db: AsyncSession = Depends(session)) -> None:
+    """Вернуть цвет в семью (US-0890)."""
+    try:
+        await service.include_colour(db, reference_id, colour_model_id)
+    except service.NoSuchReference as missing:
+        raise HTTPException(status_code=404, detail=str(missing)) from None
 
 
 @router.post("/{reference_id}/reject", response_model=list[StatusEventOut], dependencies=[requires("review", Action.WRITE)])

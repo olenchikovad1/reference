@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from reference_api.models.references import (
     ReferenceTransfer,
     Reference,
+    ReferenceColourExclusion,
     ReferenceDraft,
     ReferencePosition,
     ReferenceHiddenTag,
@@ -33,14 +34,23 @@ async def create(
     colour_model_id: int | None = None,
     forked_from_version_id: int | None = None,
     executor_id: str | None = None,
+    garment_model_id: int | None = None,
+    drop_id: int | None = None,
 ) -> Reference:
     """Новая карточка без версий: первую кладёт ``add_version`` в той же
     транзакции — карточка без версии наружу не выходит."""
-    card = Reference(name=name, colour_model_id=colour_model_id, forked_from_version_id=forked_from_version_id,
-                     executor_id=executor_id)
+    card = Reference(
+        name=name,
+        colour_model_id=colour_model_id,
+        forked_from_version_id=forked_from_version_id,
+        executor_id=executor_id,
+        garment_model_id=garment_model_id,
+        drop_id=drop_id,
+    )
     db.add(card)
     await db.flush()
     return card
+
 
 
 async def add_version(
@@ -505,3 +515,35 @@ async def drafts_of(db: AsyncSession, author_id: str) -> list[tuple[ReferenceDra
         .order_by(ReferenceDraft.updated_at.desc())
     )
     return [(d, c) for d, c in rows.all()]
+
+
+async def exclusions(db: AsyncSession, reference_id: int) -> set[int]:
+    rows = await db.execute(
+        select(ReferenceColourExclusion.colour_model_id).where(
+            ReferenceColourExclusion.reference_id == reference_id
+        )
+    )
+    return set(rows.scalars())
+
+
+async def exclude_colour(db: AsyncSession, reference_id: int, colour_model_id: int) -> None:
+    exists = await db.scalar(
+        select(ReferenceColourExclusion.reference_id).where(
+            ReferenceColourExclusion.reference_id == reference_id,
+            ReferenceColourExclusion.colour_model_id == colour_model_id,
+        )
+    )
+    if exists is None:
+        db.add(ReferenceColourExclusion(reference_id=reference_id, colour_model_id=colour_model_id))
+        await db.commit()
+
+
+async def include_colour(db: AsyncSession, reference_id: int, colour_model_id: int) -> None:
+    await db.execute(
+        delete(ReferenceColourExclusion).where(
+            ReferenceColourExclusion.reference_id == reference_id,
+            ReferenceColourExclusion.colour_model_id == colour_model_id,
+        )
+    )
+    await db.commit()
+

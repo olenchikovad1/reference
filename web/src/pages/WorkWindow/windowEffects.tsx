@@ -2,16 +2,20 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { toUnit } from '../../shared/api/colours'
 import { frameUrl } from '../../shared/api/products'
 import { EMPTY, nudge, remove, select } from '../../shared/composition'
-import { uploadCanvas } from '../../shared/api/assets'
 import { sayRemark } from '../../shared/api/references'
-import { saveReference, tagNames, type RefTags } from '../../shared/api/references'
+import {
+  excludeFamilyColour,
+  fetchFamily,
+  includeFamilyColour,
+  tagNames,
+  type RefTags,
+} from '../../shared/api/references'
 import { windowKey } from '../../shared/keys'
 import { useDismiss } from '../../shared/useDismiss'
 import { useFrameAlpha } from '../../shared/frameAlpha'
 import { PICK_TYPE, type Pick as Picked } from '../WorkPicker'
 import { type ColourChoice } from '../ColourCompare'
-import { shrink } from './work'
-import { PRODUCT, VIEW_SIZE } from './constants'
+import { PRODUCT } from './constants'
 import type { WindowState } from './windowState'
 import type { WindowActions } from './windowActions'
 
@@ -41,6 +45,7 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
     colourCode,
     setColourCode,
     setColourModelId,
+    setDropId,
     setRestored,
     zoom,
     pan,
@@ -88,7 +93,6 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
     clampPan,
     versionBody,
     saveCard,
-    versionBefore,
     saveCardAs,
     flip,
     step,
@@ -326,6 +330,7 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
     setBaseline(null)
     setDraftHeld(null)
     setColourModelId(q.get('colour_model') ? Number(q.get('colour_model')) : null)
+    setDropId(q.get('drop') ? Number(q.get('drop')) : null)
     setColourCode(q.get('colour') ?? 'WHITE')
     setSize(null)
     history.open(null, EMPTY)
@@ -360,43 +365,28 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
     })
   }, [catalogue.data, refDropIds, colours])
 
-  /** Сохранить выбранные цвета референсами — по одному на цветомодель, одной
-   *  командой. Лист один (от цвета он не зависит), снимки — с превью каждого
-   *  цвета, работа — та же с другим кодом цвета. */
-  async function saveColours(picked: ColourChoice[], canvases: Record<string, Record<string, HTMLCanvasElement | null>>) {
+  /** Оставить в семье только выбранные цвета (US-0890): остальные исключить.
+   *  Карточка одна — не плодим референс на каждый цвет. */
+  async function saveColours(picked: ColourChoice[], _canvases: Record<string, Record<string, HTMLCanvasElement | null>>) {
     if (saving || picked.length === 0) return
-    // Копии идут от версии, а не от черновика: «пошёл от версии N» должно
-    // значить ровно то, что на экране (US-0599).
-    const base = await versionBefore('перед копиями в других цветах')
-    if (base === 'failed') return
+    if (!current) {
+      setDropHint('Сначала сохраните референс — потом состав семьи.')
+      return
+    }
     setSaving(true)
     try {
-      const body = await versionBody()
-      if (!body) return
-      const made: number[] = []
-      for (const c of picked) {
-        const views: Record<string, string> = {}
-        await Promise.all(
-          ['front', 'back'].map(async (side) => {
-            const cv = canvases[c.code]?.[side]
-            if (cv) views[side] = await uploadCanvas(shrink(cv, VIEW_SIZE), `${PRODUCT}-${side}-${c.code}-view.png`)
-          }),
-        )
-        const saved = await saveReference({
-          ...body,
-          name: `${PRODUCT} · ${c.name.toLowerCase()}`,
-          work: { ...(body.work as Record<string, unknown>), colourCode: c.code },
-          views,
-          colour_model_id: c.colourModelId,
-          forked_from: current && base ? { reference_id: current.id, number: base } : null,
-        })
-        made.push(saved.id)
+      const keep = new Set(picked.map((c) => c.colourModelId).filter((id): id is number => id != null))
+      // Основной взгляд семьи убрать нельзя — сервер откажет (решение 0019).
+      if (current.colour_model_id != null) keep.add(current.colour_model_id)
+      const family = await fetchFamily(current.id)
+      for (const c of family) {
+        if (keep.has(c.colour_model_id) && !c.in_family) await includeFamilyColour(current.id, c.colour_model_id)
+        if (!keep.has(c.colour_model_id) && c.in_family) await excludeFamilyColour(current.id, c.colour_model_id)
       }
-      void queries.invalidateQueries({ queryKey: ['references'] })
       setCompareOpen(false)
-      setDropHint(`Сохранено референсов: ${made.map((n) => `№${n}`).join(', ')} — они на витрине.`)
+      setDropHint(`В семье: ${picked.map((c) => c.name).join(', ')}.`)
     } catch (e) {
-      setDropHint(`Не сохранилось: ${e instanceof Error ? e.message : String(e)} — повторите.`)
+      setDropHint(`Семью не обновили: ${e instanceof Error ? e.message : String(e)} — повторите.`)
     } finally {
       setSaving(false)
     }

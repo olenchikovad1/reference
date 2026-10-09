@@ -45,6 +45,7 @@ export function useWindowActions(s: WindowState) {
     setColourCode,
     colourModelId,
     setColourModelId,
+    dropId,
     fontsReady,
     images,
     setImagesVersion,
@@ -229,7 +230,9 @@ export function useWindowActions(s: WindowState) {
    *  а не на своё место. false — не сохранилось, и сказано почему. */
   async function saveCard(): Promise<boolean> {
     const saved = await keep(async (body) =>
-      current ? saveVersion(current.id, body) : saveReference({ ...body, colour_model_id: colourModelId }),
+      current
+        ? saveVersion(current.id, body)
+        : saveReference({ ...body, colour_model_id: colourModelId, drop_id: dropId }),
     )
     return saved !== null
   }
@@ -255,6 +258,7 @@ export function useWindowActions(s: WindowState) {
       saveReference({
         ...body,
         colour_model_id: current?.colour_model_id ?? colourModelId,
+        drop_id: dropId,
         forked_from: current && viewing ? { reference_id: current.id, number: viewing } : null,
       }),
     )

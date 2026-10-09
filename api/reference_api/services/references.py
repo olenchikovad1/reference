@@ -64,6 +64,7 @@ async def create(
     work: dict | None = None,
     author_id: str | None = None,
     colour_model_id: int | None = None,
+    drop_id: int | None = None,
     forked_from: tuple[int, int] | None = None,
     views: dict[str, str] | None = None,
 ) -> Saved:
@@ -88,8 +89,30 @@ async def create(
         if forked_from is not None:
             await repo.drop_draft(db, forked_from[0], author_id)
     # Исполнитель по умолчанию — тот, кто создал (US-0509).
-    card = await repo.create(db, name, colour_model_id=colour_model_id, forked_from_version_id=parent_id,
-                             executor_id=author_id)
+    # Семейство (0019): модель и дроп; основной цвет — взгляд.
+    garment_model_id = None
+    family_drop_id = drop_id
+    if colour_model_id is not None:
+        from reference_api.repositories import drops as drops_repo
+
+        cm = await drops_repo.colour_model(db, colour_model_id)
+        if cm is not None:
+            garment_model_id = cm.model_id
+            drop_ids = {d.id for d in cm.drops}
+            if family_drop_id is not None and family_drop_id not in drop_ids:
+                raise ValueError("цветомодели нет в этом дропе")
+            if family_drop_id is None:
+                ordered = sorted(cm.drops, key=lambda d: (d.retired, d.release_from))
+                family_drop_id = ordered[0].id if ordered else None
+    card = await repo.create(
+        db,
+        name,
+        colour_model_id=colour_model_id,
+        forked_from_version_id=parent_id,
+        executor_id=author_id,
+        garment_model_id=garment_model_id,
+        drop_id=family_drop_id,
+    )
     version = await _put(db, card, name, sheet_digest, image_digests, texts, work, author_id, views)
     return Saved(card.id, version.number, found)
 
@@ -466,8 +489,47 @@ async def rejected(db: AsyncSession):
     return await repo.rejected(db)
 
 
+async def family_colours(db: AsyncSession, reference_id: int) -> list[tuple[int, str, bool]]:
+    """Цвета семьи: (colour_model_id, code, in_family). US-0890 / решение 0019."""
+    from reference_api.repositories import drops as drops_repo
+
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    if card.garment_model_id is None or card.drop_id is None:
+        # Старая карточка без семьи — один основной цвет, если есть.
+        if card.colour_model_id is None:
+            return []
+        cm = await drops_repo.colour_model(db, card.colour_model_id)
+        return [(cm.id, cm.colour_code, True)] if cm else []
+    all_cm = await drops_repo.colours_of_model_in_drop(db, card.garment_model_id, card.drop_id)
+    excluded = await repo.exclusions(db, reference_id)
+    return [(c.id, c.colour_code, c.id not in excluded) for c in all_cm]
+
+
+async def exclude_colour(db: AsyncSession, reference_id: int, colour_model_id: int) -> None:
+    """Убрать цвет из семьи; основной взгляд нельзя — иначе карточка без лица."""
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    if card.colour_model_id == colour_model_id:
+        raise ValueError("основной цвет семьи убрать нельзя — смените взгляд")
+    members = {cid for cid, _, on in await family_colours(db, reference_id) if on}
+    if colour_model_id not in members:
+        raise ValueError("этого цвета нет в семье")
+    await repo.exclude_colour(db, reference_id, colour_model_id)
+
+
+async def include_colour(db: AsyncSession, reference_id: int, colour_model_id: int) -> None:
+    """Вернуть исключённый цвет в семью."""
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    await repo.include_colour(db, reference_id, colour_model_id)
+
 
 async def origins(db: AsyncSession, cards) -> dict[int, int]:
+
     """Референс → номер того, от чьей версии он пошёл."""
     by_version = await repo.origins(db, [c.forked_from_version_id for c in cards if c.forked_from_version_id])
     return {c.id: by_version[c.forked_from_version_id] for c in cards if c.forked_from_version_id in by_version}

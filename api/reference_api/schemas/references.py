@@ -38,8 +38,10 @@ class AutoVersionIn(VersionIn):
 class SaveIn(VersionIn):
     """Новый референс с первой версией."""
 
-    #: Цветомодель — изделие в цвете, на котором референс (US-0489).
+    #: Цветомодель — основной взгляд семьи (US-0489 / решение 0019).
     colour_model_id: int | None = None
+    #: Дроп семьи; пусто — первый дроп цветомодели (US-0890).
+    drop_id: int | None = None
     #: «Сохранить как». Пусто — референс начат с чистого листа.
     forked_from: ForkIn | None = None
 
@@ -208,6 +210,15 @@ class RejectedOut(CardOut):
     rejected_by_id: str | None
     rejected_by_name: str
     reason: str
+
+
+class FamilyColourOut(BaseModel):
+    """Цвет семьи: в семье или исключён (US-0890)."""
+
+    colour_model_id: int
+    colour_code: str
+    in_family: bool
+
 
 
 

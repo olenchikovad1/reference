@@ -91,6 +91,18 @@ async def colour_model_of(db: AsyncSession, model_id: int, colour_code: str) -> 
     return await db.scalar(select(ColourModel).where(ColourModel.model_id == model_id, ColourModel.colour_code == colour_code))
 
 
+async def colours_of_model_in_drop(db: AsyncSession, model_id: int, drop_id: int) -> list[ColourModel]:
+    """Цветомодели модели в ассортименте дропа — состав семьи до исключений."""
+    rows = await db.execute(
+        select(ColourModel)
+        .join(DropItem, DropItem.colour_model_id == ColourModel.id)
+        .where(ColourModel.model_id == model_id, DropItem.drop_id == drop_id)
+        .order_by(ColourModel.colour_code)
+    )
+    return list(rows.scalars())
+
+
+
 async def add_item(db: AsyncSession, drop_id: int, model_id: int, colour_code: str) -> None:
     """Цветомодель в ассортимент: нет такой — заводится; уже в дропе — ничего."""
     cm = await colour_model_of(db, model_id, colour_code)
