@@ -49,7 +49,12 @@ export function useWindowState() {
   const queries = useQueryClient()
   // Из кэша сразу, а не промисом: окно, открытое второй раз, не должно
   // проходить через «Загружаю изделие…» ни на кадр (US-0600).
-  const [product, setProduct] = useState<Product | null>(() => queries.getQueryData<Product>(productQuery(PRODUCT).queryKey) ?? null)
+  // Код изделия из адреса (?product=) или стендовый по умолчанию (US-0886).
+  const productCode =
+    new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('product') ?? PRODUCT
+  const [product, setProduct] = useState<Product | null>(
+    () => queries.getQueryData<Product>(productQuery(productCode).queryKey) ?? null,
+  )
   const [error, setError] = useState<string | null>(null)
   const [stateCode, setStateCode] = useState('front')
   // Размер изделия. Печатное поле идёт за ним: принт, помещающийся на 164,
@@ -202,7 +207,7 @@ export function useWindowState() {
   useEffect(() => {
     // Изделие, палитра и набор одни на все карточки: грузятся один раз за
     // вкладку и берутся из кэша при каждом следующем открытии окна.
-    queries.fetchQuery(productQuery(PRODUCT)).then(setProduct).catch((e: Error) => setError(e.message))
+    queries.fetchQuery(productQuery(productCode)).then(setProduct).catch((e: Error) => setError(e.message))
     queries
       .fetchQuery({ queryKey: ['palette'], queryFn: fetchPalette, staleTime: Infinity })
       .then((p) => setColours(p.colors))
@@ -225,6 +230,11 @@ export function useWindowState() {
       .then(() => setFontsReady(true))
       .catch(() => setFontsReady(true))
   }, [])
+
+  // Изделие с кадров — из ?product= (цветомодель plm), иначе стендовый код.
+  useEffect(() => {
+    queries.fetchQuery(productQuery(productCode)).then(setProduct).catch((e: Error) => setError(e.message))
+  }, [productCode, queries])
 
   const state = product?.states.find((s) => s.code === stateCode) ?? product?.states[0] ?? null
   // Калибровка ВЫБРАННОГО размера: от неё зависят и показ, и проверки, и

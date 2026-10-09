@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 __all__ = [
     "Drop",
@@ -21,7 +22,11 @@ __all__ = [
     "list_colorways",
     "list_colors",
     "colorway_card",
+    "enrich_colorways",
+    "NO_FRAMES",
 ]
+
+NO_FRAMES = "у изделия нет кадров для работы"
 
 TIMEOUT_SECONDS = 10.0
 #: Повторы только на сетевых/5xx. 401/403 не долбим.
@@ -217,3 +222,34 @@ async def colorway_card(
     if not isinstance(data, dict):
         raise PlmRefused("plm вернул карточку не объектом")
     return data
+
+
+async def enrich_colorways(db: AsyncSession, items: list[Colorway]) -> list[dict[str, Any]]:
+    """Добавить к ЦМ plm свою связь с кадрами и can_work — без копирования каталога."""
+    from reference_api.repositories import plm_links as links_repo
+    from reference_api.repositories import products as products_repo
+
+    codes = await links_repo.product_codes(db, [c.style_code for c in items if c.style_code])
+    out: list[dict[str, Any]] = []
+    for c in items:
+        product = codes.get(c.style_code) if c.style_code else None
+        can = bool(product and products_repo.load_product(product) is not None)
+        out.append(
+            {
+                "id": c.id,
+                "article": c.article,
+                "title": c.title,
+                "style_id": c.style_id,
+                "style_code": c.style_code,
+                "color": c.color,
+                "base_color": c.base_color,
+                "rgb": list(c.rgb) if c.rgb else None,
+                "gender": c.gender,
+                "image": c.image,
+                "suppliers": list(c.suppliers),
+                "product_code": product,
+                "can_work": can,
+                "reason": None if can else NO_FRAMES,
+            }
+        )
+    return out

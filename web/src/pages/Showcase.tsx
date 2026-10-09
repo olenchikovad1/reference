@@ -40,6 +40,7 @@ import {
   type Card,
 } from '../shared/api/references'
 import { fetchDrops } from '../shared/api/drops'
+import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, rgbCss, type PlmColorway } from '../shared/api/plm'
 
 /** Где браузер помнит выбранный порядок витрины. */
 const SORT_KEY = 'reference.showcase.sort'
@@ -685,61 +686,129 @@ export function Showcase() {
       <CreateDialog
         open={creating}
         onClose={() => setCreating(false)}
-        onPick={(colourModel, colour) =>
+        onPickLocal={(colourModel, colour) =>
           navigate(`/references/new?colour_model=${colourModel}&colour=${encodeURIComponent(colour)}`)
         }
+        onPickPlm={(cw, dropCode) => {
+          if (!cw.can_work || !cw.product_code) return
+          const colour = cw.color ?? cw.base_color ?? 'WHITE'
+          navigate(
+            `/references/new?product=${encodeURIComponent(cw.product_code)}&plm_colorway=${encodeURIComponent(cw.id)}&colour=${encodeURIComponent(colour)}&plm_drop=${encodeURIComponent(dropCode)}`,
+          )
+        }}
       />
     </main>
   )
 }
 
-/** «+»: выбрать изделие с кадрами и его цвет — дальше открывается работа. */
+/** «+»: PLM, если настроен, иначе стендовый справочник (US-0886). */
 function CreateDialog({
   open,
   onClose,
-  onPick,
+  onPickLocal,
+  onPickPlm,
 }: {
   open: boolean
   onClose: () => void
-  onPick: (colourModelId: number, colourCode: string) => void
+  onPickLocal: (colourModelId: number, colourCode: string) => void
+  onPickPlm: (cw: PlmColorway, dropCode: string) => void
 }) {
-  const tree = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue, enabled: open })
-  const palette = useQuery({ queryKey: ['palette'], queryFn: fetchPalette, enabled: open })
+  const plm = useQuery({ queryKey: ['plm-status'], queryFn: fetchPlmStatus, enabled: open })
+  const usePlm = Boolean(plm.data?.configured && plm.data.reachable)
+  const tree = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue, enabled: open && !usePlm })
+  const palette = useQuery({ queryKey: ['palette'], queryFn: fetchPalette, enabled: open && !usePlm })
+  const [drop, setDrop] = useState('')
+  const plmDrops = useQuery({ queryKey: ['plm-drops'], queryFn: () => fetchPlmDrops(), enabled: open && usePlm })
+  const colorways = useQuery({
+    queryKey: ['plm-colorways', drop],
+    queryFn: () => fetchPlmColorways(drop || undefined),
+    enabled: open && usePlm && Boolean(drop),
+  })
   const models = (tree.data ?? []).flatMap(modelsOf)
   const colourOf = (code: string) => palette.data?.colors.find((c) => c.code === code)
+
+  useEffect(() => {
+    if (!drop && (plmDrops.data?.length ?? 0) > 0) setDrop(plmDrops.data![0].code)
+  }, [plmDrops.data, drop])
+
   return (
     <Modal open={open} onClose={onClose} title="Новый референс">
-      {tree.isPending && <p className="text-sm">Загружаю изделия…</p>}
-      {tree.isError && <p className="text-sm">Справочник изделий не ответил — закройте окно и попробуйте ещё раз.</p>}
-      {models.map((m) => (
-        <section key={m.id} className="mb-3">
-          <div className="text-sm font-semibold">
-            {m.name} <span className="font-normal text-muted-foreground">{m.code}</span>
+      {plm.isPending && <p className="text-sm">Проверяю каталог plm…</p>}
+      {plm.data?.configured && !plm.data.reachable && (
+        <p className="mb-2 text-sm text-muted-foreground">plm недоступен: {plm.data.message}. Локальный справочник стенда ниже.</p>
+      )}
+      {usePlm ? (
+        <>
+          <div className="mb-3 w-64">
+            <Select
+              aria-label="дроп plm"
+              options={(plmDrops.data ?? []).map((d) => ({
+                value: d.code,
+                label: [d.code, d.season, d.description].filter(Boolean).join(' · '),
+              }))}
+              placeholder="дроп plm"
+              value={drop}
+              onChange={(e) => setDrop(e.target.value)}
+            />
           </div>
-          {!m.can_work && <p className="text-xs text-muted-foreground">{m.reason}</p>}
-          <div className="mt-1 flex flex-wrap gap-2">
-            {m.colour_models.map((cm) => {
-              const colour = colourOf(cm.colour_code)
-              return (
-                <button
-                  key={cm.id}
-                  disabled={!m.can_work}
-                  onClick={() => onPick(cm.id, cm.colour_code)}
-                  className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
-                  title={m.can_work ? `начать работу: ${colour?.name ?? cm.colour_code}` : (m.reason ?? '')}
-                >
-                  <span
-                    className="mr-1 inline-block h-3 w-3 rounded-sm border border-line align-middle"
-                    style={{ background: colour ? toCss(colour) : undefined }}
-                  />
-                  {/* Группа палитры по-русски — как в матрице дропа; код Cosmic — в подсказке. */}
-                  {colour?.group ?? cm.colour_code}
-                </button>
-              )
-            })}
+          {colorways.isPending && <p className="text-sm">Загружаю цветомодели…</p>}
+          {colorways.isError && <p className="text-sm">{(colorways.error as Error).message}</p>}
+          <div className="flex flex-wrap gap-3">
+            {(colorways.data ?? []).map((cw) => (
+              <button
+                key={cw.id}
+                disabled={!cw.can_work}
+                onClick={() => onPickPlm(cw, drop)}
+                className={buttonClass({ tone: 'neutral', variant: 'outline' })}
+                title={cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
+                style={{ minWidth: 140 }}
+              >
+                <span
+                  className="mb-1 block h-8 w-full rounded-sm border border-line"
+                  style={{ background: rgbCss(cw.rgb) }}
+                  aria-hidden
+                />
+                <span className="block text-left text-sm font-semibold">{cw.color ?? cw.article}</span>
+                <span className="block text-left text-xs text-muted-foreground">{cw.style_code} · {cw.article}</span>
+                {!cw.can_work && <span className="mt-1 block text-left text-xs text-muted-foreground">{cw.reason}</span>}
+              </button>
+            ))}
           </div>
-        </section>
-      ))}
+        </>
+      ) : (
+        <>
+          {tree.isPending && <p className="text-sm">Загружаю изделия…</p>}
+          {tree.isError && <p className="text-sm">Справочник изделий не ответил — закройте окно и попробуйте ещё раз.</p>}
+          {models.map((m) => (
+            <section key={m.id} className="mb-3">
+              <div className="text-sm font-semibold">
+                {m.name} <span className="font-normal text-muted-foreground">{m.code}</span>
+              </div>
+              {!m.can_work && <p className="text-xs text-muted-foreground">{m.reason}</p>}
+              <div className="mt-1 flex flex-wrap gap-2">
+                {m.colour_models.map((cm) => {
+                  const colour = colourOf(cm.colour_code)
+                  return (
+                    <button
+                      key={cm.id}
+                      disabled={!m.can_work}
+                      onClick={() => onPickLocal(cm.id, cm.colour_code)}
+                      className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+                      title={m.can_work ? `начать работу: ${colour?.name ?? cm.colour_code}` : (m.reason ?? '')}
+                    >
+                      <span
+                        className="mr-1 inline-block h-3 w-3 rounded-sm border border-line align-middle"
+                        style={{ background: colour ? toCss(colour) : undefined }}
+                      />
+                      {colour?.group ?? cm.colour_code}
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
+        </>
+      )}
     </Modal>
   )
 }

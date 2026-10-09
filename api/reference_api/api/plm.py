@@ -8,14 +8,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from platform_client import Action, requires
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.config import settings
+from reference_api.db import session
+from reference_api.repositories import plm_links as links_repo
 from reference_api.services import plm as plm_service
 
 __all__ = ["router"]
 
 router = APIRouter(prefix="/plm", tags=["plm"])
+
+
+class ProductLinkIn(BaseModel):
+    style_code: str = Field(min_length=1, max_length=64)
+    product_code: str = Field(min_length=1, max_length=64)
+
 
 
 def _configured() -> tuple[str, str]:
@@ -83,30 +94,30 @@ async def drops(active_only: bool = True) -> dict[str, Any]:
 
 
 @router.get("/colorways")
-async def colorways(drop: str | None = Query(default=None)) -> dict[str, Any]:
+async def colorways(
+    drop: str | None = Query(default=None),
+    db: AsyncSession = Depends(session),
+) -> dict[str, Any]:
     base, key = _configured()
     try:
         items = await plm_service.list_colorways(base, key, drop=drop)
     except (plm_service.PlmUnavailable, plm_service.PlmRefused) as failure:
         raise _map_failure(failure) from failure
-    return {
-        "items": [
-            {
-                "id": c.id,
-                "article": c.article,
-                "title": c.title,
-                "style_id": c.style_id,
-                "style_code": c.style_code,
-                "color": c.color,
-                "base_color": c.base_color,
-                "rgb": list(c.rgb) if c.rgb else None,
-                "gender": c.gender,
-                "image": c.image,
-                "suppliers": list(c.suppliers),
-            }
-            for c in items
-        ]
-    }
+    return {"items": await plm_service.enrich_colorways(db, items)}
+
+
+@router.get("/product-links")
+async def product_links(db: AsyncSession = Depends(session)) -> dict[str, Any]:
+    """Свои связи style → кадры. Не каталог plm."""
+    rows = await links_repo.all_links(db)
+    return {"items": [{"style_code": r.style_code, "product_code": r.product_code} for r in rows]}
+
+
+@router.put("/product-links", dependencies=[requires("products", Action.WRITE)])
+async def put_product_link(body: ProductLinkIn, db: AsyncSession = Depends(session)) -> dict[str, str]:
+    await links_repo.upsert(db, style_code=body.style_code, product_code=body.product_code)
+    await db.commit()
+    return {"style_code": body.style_code, "product_code": body.product_code}
 
 
 @router.get("/colors")

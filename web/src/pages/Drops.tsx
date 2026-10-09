@@ -27,25 +27,53 @@ import {
   type TreeNode,
 } from '../shared/api/drops'
 import { DropBoard } from './DropBoard'
+import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, rgbCss } from '../shared/api/plm'
 
 const dateRu = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 
 type Row = Matrix['rows'][number]
 
 export function Drops() {
-  const drops = useQuery({ queryKey: ['drops'], queryFn: fetchDrops })
+  const plm = useQuery({ queryKey: ['plm-status'], queryFn: fetchPlmStatus })
+  const usePlm = Boolean(plm.data?.configured && plm.data.reachable)
+  const drops = useQuery({ queryKey: ['drops'], queryFn: fetchDrops, enabled: !usePlm })
+  const plmDrops = useQuery({ queryKey: ['plm-drops'], queryFn: () => fetchPlmDrops(), enabled: usePlm })
   const [picked, setPicked] = useState<number | null>(null)
+  const [plmDrop, setPlmDrop] = useState<string | null>(null)
   // Выбранный мог исчезнуть — удалён, а список уже перечитан: тогда первый живой.
   const current = (picked !== null && drops.data?.some((d) => d.id === picked) ? picked : null) ?? drops.data?.find((d) => !d.retired)?.id ?? null
+  const currentPlm = plmDrop ?? plmDrops.data?.[0]?.code ?? null
   const canWrite = useCan(CODE, 'drops', 'write')
   const canDelete = useCan(CODE, 'drops', 'delete')
   // Форма дропа: null — закрыта, 'new' — завести, дроп — поправить.
   const [editing, setEditing] = useState<Drop | 'new' | null>(null)
   const [deleting, setDeleting] = useState<Drop | null>(null)
 
-  if (drops.isPending) return <main style={S.page}>Загружаю дропы…</main>
-  if (drops.isError)
+  if (plm.isPending || (!usePlm && drops.isPending)) return <main style={S.page}>Загружаю дропы…</main>
+  if (!usePlm && drops.isError)
     return <main style={S.page}>Справочник дропов не ответил — обновите страницу; если повторится, стенд сервиса не поднят.</main>
+  if (plm.data?.configured && !plm.data.reachable)
+    return <main style={S.page}>plm недоступен: {plm.data.message}</main>
+
+  if (usePlm) {
+    return (
+      <main style={{ ...S.page, display: 'grid', gridTemplateColumns: '260px minmax(0, 1fr)', gap: 24 }}>
+        <nav aria-label="дропы plm">
+          <h1 style={S.h1}>Дропы</h1>
+          <p style={{ ...S.dim, marginBottom: 12 }}>из plm · без копии в базе</p>
+          {(plmDrops.data ?? []).map((d) => (
+            <button key={d.code} onClick={() => setPlmDrop(d.code)} style={{ ...S.drop, ...(d.code === currentPlm ? S.dropOn : {}) }}>
+              <b>{d.code}</b>
+              <span style={S.dim}>
+                {[d.season, d.subseason, d.description].filter(Boolean).join(' · ')}
+              </span>
+            </button>
+          ))}
+        </nav>
+        {currentPlm ? <PlmAssortment dropCode={currentPlm} /> : null}
+      </main>
+    )
+  }
 
   return (
     <main style={{ ...S.page, display: 'grid', gridTemplateColumns: '260px minmax(0, 1fr)', gap: 24 }}>
@@ -56,7 +84,7 @@ export function Drops() {
             + завести дроп
           </button>
         )}
-        {drops.data.map((d) => (
+        {(drops.data ?? []).map((d) => (
           <button key={d.id} onClick={() => setPicked(d.id)} style={{ ...S.drop, ...(d.id === current ? S.dropOn : {}) }}>
             <b>{d.name}</b>
             <span style={S.dim}>
@@ -66,7 +94,7 @@ export function Drops() {
           </button>
         ))}
       </nav>
-      {current !== null ? (
+      {current !== null && drops.data ? (
         <DropMatrix
           dropId={current}
           drop={drops.data.find((d) => d.id === current)!}
@@ -96,6 +124,61 @@ export function Drops() {
         />
       )}
     </main>
+  )
+}
+
+/** Ассортимент дропа из plm: крупные плашки цвета ткани, без зеркала в Postgres. */
+function PlmAssortment({ dropCode }: { dropCode: string }) {
+  const navigate = useNavigate()
+  const colorways = useQuery({
+    queryKey: ['plm-colorways', dropCode],
+    queryFn: () => fetchPlmColorways(dropCode),
+  })
+  if (colorways.isPending) return <section>Загружаю цветомодели plm…</section>
+  if (colorways.isError) return <section>{(colorways.error as Error).message}</section>
+  return (
+    <section>
+      <h2 style={S.h1}>{dropCode}</h2>
+      <p style={{ ...S.dim, marginBottom: 16 }}>цветомодели plm · плашка — цвет ткани</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+        {(colorways.data ?? []).map((cw) => (
+          <button
+            key={cw.id}
+            disabled={!cw.can_work}
+            onClick={() => {
+              if (!cw.can_work || !cw.product_code) return
+              const colour = cw.color ?? cw.base_color ?? 'WHITE'
+              navigate(
+                `/references/new?product=${encodeURIComponent(cw.product_code)}&plm_colorway=${encodeURIComponent(cw.id)}&colour=${encodeURIComponent(colour)}&plm_drop=${encodeURIComponent(dropCode)}`,
+              )
+            }}
+            style={{
+              ...S.drop,
+              width: 160,
+              opacity: cw.can_work ? 1 : 0.55,
+              cursor: cw.can_work ? 'pointer' : 'not-allowed',
+            }}
+            title={cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
+          >
+            <span
+              style={{
+                display: 'block',
+                height: 40,
+                borderRadius: 4,
+                border: '1px solid var(--line, #ccc)',
+                background: rgbCss(cw.rgb),
+                marginBottom: 8,
+              }}
+            />
+            <b>{cw.color ?? cw.article}</b>
+            <span style={S.dim}>
+              {cw.style_code} · {cw.article}
+              {!cw.can_work ? ` · ${cw.reason}` : ''}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 

@@ -126,3 +126,17 @@ class DropItem(Base):
 
     drop_id: Mapped[int] = mapped_column(ForeignKey("drops.id", ondelete="CASCADE"), primary_key=True)
     colour_model_id: Mapped[int] = mapped_column(ForeignKey("colour_models.id", ondelete="RESTRICT"), primary_key=True)
+
+
+class PlmProductLink(Base):
+    """Тонкая связь артикула PLM с изделием, у которого есть кадры (0018, US-0886).
+
+    Не зеркало каталога: только ключ style_code и код изделия в томе. Дропы и
+    цветомодели plm сюда не копируются.
+    """
+
+    __tablename__ = "plm_product_links"
+
+    style_code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    product_code: Mapped[str] = mapped_column(String(64), nullable=False)
+
