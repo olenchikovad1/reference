@@ -135,6 +135,10 @@ class Settings(BaseSettings):
     #: живёт на локальных фикстурах.
     plm_base_url: str | None = None
     plm_machine_key: str | None = None
+    #: Адрес фронта plm для ссылки «открыть в PLM» (US-0893). Пусто — только
+    #: относительный путь из карточки.
+    plm_web_url: str | None = None
+
 
     s3_region: str = "ru-central1"
     amqp_url: str | None = None

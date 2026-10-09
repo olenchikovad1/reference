@@ -8,6 +8,28 @@ export interface PlmStatus {
   reachable: boolean
   drops: number
   message: string
+  web_url?: string | null
+}
+
+export type PlmReadiness = 'none' | 'partial' | 'full'
+
+export interface PlmPassport {
+  id: string
+  article: string
+  title: string | null
+  style_id: string
+  style_code: string
+  style_name: string | null
+  brand: string | null
+  category: string | null
+  color: string | null
+  color_code: string | null
+  gender: string | null
+  drop_code: string | null
+  size_range: string | null
+  suppliers: string[]
+  readiness: Record<string, PlmReadiness>
+  plm_path: string
 }
 
 export interface PlmDrop {
@@ -63,6 +85,32 @@ export const fetchPlmColorways = (drop?: string) =>
   get<{ items: PlmColorway[] }>(`plm/colorways${drop ? `?drop=${encodeURIComponent(drop)}` : ''}`).then(
     (b) => b.items,
   )
+export const fetchPlmPassport = (colorwayId: string) => get<PlmPassport>(`plm/colorways/${encodeURIComponent(colorwayId)}`)
+
+const READINESS_LABEL: Record<string, string> = {
+  size_charts: 'табель мер',
+  patterns: 'лекала',
+  technology: 'технология',
+  boms: 'БОМ',
+}
+const READINESS_STATE: Record<PlmReadiness, string> = {
+  none: 'нет',
+  partial: 'в работе',
+  full: 'есть',
+}
+
+export function readinessLines(marks: Record<string, PlmReadiness> | undefined): { label: string; state: string }[] {
+  return Object.entries(READINESS_LABEL).map(([key, label]) => ({
+    label,
+    state: READINESS_STATE[marks?.[key] ?? 'none'],
+  }))
+}
+
+export function plmOpenUrl(webUrl: string | null | undefined, path: string | null | undefined): string | null {
+  if (!path) return null
+  if (!webUrl) return path
+  return `${webUrl.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`
+}
 
 export function rgbCss(rgb: number[] | null | undefined): string | undefined {
   if (!rgb || rgb.length !== 3) return undefined

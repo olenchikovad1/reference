@@ -6,6 +6,7 @@ import { Slider, Section } from './controls'
 import { S } from './styles'
 import type { WorkWindowState } from './useWorkWindow'
 import { on, small } from './controls'
+import { PlmPassport, plmColorwayFromUrl } from './PlmPassport'
 
 // Панель изделия (план 114, US-0894): цвет, размер, показ. Состояние — у окна.
 export function GarmentPanel({ w }: { w: WorkWindowState }) {
@@ -27,6 +28,7 @@ export function GarmentPanel({ w }: { w: WorkWindowState }) {
     state,
     field,
   } = w
+  const plmColorway = plmColorwayFromUrl()
   // Изделие загружено: окно раньше уже показало «загружаю» или ошибку.
   if (!product || !state) return null
   return (
@@ -37,6 +39,7 @@ export function GarmentPanel({ w }: { w: WorkWindowState }) {
           ×
         </button>
       </div>
+      {plmColorway ? <PlmPassport colorwayId={plmColorway} /> : null}
       <Section title="Цвет">
         <div style={S.swatches}>
           {colours.map((c) => (

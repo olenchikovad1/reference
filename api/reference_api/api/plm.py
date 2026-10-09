@@ -58,12 +58,30 @@ async def status() -> dict[str, Any]:
     """Настроен ли канал и отвечает ли plm на чтение дропов."""
     cfg = settings()
     if not cfg.plm_base_url or not cfg.plm_machine_key:
-        return {"configured": False, "reachable": False, "drops": 0, "message": "plm не настроен"}
+        return {
+            "configured": False,
+            "reachable": False,
+            "drops": 0,
+            "message": "plm не настроен",
+            "web_url": cfg.plm_web_url,
+        }
     try:
         items = await plm_service.list_drops(cfg.plm_base_url, cfg.plm_machine_key)
     except (plm_service.PlmUnavailable, plm_service.PlmRefused) as failure:
-        return {"configured": True, "reachable": False, "drops": 0, "message": str(failure)}
-    return {"configured": True, "reachable": True, "drops": len(items), "message": "ok"}
+        return {
+            "configured": True,
+            "reachable": False,
+            "drops": 0,
+            "message": str(failure),
+            "web_url": cfg.plm_web_url,
+        }
+    return {
+        "configured": True,
+        "reachable": True,
+        "drops": len(items),
+        "message": "ok",
+        "web_url": cfg.plm_web_url,
+    }
 
 
 @router.get("/drops")
