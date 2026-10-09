@@ -13,6 +13,12 @@ infra/stand/files/products/*/source/
 infra/stand/files/models/
 infra/stand/files/dictionaries/
 
+# Сменный том кадров/принтов для prod (US-0025). Содержимое выкладывает
+# scripts/stand/seed_garment_assets.py из стенда; в git только README.
+infra/garment-assets/**
+!infra/garment-assets/README.md
+
+
 __pycache__/
 *.py[cod]
 .venv/

@@ -167,6 +167,11 @@ py scripts/stand/fetch_models.py && cp api/.env.example api/.env && cp web/.env.
 исходники моделей и нейросети. Что в томе на месте, а что подменено или
 отсутствует, говорит `py scripts/stand/verify_volume.py` — до подъёма стенда.
 
+**Боевой том кадров и принтов — сменный:** `infra/garment-assets` (или любой
+каталог через `FILES_HOST_PATH`), наполняется
+`py scripts/stand/seed_garment_assets.py` со стенда. Логика приложения путь не
+зашивает — том можно заменить (в т.ч. будущий с Drive).
+
 **Порог узнавания меняется в `api/.env`, но контейнер надо пересоздать:**
 `env_file` читается при создании, а не при каждом старте. `docker compose up -d
 api` — это пересоздание без пересборки.
