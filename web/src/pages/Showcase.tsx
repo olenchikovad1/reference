@@ -22,7 +22,8 @@ import { ReferenceCard as ShowcaseCard } from '../candidates/ReferenceCard'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { SHOWCASE_KEYS } from '../shared/keys'
 import { moveTo, ownOrder, placeOf, preview } from '../shared/order'
-import { passes, useDropFilter } from '../shared/filters'
+import { SEASON_NAMES, passes, useDropFilter, type SeasonFilter } from '../shared/filters'
+import { fetchPeople } from '../shared/api/people'
 import { useCan } from '../shared/api/platform'
 
 import { ORDER_KEY, prefetchCard } from '../shared/cardCache'
@@ -31,17 +32,22 @@ import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
 import {
   copyReference,
   eraseForever,
+  fetchTasks,
   findReferences,
   listReferences,
   moveToDrop,
   setOrder,
   restoreReference,
+  STATUS_NAMES,
   trashReference,
   type Card,
+  type Status,
 } from '../shared/api/references'
 import { fetchDrops, type Drop } from '../shared/api/drops'
 import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, plmImageUrl, rgbCss, type PlmColorway, type PlmDrop } from '../shared/api/plm'
 import {
+  endingDates,
+  endingWeeks,
   inSeasonDates,
   inSeasonWeeks,
   profileFromDates,
@@ -94,6 +100,9 @@ export function Showcase() {
   const plmStatus = useQuery({ queryKey: ['plm-status'], queryFn: fetchPlmStatus })
   const usePlm = Boolean(plmStatus.data?.configured && plmStatus.data.reachable)
   const plmDrops = useQuery({ queryKey: ['plm-drops'], queryFn: () => fetchPlmDrops(), enabled: usePlm })
+  const people = useQuery({ queryKey: ['people'], queryFn: fetchPeople })
+  const tasks = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks })
+  const myTurnIds = new Set((tasks.data?.mine ?? []).map((t) => t.id))
   // Свой порядок (US-0601): «по дате» или «мой». Выбор помнит браузер —
   // это удобство смотрящего, а не данные.
   const [sortOwn, setSortOwn] = useState(() => {
@@ -181,15 +190,22 @@ export function Showcase() {
   // адресатом; выбор помнит браузер, как и порядок.
   const [onlyMine, setOnlyMine] = useRemembered(MINE_KEY)
   const [onlyDrafts, setOnlyDrafts] = useRemembered(DRAFTS_KEY)
+  const seasonMode: SeasonFilter = drop.filter.season ?? 'in'
   const filtered = (
     found.ids === null ? cards.data : found.ids.flatMap((id) => cards.data?.find((c) => c.id === id) ?? [])
-  )?.filter((c) => (!onlyMine || c.mine) && (!onlyDrafts || c.my_draft)).filter((c) =>
-    passes(
-      { drops: c.drop_ids, audiences: c.audience ? [c.audience] : [], categories: c.category ? [c.category] : [] },
-      drop.filter,
-    ),
-  // Вне сезона по умолчанию не на витрине (US-0888); фильтр «вне сезона» — US-0889.
-  ).filter((c) => cardInSeason(c, drops.data, usePlm ? plmDrops.data : undefined))
+  )
+    ?.filter((c) => (!onlyMine || c.mine) && (!onlyDrafts || c.my_draft))
+    .filter((c) =>
+      passes(
+        { drops: c.drop_ids, audiences: c.audience ? [c.audience] : [], categories: c.category ? [c.category] : [] },
+        drop.filter,
+      ),
+    )
+    .filter((c) => drop.filter.status === null || c.status === drop.filter.status)
+    .filter((c) => drop.filter.executor === null || c.executor?.id === drop.filter.executor)
+    .filter((c) => !drop.filter.myTurn || myTurnIds.has(c.id))
+    .filter((c) => cardMatchesSeason(c, seasonMode, drops.data, usePlm ? plmDrops.data : undefined))
+
   // В поиске — порядок совпадения всегда: там важнее, что нашлось первым.
   const shown = filtered && found.ids === null && sortOwn ? ownOrder(filtered) : filtered
   // Во время переноса — предварительный порядок: переносимые на месте курсора.
@@ -442,6 +458,48 @@ export function Showcase() {
       />
       <div className="flex flex-wrap items-center justify-between gap-x-4">
         <DropFilterBar {...drop}>
+          <div className="w-44 shrink-0">
+            <Select
+              aria-label="статус"
+              options={(Object.keys(STATUS_NAMES) as Status[])
+                .filter((s) => s !== 'rejected')
+                .map((s) => ({ value: s, label: STATUS_NAMES[s] }))}
+              placeholder="любой статус"
+              value={drop.filter.status ?? ''}
+              onChange={(e) => drop.set({ status: (e.target.value || null) as Status | null })}
+            />
+          </div>
+          <div className="w-44 shrink-0">
+            <Select
+              aria-label="исполнитель"
+              options={(people.data ?? []).map((p) => ({
+                value: p.id,
+                label: p.full_name || p.display_name,
+              }))}
+              placeholder="любой исполнитель"
+              value={drop.filter.executor ?? ''}
+              onChange={(e) => drop.set({ executor: e.target.value || null })}
+            />
+          </div>
+          <div className="w-40 shrink-0">
+            <Select
+              aria-label="сезон"
+              options={(Object.keys(SEASON_NAMES) as SeasonFilter[]).map((s) => ({
+                value: s,
+                label: SEASON_NAMES[s],
+              }))}
+              placeholder="в сезоне"
+              value={drop.filter.season ?? ''}
+              onChange={(e) => drop.set({ season: (e.target.value || null) as SeasonFilter | null })}
+            />
+          </div>
+          <Chip
+            on={drop.filter.myTurn}
+            set={(fn) => drop.set({ myTurn: fn(drop.filter.myTurn) })}
+            title="Только референсы, где сейчас мой ход в согласовании"
+          >
+            мой ход
+          </Chip>
           <Chip on={onlyMine} set={setOnlyMine} title="Только референсы, где я исполнитель">
             только мои
           </Chip>
@@ -946,7 +1004,19 @@ function scrollerOf(el: HTMLElement): { scrollBy: (x: number, y: number) => void
   return window
 }
 
-/** Карточка в сезоне, если хоть один её дроп в окне продаж (или дропов нет). */
+/** Карточка проходит сезон-фильтр (US-0888/0889). */
+function cardMatchesSeason(
+  card: Card,
+  mode: SeasonFilter,
+  local: Drop[] | undefined,
+  plm: PlmDrop[] | undefined,
+): boolean {
+  const inSeason = cardInSeason(card, local, plm)
+  if (mode === 'in') return inSeason
+  if (mode === 'out') return !inSeason
+  return inSeason && cardEnding(card, local, plm)
+}
+
 function cardInSeason(card: Card, local: Drop[] | undefined, plm: PlmDrop[] | undefined): boolean {
   if (plm?.length) {
     const mine = plm.filter((d) => card.drops.includes(d.code) || card.drops.includes(d.description ?? ''))
@@ -957,6 +1027,18 @@ function cardInSeason(card: Card, local: Drop[] | undefined, plm: PlmDrop[] | un
     if (mine.length) return mine.some((d) => inSeasonDates(d.release_from, d.release_to))
   }
   return true
+}
+
+function cardEnding(card: Card, local: Drop[] | undefined, plm: PlmDrop[] | undefined): boolean {
+  if (plm?.length) {
+    const mine = plm.filter((d) => card.drops.includes(d.code) || card.drops.includes(d.description ?? ''))
+    if (mine.length) return mine.some((d) => endingWeeks(d.intake_week, d.exit_week))
+  }
+  if (local?.length && card.drop_ids.length) {
+    const mine = local.filter((d) => card.drop_ids.includes(d.id))
+    if (mine.length) return mine.some((d) => endingDates(d.release_from, d.release_to))
+  }
+  return false
 }
 
 /** На остросезонном — срок «до ДД.ММ» (US-0888). */

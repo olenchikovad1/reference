@@ -15,7 +15,7 @@ import { Justified, JustifiedCell, useRatios } from '../candidates/Justified'
 import { Viewer } from '../candidates/Viewer'
 import { Votes } from '../candidates/Votes'
 import type { KeyRow } from '../shared/keys'
-import { passes, useDropFilter } from '../shared/filters'
+import { DECISION_NAMES, passes, useDropFilter, type DropDecision } from '../shared/filters'
 import { CODE } from '../app/shell'
 import { useCan } from '../shared/api/platform'
 import {
@@ -153,7 +153,8 @@ export function Prints() {
           return item ? [{ item, weight: f.weight, because: f.because }] : []
         })
   ).filter(({ item }) =>
-    passes({ drops: item.drops.map((d) => d.id), audiences: item.audiences.map((a) => a.code), categories: item.categories }, drop.filter),
+    passes({ drops: item.drops.map((d) => d.id), audiences: item.audiences.map((a) => a.code), categories: item.categories }, drop.filter) &&
+      printMatchesDecision(item, drop.filter.decision, drop.filter.drop),
   )
 
   function assign(what: { drop_id?: number; audience?: string }) {
@@ -266,8 +267,22 @@ export function Prints() {
           </div>
         }
       />
-      <DropFilterBar {...drop} />
+      <DropFilterBar {...drop}>
+        <div className="w-52 shrink-0">
+          <Select
+            aria-label="решение в дропе"
+            options={(Object.keys(DECISION_NAMES) as DropDecision[]).map((d) => ({
+              value: d,
+              label: DECISION_NAMES[d],
+            }))}
+            placeholder="любое решение"
+            value={drop.filter.decision ?? ''}
+            onChange={(e) => drop.set({ decision: (e.target.value || null) as DropDecision | null })}
+          />
+        </div>
+      </DropFilterBar>
       <AssignBar selected={picked.size} noun={['картинка', 'картинки', 'картинок']} onAssign={assign} onClear={() => setPicked(new Set())}>
+
         {canDefect && !defects && <GroupDefect digests={[...picked]} onDone={() => setPicked(new Set())} />}
       </AssignBar>
       {busy && <p className="mb-2 text-sm text-muted-foreground">{busy}</p>}
@@ -607,6 +622,21 @@ function useWeights(query: string): { rows: Hit[] | null; error: string | null }
     }
   }, [query])
   return { rows, error }
+}
+
+/** Решение принта в дропе (US-0889): «через референс» считается одобренным. */
+function printMatchesDecision(
+  item: LibraryItem,
+  decision: DropDecision | null,
+  dropId: number | null,
+): boolean {
+  if (decision === null) return true
+  const links = dropId !== null ? item.drops.filter((d) => d.id === dropId) : item.drops
+  if (links.length === 0) return false
+  return links.some((d) => {
+    const st = d.via !== null ? 'approved' : (d.status ?? 'proposed')
+    return st === decision
+  })
 }
 
 /** Брак выделенным разом (US-0714): одна причина на всех, каждую — отдельно. */

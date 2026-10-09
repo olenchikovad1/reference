@@ -54,6 +54,26 @@ export function inSeasonWeeks(
   return weekInWindow(isoWeek(today), intake, exit)
 }
 
+/** Кончается: в сезоне и до exit ≤ 2 недель (US-0889). */
+export function endingWeeks(
+  intake: number | null | undefined,
+  exit: number | null | undefined,
+  today: Date = new Date(),
+): boolean {
+  if (intake == null || exit == null) return false
+  if (!inSeasonWeeks(intake, exit, today)) return false
+  const w = isoWeek(today)
+  const left = exit >= w ? exit - w : exit + (53 - w)
+  return left <= 2
+}
+
+export function endingDates(from: string, to: string, today: Date = new Date()): boolean {
+  if (!inSeasonDates(from, to, today)) return false
+  const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  const left = (Date.parse(to + 'T00:00:00Z') - start) / 86_400_000
+  return left >= 0 && left <= 14
+}
+
 /** Последний день ISO-недели exit в ISO-году даты `today` — «до 31.08». */
 export function untilWeekLabel(exit: number, today: Date = new Date()): string {
   const year = isoWeekYear(today)

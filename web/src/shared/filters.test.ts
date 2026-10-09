@@ -4,7 +4,16 @@ import { describe, expect, it } from 'vitest'
 
 import { passes, type DropFilter } from './filters'
 
-const none: DropFilter = { drop: null, audience: null, category: null }
+const none: DropFilter = {
+  drop: null,
+  audience: null,
+  category: null,
+  status: null,
+  executor: null,
+  myTurn: false,
+  season: null,
+  decision: null,
+}
 const tank = { drops: [1, 3], audiences: ['boys'], categories: ['Худи'] }
 const teddy = { drops: [2], audiences: ['all'], categories: [] }
 
@@ -28,7 +37,8 @@ describe('фильтр по дропу, адресату, виду одежды'
   })
 
   it('вид одежды и сочетание условий', () => {
-    expect(passes(tank, { drop: 1, audience: 'boys', category: 'Худи' })).toBe(true)
-    expect(passes(tank, { drop: 1, audience: 'boys', category: 'Футболки' })).toBe(false)
+    expect(passes(tank, { ...none, drop: 1, audience: 'boys', category: 'Худи' })).toBe(true)
+    expect(passes(tank, { ...none, drop: 1, audience: 'boys', category: 'Футболки' })).toBe(false)
   })
 })
+
