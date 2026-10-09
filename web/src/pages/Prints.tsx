@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom'
 import { AssignBar, DropFilterBar } from '../candidates/DropFilter'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { Justified, JustifiedCell, useRatios } from '../candidates/Justified'
+import { TryOn } from '../candidates/TryOn'
 import { Viewer } from '../candidates/Viewer'
 import { Votes } from '../candidates/Votes'
 import type { KeyRow } from '../shared/keys'
@@ -465,6 +466,7 @@ function PrintDetails({
   const [marking, setMarking] = useState(defecting)
   const [markReason, setMarkReason] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [tryOn, setTryOn] = useState(false)
   const refresh = () => queries.invalidateQueries({ queryKey: ['library'] })
   const fail = (e: Error) => setError(`${e.message} — повторите.`)
   const title = item.name?.name ?? item.file_name
@@ -537,6 +539,14 @@ function PrintDetails({
               ))}
             </div>
           )}
+          <button
+            className={buttonClass({ tone: 'accent', variant: 'solid', small: true })}
+            onClick={() => setTryOn(true)}
+            title="Примерить на изделиях дропа без сохранения (US-0892)"
+          >
+            примерить
+          </button>
+          {tryOn && <TryOn digest={item.digest} name={title} onClose={() => setTryOn(false)} />}
           <div className="flex flex-wrap items-center gap-1 text-xs">
             <span className="text-muted-foreground">где использован:</span>
             {item.references.length === 0 && <span className="text-muted-foreground">нигде</span>}
