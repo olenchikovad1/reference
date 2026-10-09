@@ -10,7 +10,7 @@
 import { EmptyState, IconButton, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
 import { warmGarments } from '../candidates/GarmentCanvas'
@@ -18,6 +18,7 @@ import { frameUrl, productQuery } from '../shared/api/products'
 import { DropFilterBar } from '../candidates/DropFilter'
 import { useFlip } from '../candidates/useFlip'
 import { meaningClass } from '../candidates/meaning'
+import { FamilyPopup } from '../candidates/FamilyPopup'
 import { ReferenceCard as ShowcaseCard } from '../candidates/ReferenceCard'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { SHOWCASE_KEYS } from '../shared/keys'
@@ -132,6 +133,9 @@ export function Showcase() {
   const redoStack = useRef<ShowcaseStep[]>([])
   const [announce, setAnnounce] = useState('')
   const { ref: openRef } = useParams()
+  const [search, setSearch] = useSearchParams()
+  const familyId = Number(search.get('family') || 0) || null
+  const familyCard = familyId ? (cards.data ?? []).find((c) => c.id === familyId) : undefined
 
   function pick(id: number, e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) {
     const order = (shownRef.current ?? []).map((c) => c.id)
@@ -636,7 +640,12 @@ export function Showcase() {
               onOpen={(e) => {
                 if (justDragged.current) return
                 if (e.ctrlKey || e.metaKey || e.shiftKey) pick(c.id, e)
-                else navigate(`/references/${c.id}`, { state: { inApp: true } })
+                // Сначала семейство цветов (US-0891), не сразу окно.
+                else {
+                  const next = new URLSearchParams(search)
+                  next.set('family', String(c.id))
+                  setSearch(next, { replace: false })
+                }
               }}
               onHover={() => prefetchCard(queries, c.id)}
               selected={selected.has(c.id)}
@@ -754,6 +763,23 @@ export function Showcase() {
           </div>
         )}
       </Modal>
+
+      {familyId && familyCard && (
+        <FamilyPopup
+          referenceId={familyId}
+          name={familyCard.name || `№${familyId}`}
+          onClose={() => {
+            const next = new URLSearchParams(search)
+            next.delete('family')
+            setSearch(next, { replace: true })
+          }}
+          onPick={(colour) => {
+            navigate(`/references/${familyId}?colour=${encodeURIComponent(colour)}`, {
+              state: { inApp: true, fromFamily: familyId },
+            })
+          }}
+        />
+      )}
 
       <CreateDialog
         open={creating}

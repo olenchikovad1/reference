@@ -91,7 +91,6 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
     addFiles,
     zoomTo,
     clampPan,
-    versionBody,
     saveCard,
     saveCardAs,
     flip,

@@ -409,7 +409,9 @@ export function useWindowActions(s: WindowState) {
     const c = upgrade(w.composition)
     for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
     if (w.stateCode) setStateCode(w.stateCode)
-    const colour = w.colourCode ?? colourCode
+    // Взгляд из адреса семьи (?colour=) главнее сохранённого (US-0891).
+    const fromUrl = new URLSearchParams(window.location.search).get('colour')
+    const colour = fromUrl ?? w.colourCode ?? colourCode
     setColourCode(colour)
     setSize(w.size ?? null)
     // Открытая версия — без выбранного: панель появляется по нажатию, а не
@@ -477,7 +479,8 @@ export function useWindowActions(s: WindowState) {
     onServer.current = workKey({ colourCode: d.colourCode ?? colourCode, composition: c })
     for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
     if (d.stateCode) setStateCode(d.stateCode)
-    setColourCode(d.colourCode ?? colourCode)
+    const fromUrl = new URLSearchParams(window.location.search).get('colour')
+    setColourCode(fromUrl ?? d.colourCode ?? colourCode)
     setSize(d.size ?? null)
     history.open(card.id, { ...c, selectedId: null })
     setCurrent(card)
@@ -717,7 +720,10 @@ export function useWindowActions(s: WindowState) {
    *  A/D меняет адрес с заменой, и ключ у открытого ссылкой становится не
    *  'default' — шаг назад приводил на ту же ссылку, окно не закрывалось. */
   function close() {
-    if ((location.state as { inApp?: boolean } | null)?.inApp) navigate(-1)
+    const state = location.state as { inApp?: boolean; fromFamily?: number } | null
+    // Esc из окна — к семейству, ещё раз — к витрине (US-0891).
+    if (state?.fromFamily) navigate(`/references?family=${state.fromFamily}`, { replace: true })
+    else if (state?.inApp) navigate(-1)
     else navigate('/references', { replace: true })
   }
 
