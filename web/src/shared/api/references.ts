@@ -224,6 +224,15 @@ export interface Trashed extends Card {
   purge_at: string
 }
 
+/** Референс в браке: кто, когда, почему (US-0885). */
+export interface Rejected extends Card {
+  rejected_at: string
+  rejected_by_id: string | null
+  rejected_by_name: string
+  reason: string
+}
+
+
 async function act(method: string, path: string): Promise<void> {
   const r = await fetch(`${BASE}${path}`, { method })
   if (!r.ok) throw new Error(r.status === 409 ? 'Сначала в корзину' : `Не вышло: ${r.status}`)
@@ -272,6 +281,13 @@ export async function listTrash(): Promise<Trashed[]> {
   if (!r.ok) throw new Error(`Корзина: ${r.status}`)
   return (await r.json()) as Trashed[]
 }
+
+export async function listRejected(): Promise<Rejected[]> {
+  const r = await fetch(`${BASE}references/rejected`)
+  if (!r.ok) throw new Error(`Брак: ${r.status}`)
+  return (await r.json()) as Rejected[]
+}
+
 
 export interface VersionMeta extends Saver {
   number: number

@@ -110,6 +110,14 @@ sections:
     icon: trash
     tone: slate
     actions: [view]
+  # Брак — своим разделом (US-0885): решение «не берём», не удаление. Вернуть
+  # в работу — review:write + роль главного в согласовании.
+  - code: rejects
+    name: Брак
+    shareable: false
+    icon: ban
+    tone: rose
+    actions: [view]
   - code: dictionaries
     name: Справочники
     shareable: false
@@ -124,15 +132,16 @@ right_sets:
     # delete — в корзину и обратно (решение 0014): неудачные варианты дизайнер
     # убирает сам; стереть насовсем — функция очистки корзины, её нет.
     grants: [references:view, references:write, references:delete, prints:view, prints:write,
-             texts:view, texts:write, drops:view, products:view, review:view, agenda:view, trash:view, dictionaries:view]
+             texts:view, texts:write, drops:view, products:view, review:view, agenda:view, trash:view,
+             rejects:view, dictionaries:view]
   - code: editor
     name: Редактор
     grants: [references:view, review:view, review:write, agenda:view, prints:view, texts:view, drops:view,
-             drops:approve-in-drop, dictionaries:view]
+             drops:approve-in-drop, rejects:view, dictionaries:view]
   - code: chief-editor
     name: Суперредактор
     grants: [references:view, references:write, references:delete, review:view, review:write, agenda:view,
-             trash:view,
+             trash:view, rejects:view,
              prints:view, prints:write,
              texts:view, texts:write, drops:view, drops:write, drops:approve-in-drop, dictionaries:view,
              dictionaries:write,

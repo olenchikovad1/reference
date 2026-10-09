@@ -181,11 +181,13 @@ async def search(db: AsyncSession, normalised: str, limit: int = 20) -> list[Ref
         select(Reference)
         .join(ReferenceVersion, ReferenceVersion.reference_id == Reference.id)
         .join(ReferenceText, ReferenceText.version_id == ReferenceVersion.id)
-        .where(ReferenceText.normalised == normalised, ALIVE)
+        # Как витрина: брак — в своём разделе, не в поиске (US-0885).
+        .where(ReferenceText.normalised == normalised, ALIVE, Reference.status != "rejected")
         .order_by(ReferenceVersion.created_at.desc())
         .limit(limit)
     )
     return list(rows.unique().scalars())
+
 
 
 async def latest(
@@ -209,7 +211,37 @@ async def latest(
             (ReferenceVersion.reference_id == Reference.id)
             & (ReferenceVersion.number == newest.c.number),
         )
-        .where(Reference.deleted_at.is_not(None) if trashed else ALIVE)
+        .where(
+            *(
+                [Reference.deleted_at.is_not(None)]
+                if trashed
+                else [ALIVE, Reference.status != "rejected"]
+            ),
+        )
+        .order_by(ReferenceVersion.created_at.desc(), ReferenceVersion.id.desc())
+        .limit(limit)
+    )
+    return [(c, v) for c, v in rows]
+
+
+async def rejected(
+    db: AsyncSession, limit: int | None = None
+) -> list[tuple[Reference, ReferenceVersion]]:
+    """Забракованные живые карточки — раздел «Брак», не корзина (US-0885)."""
+    newest = (
+        select(ReferenceVersion.reference_id, func.max(ReferenceVersion.number).label("number"))
+        .group_by(ReferenceVersion.reference_id)
+        .subquery()
+    )
+    rows = await db.execute(
+        select(Reference, ReferenceVersion)
+        .join(newest, newest.c.reference_id == Reference.id)
+        .join(
+            ReferenceVersion,
+            (ReferenceVersion.reference_id == Reference.id)
+            & (ReferenceVersion.number == newest.c.number),
+        )
+        .where(ALIVE, Reference.status == "rejected")
         .order_by(ReferenceVersion.created_at.desc(), ReferenceVersion.id.desc())
         .limit(limit)
     )

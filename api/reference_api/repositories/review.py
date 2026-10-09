@@ -54,6 +54,18 @@ async def last_returns(db: AsyncSession, ids: list[int]) -> dict[int, ReferenceS
     return {e.reference_id: e for e in rows.scalars()}
 
 
+async def last_rejects(db: AsyncSession, ids: list[int]) -> dict[int, ReferenceStatusEvent]:
+    """Последний переход в брак — кто, когда, почему (US-0885)."""
+    if not ids:
+        return {}
+    rows = await db.execute(select(ReferenceStatusEvent)
+                            .where(ReferenceStatusEvent.reference_id.in_(ids),
+                                   ReferenceStatusEvent.to_status == "rejected")
+                            .order_by(ReferenceStatusEvent.at))
+    return {e.reference_id: e for e in rows.scalars()}
+
+
+
 async def add_remark(db: AsyncSession, **fields) -> ReferenceRemark:
     row = ReferenceRemark(**fields)
     db.add(row)

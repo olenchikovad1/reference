@@ -17,6 +17,7 @@ import { Prints } from '../pages/Prints'
 import { Texts } from '../pages/Texts'
 import { Showcase } from '../pages/Showcase'
 import { Trash } from '../pages/Trash'
+import { Rejects } from '../pages/Rejects'
 import { NotFound, Placeholder } from '../pages/Placeholder'
 import { Dictionaries } from '../pages/Dictionaries'
 import { Tasks } from '../pages/Tasks'
@@ -40,6 +41,7 @@ const PAGES: Record<string, () => ReactElement> = {
   prints: () => <Prints />,
   texts: () => <Texts />,
   trash: () => <Trash />,
+  rejects: () => <Rejects />,
   drops: () => <Drops />,
   products: () => <Products />,
   dictionaries: () => <Dictionaries />,

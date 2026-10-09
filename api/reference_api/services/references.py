@@ -461,6 +461,12 @@ async def trashed(db: AsyncSession):
     return await repo.latest(db, trashed=True)
 
 
+async def rejected(db: AsyncSession):
+    """Забракованные — раздел «Брак», не корзина (US-0885)."""
+    return await repo.rejected(db)
+
+
+
 async def origins(db: AsyncSession, cards) -> dict[int, int]:
     """Референс → номер того, от чьей версии он пошёл."""
     by_version = await repo.origins(db, [c.forked_from_version_id for c in cards if c.forked_from_version_id])

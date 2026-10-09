@@ -229,3 +229,33 @@ async def test_approved_waits_for_the_chief_only_with_the_final_right(client) ->
         without, _ = await review.tasks(db, CHIEF, can_final=False)
     assert ref in [t.id for t in with_right]
     assert ref not in [t.id for t in without]
+
+
+async def test_rejected_leaves_showcase_and_lives_in_rejects(client) -> None:
+    """Забракованный пропадал: не в корзине, своего раздела не было (US-0885).
+
+    Причина пропажи — статус `rejected` без дома: витрина его держала (или
+    человек искал в корзине), а «Брака» не было. Теперь — не на витрине, не в
+    корзине, в «Браке» с причиной; «вернуть в работу» возвращает на витрину.
+    """
+    ref = await new_reference(client)
+    assert (await client.post(f"{API}/references/{ref}/reject", headers=as_(CHIEF),
+                              json={"comment": "сюжет не для детей"})).status_code == 200
+
+    showcase = [c["id"] for c in (await client.get(f"{API}/references")).json()]
+    assert ref not in showcase, "на витрине забракованных нет"
+
+    trash = [c["id"] for c in (await client.get(f"{API}/references/trash")).json()]
+    assert ref not in trash, "брак — не корзина"
+
+    rejects = (await client.get(f"{API}/references/rejected")).json()
+    hit = next(c for c in rejects if c["id"] == ref)
+    assert hit["reason"] == "сюжет не для детей"
+    assert hit["rejected_by_id"] == CHIEF
+    assert hit["rejected_at"]
+
+    assert (await client.post(f"{API}/references/{ref}/revive", headers=as_(CHIEF),
+                              json={"comment": "переделаем"})).status_code == 200
+    assert ref in [c["id"] for c in (await client.get(f"{API}/references")).json()]
+    assert ref not in [c["id"] for c in (await client.get(f"{API}/references/rejected")).json()]
+

@@ -201,6 +201,16 @@ class TrashedOut(CardOut):
     purge_at: datetime
 
 
+class RejectedOut(CardOut):
+    """Референс в браке: кто забраковал, когда и почему (US-0885)."""
+
+    rejected_at: datetime
+    rejected_by_id: str | None
+    rejected_by_name: str
+    reason: str
+
+
+
 class VersionMetaOut(Saver):
     number: int
     #: Сделана сама перед переходом — перед каким; пусто — сохранил человек.

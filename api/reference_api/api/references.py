@@ -25,6 +25,7 @@ from reference_api.schemas.references import (
     StatusEventOut,
     CommentIn,
     TrashedOut,
+    RejectedOut,
     FoundReferenceOut,
     HiddenTagIn,
     TagIn,
@@ -233,6 +234,29 @@ async def trash_list(db: AsyncSession = Depends(session)) -> list[TrashedOut]:
         TrashedOut(**card.model_dump(), deleted_at=c.deleted_at, purge_at=service.purge_date(c.deleted_at))
         for card, (c, _) in zip(cards, rows, strict=True)
     ]
+
+
+@router.get("/rejected", response_model=list[RejectedOut])
+async def rejected_list(db: AsyncSession = Depends(session)) -> list[RejectedOut]:
+    """Брак: забракованные с причиной — не корзина (US-0885)."""
+    from reference_api.repositories import review as review_repo
+
+    rows = await service.rejected(db)
+    cards = await _cards(db, rows)
+    events = await review_repo.last_rejects(db, [c.id for c, _ in rows])
+    names = await people.names_of(db, [e.by_id for e in events.values() if e.by_id])
+    out: list[RejectedOut] = []
+    for card, (c, _) in zip(cards, rows, strict=True):
+        e = events.get(c.id)
+        out.append(RejectedOut(
+            **card.model_dump(),
+            rejected_at=e.at if e else c.created_at,
+            rejected_by_id=e.by_id if e else None,
+            rejected_by_name=names.get(e.by_id or "", "") if e else "",
+            reason=(e.comment or "") if e else "",
+        ))
+    return out
+
 
 
 @router.post("/{reference_id}/copy", response_model=SavedOut, dependencies=[requires("references", Action.WRITE)])

@@ -48,6 +48,8 @@ export const SECTIONS: SectionPlace[] = [
     about: 'Повестка созвона: что выдвинуто на обсуждение, по дропам, с поводами.', children: [] },
   { code: 'trash', title: 'Корзина', path: '/trash', plan: 'план 099 (US-0712)',
     about: 'Корзина: удалённое 30 дней возвращается целиком.', children: [] },
+  { code: 'rejects', title: 'Брак', path: '/rejects', plan: 'план 017 (US-0885)',
+    about: 'Брак: забракованные с причиной; вернуть в работу отсюда.', children: [] },
   { code: 'dictionaries', title: 'Справочники', path: '/dictionaries', plan: 'план 073',
     about: 'Справочники: товарная иерархия, адресаты, палитра.', children: [] },
 ]
