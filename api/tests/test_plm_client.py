@@ -57,3 +57,26 @@ async def test_wrong_key_is_refusal_not_retry_storm() -> None:
     with pytest.raises(plm.PlmRefused):
         await plm.list_drops("http://plm.example/plm", "bad", transport=httpx.MockTransport(handler))
     assert calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_image_fetch_asks_machine_thumb_not_original() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        return httpx.Response(200, content=b"\xff\xd8\xff", headers={"content-type": "image/jpeg"})
+
+    content, media = await plm.fetch_image(
+        "http://plm.example/plm",
+        "secret",
+        "img-1",
+        "thumb",
+        transport=httpx.MockTransport(handler),
+    )
+    assert seen["path"].endswith("/api/machine/images/img-1/thumb")
+    assert content.startswith(b"\xff\xd8")
+    assert "jpeg" in media
+
+    with pytest.raises(plm.PlmRefused):
+        await plm.fetch_image("http://plm.example/plm", "secret", "img-1", "original", transport=httpx.MockTransport(handler))

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from platform_client import Action, requires
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -151,3 +151,20 @@ async def colorway(colorway_id: str) -> dict[str, Any]:
         return await plm_service.colorway_card(base, key, colorway_id)
     except (plm_service.PlmUnavailable, plm_service.PlmRefused) as failure:
         raise _map_failure(failure) from failure
+
+
+@router.get("/images/{image_key}/{preset}")
+async def plm_image(image_key: str, preset: str) -> Response:
+    """Картинка модели из plm для выбора (US-0887). Не кадр холста; только thumb/preview."""
+    if preset not in ("thumb", "preview"):
+        raise HTTPException(status_code=404, detail={"code": "image_preset_forbidden", "message": "Только thumb и preview."})
+    base, key = _configured()
+    try:
+        content, media = await plm_service.fetch_image(base, key, image_key, preset)
+    except (plm_service.PlmUnavailable, plm_service.PlmRefused) as failure:
+        raise _map_failure(failure) from failure
+    return Response(
+        content=content,
+        media_type=media,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )

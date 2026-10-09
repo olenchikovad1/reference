@@ -68,3 +68,9 @@ export function rgbCss(rgb: number[] | null | undefined): string | undefined {
   if (!rgb || rgb.length !== 3) return undefined
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`
 }
+
+/** Thumb/preview через BFF — оригинал в браузер не уходит (И-3, US-0887). */
+export function plmImageUrl(imageKey: string | null | undefined, preset: 'thumb' | 'preview' = 'thumb'): string | null {
+  if (!imageKey) return null
+  return `${BASE}plm/images/${encodeURIComponent(imageKey)}/${preset}`
+}

@@ -27,7 +27,7 @@ import {
   type TreeNode,
 } from '../shared/api/drops'
 import { DropBoard } from './DropBoard'
-import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, rgbCss } from '../shared/api/plm'
+import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, plmImageUrl, rgbCss } from '../shared/api/plm'
 
 const dateRu = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 
@@ -160,16 +160,24 @@ function PlmAssortment({ dropCode }: { dropCode: string }) {
             }}
             title={cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
           >
-            <span
-              style={{
-                display: 'block',
-                height: 40,
-                borderRadius: 4,
-                border: '1px solid var(--line, #ccc)',
-                background: rgbCss(cw.rgb),
-                marginBottom: 8,
-              }}
-            />
+            {plmImageUrl(cw.image) ? (
+              <img
+                src={plmImageUrl(cw.image)!}
+                alt=""
+                style={{ display: 'block', width: '100%', height: 96, objectFit: 'cover', borderRadius: 4, marginBottom: 8 }}
+              />
+            ) : (
+              <span
+                style={{
+                  display: 'block',
+                  height: 40,
+                  borderRadius: 4,
+                  border: '1px solid var(--line, #ccc)',
+                  background: rgbCss(cw.rgb),
+                  marginBottom: 8,
+                }}
+              />
+            )}
             <b>{cw.color ?? cw.article}</b>
             <span style={S.dim}>
               {cw.style_code} · {cw.article}

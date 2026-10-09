@@ -23,6 +23,7 @@ __all__ = [
     "list_colors",
     "colorway_card",
     "enrich_colorways",
+    "fetch_image",
     "NO_FRAMES",
 ]
 
@@ -245,6 +246,7 @@ async def enrich_colorways(db: AsyncSession, items: list[Colorway]) -> list[dict
                 "base_color": c.base_color,
                 "rgb": list(c.rgb) if c.rgb else None,
                 "gender": c.gender,
+                # Ключ картинки plm — только для выбора; холст на кадрах тома.
                 "image": c.image,
                 "suppliers": list(c.suppliers),
                 "product_code": product,
@@ -253,3 +255,34 @@ async def enrich_colorways(db: AsyncSession, items: list[Colorway]) -> list[dict
             }
         )
     return out
+
+
+async def fetch_image(
+    base_url: str,
+    key: str,
+    image_key: str,
+    preset: str,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> tuple[bytes, str]:
+    """Thumb/preview из машинного входа plm. Оригинал не запрашиваем."""
+    if preset not in ("thumb", "preview"):
+        raise PlmRefused("доступны только thumb и preview")
+    if not base_url or not key:
+        raise PlmUnavailable("plm не настроен: нет адреса или ключа машинного входа")
+    url = f"{_base(base_url)}/api/machine/images/{image_key}/{preset}"
+    headers = {"Authorization": f"Bearer {key}"}
+    try:
+        async with httpx.AsyncClient(transport=transport, timeout=TIMEOUT_SECONDS) as client:
+            response = await client.get(url, headers=headers)
+    except httpx.HTTPError as failure:
+        raise PlmUnavailable(f"plm недоступен: {type(failure).__name__}") from failure
+    if response.status_code in (401, 403):
+        raise PlmRefused(f"plm отказал ({response.status_code}): ключ не принят")
+    if response.status_code == 404:
+        raise PlmRefused("картинки нет")
+    if response.status_code != 200:
+        raise PlmUnavailable(f"plm ответил {response.status_code}")
+    media = response.headers.get("content-type") or "image/jpeg"
+    return response.content, media
+

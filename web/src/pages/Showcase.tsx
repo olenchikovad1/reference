@@ -40,7 +40,7 @@ import {
   type Card,
 } from '../shared/api/references'
 import { fetchDrops } from '../shared/api/drops'
-import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, rgbCss, type PlmColorway } from '../shared/api/plm'
+import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, plmImageUrl, rgbCss, type PlmColorway } from '../shared/api/plm'
 
 /** Где браузер помнит выбранный порядок витрины. */
 const SORT_KEY = 'reference.showcase.sort'
@@ -763,11 +763,15 @@ function CreateDialog({
                 title={cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
                 style={{ minWidth: 140 }}
               >
-                <span
-                  className="mb-1 block h-8 w-full rounded-sm border border-line"
-                  style={{ background: rgbCss(cw.rgb) }}
-                  aria-hidden
-                />
+                {plmImageUrl(cw.image) ? (
+                  <img src={plmImageUrl(cw.image)!} alt="" className="mb-1 block h-20 w-full rounded-sm object-cover" />
+                ) : (
+                  <span
+                    className="mb-1 block h-8 w-full rounded-sm border border-line"
+                    style={{ background: rgbCss(cw.rgb) }}
+                    aria-hidden
+                  />
+                )}
                 <span className="block text-left text-sm font-semibold">{cw.color ?? cw.article}</span>
                 <span className="block text-left text-xs text-muted-foreground">{cw.style_code} · {cw.article}</span>
                 {!cw.can_work && <span className="mt-1 block text-left text-xs text-muted-foreground">{cw.reason}</span>}
