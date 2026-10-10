@@ -190,6 +190,20 @@ def deny(reason: str) -> None:
     _respond("deny", reason)
 
 
+def warn(note: str) -> None:
+    """Пропустить правку и оставить замечание тому, кто правил.
+
+    Для правил, где работа с недоделанным законна: отказ отбивал бы правку, которую
+    честно доделают следующим шагом, и правило начали бы обходить.
+    """
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "additionalContext": note,
+        }
+    }, ensure_ascii=False))
+
+
 def silent() -> None:
     """Промолчать: команда идёт обычным путём."""
     return None

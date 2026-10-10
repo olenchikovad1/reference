@@ -20,7 +20,14 @@
    `web/src/components` — это и есть начало расхождения.
 
 Отвечает `deny`, а не `ask`: последствие не дорогое, но и решать тут нечего —
-импорт переносится внутрь набора, и вопрос закрыт. Запуск без stdin работает как
+импорт переносится внутрь набора, и вопрос закрыт.
+
+Кроме отказов — замечания, правку они не отбивают: цвет значением вместо роли
+(`color.md`) и текстовая кнопка с общепринятым действием вместо значка
+(`actions.md`). Экран в работе законно бывает недокрашен; замечание видно сразу,
+а не на приёмке. В наборе компонентов и в файлах токенов и темы замечаний нет —
+там значениям и место. Полный обход (`--scan`) замечаний не считает: он
+блокирующий, и замечания сделали бы его отказом. Запуск без stdin работает как
 проверка всего дерева, чтобы то же правило можно было прогнать перед слиянием:
 
     py -X utf8 .claude/hooks/guard_ui_boundary.py --scan
@@ -107,6 +114,74 @@ HANDMADE = (
 # выключение должно быть видно как решение: рядом с ним причина.
 PAGINATION_OFF = re.compile(r'pagination=["\']off["\']')
 JUSTIFIED = re.compile(r'(?:Постраничность выключена|постраничност[ьи][^\n]{0,80}выключен)')
+
+
+# Цвет значением вместо роли и текстовая кнопка вместо общепринятого значка (US-0907,
+# листы color.md и actions.md). Это замечание, а не отказ: экран в работе законно
+# бывает недокрашен, и отбитая правка учит обходить хук, а не брать роль.
+#
+# Цвета палитры Tailwind сопоставлены роли по смыслу оттенка: красный почти всегда
+# «опасность», а не украшение. Код цвета (#…, rgb()) роли не говорит — тогда
+# замечание перечисляет роли и отправляет к листу.
+PALETTE_CLASS = re.compile(
+    r"\b(?:bg|text|border|ring|fill|stroke|outline|from|to|via)-"
+    r"(red|rose|green|emerald|lime|yellow|amber|orange|blue|sky|cyan|indigo|"
+    r"gray|slate|zinc|neutral|stone)-\d{2,3}\b"
+)
+HUE_ROLE = {
+    "red": "опасность", "rose": "опасность",
+    "green": "успех", "emerald": "успех", "lime": "успех",
+    "yellow": "предупреждение", "amber": "предупреждение", "orange": "предупреждение",
+    "blue": "основное или сведения", "sky": "сведения", "cyan": "сведения",
+    "indigo": "основное",
+    "gray": "нейтральное", "slate": "нейтральное", "zinc": "нейтральное",
+    "neutral": "нейтральное", "stone": "нейтральное",
+}
+COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|\b(?:rgba?|hsla?)\([^)]*\)")
+
+# Файлы, где значениям и место: определение токенов и темы. Набор компонентов
+# исключён отдельно — через `inside_ui`.
+TOKEN_FILE = re.compile(r"(?:^|/)[^/]*(?:token|theme|palette|tones?)[^/]*$", re.IGNORECASE)
+
+# Слово на кнопке → значок. Только действия из таблицы actions.md; главное действие
+# формы («Сохранить», «Записать») текстом законно и сюда не входит.
+ICON_FOR = {
+    "удалить": "корзина", "в корзину": "корзина",
+    "изменить": "карандаш", "редактировать": "карандаш",
+    "копировать": "две страницы", "копия": "две страницы", "дублировать": "две страницы",
+    "обновить": "круговая стрелка", "повторить": "круговая стрелка",
+    "добавить": "плюс", "закрыть": "крестик", "найти": "лупа", "поиск": "лупа",
+    "фильтр": "воронка", "настройки": "шестерёнка", "скачать": "стрелка вниз в лоток",
+    "загрузить": "стрелка вверх из лотка", "печать": "принтер", "печатать": "принтер",
+}
+TEXT_BUTTON = re.compile(
+    r"<(?:button|Button)\b[^>]*>\s*(" + "|".join(sorted(ICON_FOR, key=len, reverse=True))
+    + r")\s*</(?:button|Button)>",
+    re.IGNORECASE,
+)
+
+
+def style_remarks(text: str, path: str) -> list[str]:
+    """Замечания о цвете значением и текстовой кнопке. Пусто — замечаний нет."""
+    if TOKEN_FILE.search(path.replace("\\", "/")):
+        return []
+    notes: list[str] = []
+    for hue in sorted({m.group(1) for m in PALETTE_CLASS.finditer(text)}):
+        notes.append(
+            f"цвет палитры `{hue}` значением — возьмите роль «{HUE_ROLE[hue]}» по имени "
+            f"(frontend-ui, color.md)"
+        )
+    for literal in sorted(set(COLOR_LITERAL.findall(text))):
+        notes.append(
+            f"цвет `{literal}` значением — возьмите роль по смыслу: основное, нейтральное, "
+            f"успех, предупреждение, опасность, сведения (frontend-ui, color.md)"
+        )
+    for word in sorted({m.group(1).lower() for m in TEXT_BUTTON.finditer(text)}):
+        notes.append(
+            f"кнопка «{word}» текстом — у действия есть общепринятый значок: "
+            f"{ICON_FOR[word]}, с подсказкой (frontend-ui, actions.md)"
+        )
+    return notes
 
 
 def unjustified_pagination_off(text: str) -> int:
@@ -241,7 +316,9 @@ def main() -> None:
             posix = path.as_posix()
             if not is_frontend(posix, lay) or inside_ui(posix, lay):
                 continue
-            problems += problems_in(path.read_text(encoding="utf-8"), posix, libraries)
+            text = path.read_text(encoding="utf-8")
+            problems += problems_in(text, posix, libraries)
+            problems += [f"{posix}: {note}" for note in style_remarks(text, posix)]
         if problems:
             # Предупреждение, а не остановка: правка уже сделана, останавливать нечего, а
             # текст нужен тому, кто правил, — чтобы починить в этом же ходу.
@@ -291,6 +368,11 @@ def main() -> None:
 
     modules = offending_imports(written, libraries)
     if not modules:
+        # Отказов нет — остаются замечания. Они идут только после блокирующих
+        # проверок: замечание не должно подменять отказ (US-0907).
+        notes = style_remarks(written, path)
+        if notes:
+            g.warn("frontend-ui — правка прошла, но:\n" + "\n".join(f"- {n}" for n in notes))
         return
 
     g.deny(
