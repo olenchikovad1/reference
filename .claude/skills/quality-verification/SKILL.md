@@ -3,7 +3,7 @@ name: quality-verification
 description: Never claim something works, is fixed or is done without running the command that proves it and reading the full output. Use before every statement of completion, before saying tests pass, before reporting a fix, before closing a task, and whenever tempted to say "should work" or "trivial change, no need to check".
 source: projects_skills/skills/quality/verification
 hooks: [guard_claim_without_run.py]
-adapted: 2026-09-23
+adapted: 2026-10-10
 ---
 # Доказательство результата
 
@@ -115,6 +115,10 @@ adapted: 2026-09-23
 Не требуют: описание того, что собираешься делать; предположения, названные
 предположениями.
 
+Экран — частный случай: «готово» про экран доказывается не сборкой, а
+снимком отрисованного экрана на широкой и узкой ширине. Порядок такой
+проверки — `frontend-ui`, лист `review.md`.
+
 ## Проверка
 
 - сказать «готово» и проверить, был ли прогон, — был;
@@ -131,6 +135,7 @@ adapted: 2026-09-23
 
 - `quality-root-cause` — что именно проверять после исправления.
 - `quality-review` — сверка тоже заявляет результат.
+- `frontend-ui` (`review.md`) — как проверяется глазами готовый экран.
 
 ---
 
