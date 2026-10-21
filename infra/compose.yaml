@@ -27,29 +27,30 @@ services:
 
   # Том miniodata: объектное хранилище. Локальная замена Yandex Object Storage;
   # протокол тот же, поэтому переезд на прод — смена адреса и ключей.
-  # Образы minio берутся с quay.io, а не с Docker Hub: с хаба они отсюда не
-  # тянутся вовсе («pull access denied»), проверено 23.09.2026.
-  # Версии — те же, что у стенда платформы. С quay.io старые теги больше не
-  # отдаются («unauthorized», 25.09.2026), а платформенные уже лежат на каждой
-  # машине, где поднят её стенд, — без него фронтенд всё равно не собрать.
+  # Образ — из архива Bitnami, как у стенда plm: MinIO убрал свои образы и с
+  # quay.io (401 «unauthorized»), и с Docker Hub, и на машине без старой
+  # копии стенд с нуля не поднимался (21.10.2026). Закреплён по digest —
+  # архив больше не обновляется. Скрипты Bitnami обходятся: запускается сам
+  # `minio`; данные — в каталоге образа, в `/data` его пользователь не пишет.
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: server /data --console-address ":9001"
+    image: bitnamilegacy/minio:2025.4.22@sha256:50cec18ac4184af4671a78aedd5554942c8ae105d51a465fa82037949046da01
+    entrypoint: ["minio"]
+    command: ["server", "/bitnami/minio/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
       - "${MINIO_PORT}:9000"
       - "${MINIO_CONSOLE_PORT}:9001"
-    volumes: ["miniodata:/data"]
+    volumes: ["miniodata:/bitnami/minio/data"]
 
   # Разовая задача: завести ведро. Отдельным сервисом, а не шагом в сервисе —
   # создание ведра не является частью работы приложения и повторяться не должно.
   #
-  # Готовность minio проверяется здесь циклом, а не healthcheck самого minio:
-  # в его образе нет ни mc, ни curl, и любая проба снаружи оказывается враньём.
+  # Готовность minio проверяется здесь циклом, а не healthcheck самого minio.
+  # Образ тот же, что у minio: в архиве Bitnami mc лежит рядом с сервером.
   minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-04-16T18-13-26Z
+    image: bitnamilegacy/minio:2025.4.22@sha256:50cec18ac4184af4671a78aedd5554942c8ae105d51a465fa82037949046da01
     depends_on: [minio]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
