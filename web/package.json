@@ -8,8 +8,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@platform/shell": "^1.26.0",
-    "@platform/tokens": "^1.31.0",
+    "@platform/shell": "^1.30.0",
+    "@platform/tokens": "^1.32.0",
     "@platform/ui": "^1.70.0",
     "@tanstack/react-query": "^5.62.7",
     "react": "^19.0.0",

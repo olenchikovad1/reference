@@ -1,4 +1,5 @@
 import '@platform/tokens/tokens.css'
+import './theme.css'
 import { applyAppearance, readAppearance } from '@platform/shell'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'

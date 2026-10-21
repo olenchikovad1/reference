@@ -1,0 +1,36 @@
+/* Меню разделов в контрастной теме — белые подписи, как во всём портале
+   (Алиса 21.10.2026; то же правило у plm, его решение 0018).
+
+   В контрастной теме платформы рельса и меню серо-зелёные. Оболочка до 1.29
+   красила подписи пунктов общим тёмно-серым `--muted-foreground` — на hub
+   они почти не читались (1.3 к одному). С 1.29 пункты берут
+   `--sidebar-muted`; здесь он и соседние токены приравнены к
+   `--sidebar-foreground`: подписи и значки белые, выбранный пункт — тёмная
+   плашка. Подменяются только значения токенов внутри навигации разделов:
+   разметку и код меню держит платформа, цвета остаются именами её токенов. */
+[data-theme='neutral'] nav[aria-label='Разделы приложения'] {
+  --sidebar-muted: var(--sidebar-foreground);
+  --muted-foreground: var(--sidebar-foreground);
+  --foreground: var(--sidebar-foreground);
+  /* Выбранный пункт: тёмная плашка вместо белой карточки. */
+  --card: var(--sidebar-border);
+  --shadow-card: none;
+  --hover: color-mix(in srgb, var(--sidebar-foreground) 14%, transparent);
+  /* Значки — белые, как подписи: цвет раздела в меню не различают. */
+  --tone-teal: var(--sidebar-foreground);
+  --tone-green: var(--sidebar-foreground);
+  --tone-blue: var(--sidebar-foreground);
+  --tone-amber: var(--sidebar-foreground);
+  --tone-rose: var(--sidebar-foreground);
+  --tone-violet: var(--sidebar-foreground);
+  --tone-slate: var(--sidebar-foreground);
+}
+
+/* Подсказка при наведении берёт фон из `--foreground`, а текст из
+   `--background` (`.pf-hint`) и рисуется внутри меню: подменённый выше
+   `--foreground` сделал бы её белой с почти белым текстом. Внутри подсказки
+   возвращается тёмный текст страницы. Снимается, когда `@platform/ui`
+   вынесет подсказку в `body`. */
+[data-theme='neutral'] nav[aria-label='Разделы приложения'] .pf-hint {
+  --foreground: var(--card-foreground);
+}
