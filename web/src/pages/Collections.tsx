@@ -52,6 +52,7 @@ import {
 import { fetchPlmStatus, plmImageUrl, plmOpenUrl, rgbCss } from '../shared/api/plm'
 import {
   authorsOf,
+  colourProgress,
   headline,
   imageFiles,
   labelCounts,
@@ -235,6 +236,8 @@ function CollectionBoard({ releaseId }: { releaseId: string }) {
 
   const { collection, bases, viewer } = board.data
   const counts = labelCounts(bases, labels.data ?? [], filter)
+  const progress = colourProgress(bases, labels.data ?? [])
+  const last = [...(labels.data ?? [])].sort((a, b) => a.position - b.position || a.id - b.id).at(-1)
   const people = authorsOf(bases)
   const fresh = newCount(bases)
   const plmHref = plmOpenUrl(plm.data?.web_url, collection.plm_path)
@@ -328,6 +331,18 @@ function CollectionBoard({ releaseId }: { releaseId: string }) {
           </button>
         )}
       </div>
+      <p
+        className="mb-4 text-sm text-muted-foreground"
+        title="Цвет считается по самой дальней метке своих вариантов; порядок меток — как в справочнике меток"
+      >
+        по цветам: {progress.colours} · не начато {progress.untouched} · в работе без метки {progress.unlabelled}
+        {progress.byLabel.map((one) => ` · ${one.label.name.toLowerCase()} ${one.colours}`)}
+        {last && (
+          <span className="font-medium text-foreground">
+            {` · ${last.name.toLowerCase()}: ${progress.donePercent}% коллекции`}
+          </span>
+        )}
+      </p>
       {moveError && <p className="mb-2 text-sm text-destructive">{moveError}</p>}
 
       {bases.length === 0 ? (

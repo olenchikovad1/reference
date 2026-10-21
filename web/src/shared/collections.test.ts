@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Base, Collection, Label, Variant } from './api/collections'
-import { authorsOf, headline, imageFiles, labelCounts, matches, newCount, placeInto, shifted } from './collections'
+import { authorsOf, colourProgress, headline, imageFiles, labelCounts, matches, newCount, placeInto, shifted } from './collections'
 
 const variant = (id: number, author: string | null, label: number | null, isNew = false): Variant => ({
   id,
@@ -105,6 +105,18 @@ describe('доска коллекции', () => {
   it('сдвиг на одно место и упор в край', () => {
     expect(shifted([1, 2, 3], 2, -1)).toEqual([2, 1, 3])
     expect(shifted([1, 2, 3], 3, 1)).toEqual([1, 2, 3])
+  })
+
+  it('ход коллекции по цветам — по самой дальней метке цвета', () => {
+    // цвет 0: метки 1 и 3 → дальняя 3 (последняя = готово); цвет 1: без меток; цвет 2: пусто
+    const three = [base([[variant(1, 'anna', 1), variant(2, 'anna', 3)], [variant(3, 'anna', null)], []])]
+    const labels = [label(1, 'Смотреть', true, 0), label(2, 'Согласовано', true, 1), label(3, 'Отдано', true, 2)]
+    const p = colourProgress(three, labels)
+    expect(p.colours).toBe(3)
+    expect(p.untouched).toBe(1)
+    expect(p.unlabelled).toBe(1)
+    expect(p.byLabel.map((x) => [x.label.name, x.colours])).toEqual([['Отдано', 1]])
+    expect(p.donePercent).toBe(33)
   })
 
   it('считает новое', () => {

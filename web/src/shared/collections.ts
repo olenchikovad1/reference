@@ -102,3 +102,51 @@ export function shifted(ids: readonly number[], id: number, step: -1 | 1): numbe
   ;[out[at], out[to]] = [out[to], out[at]]
   return out
 }
+
+/** Ход коллекции по цветам — «сколько релиза уже сделано» (Алиса 21.10).
+ *
+ * Цвет считается по самой дальней метке среди своих вариантов в работе;
+ * «дальше» — ниже в справочнике меток: порядок там смысловой и задаётся людьми
+ * («Смотреть директору» → «Правки» → «Согласовано» → «Отдано фабрике»).
+ * Цвет без вариантов — «не начат», с вариантами без меток — «в работе».
+ * Последняя метка справочника — «готово»: её доля и есть процент коллекции. */
+export interface ColourProgress {
+  colours: number
+  untouched: number
+  unlabelled: number
+  byLabel: { label: Label; colours: number }[]
+  /** Доля цветов на последней метке, 0…100, целым. */
+  donePercent: number
+}
+
+export function colourProgress(bases: readonly Base[], labels: readonly Label[]): ColourProgress {
+  const ordered = [...labels].sort((a, b) => a.position - b.position || a.id - b.id)
+  const rank = new Map(ordered.map((l, i) => [l.id, i]))
+  const reached = new Map<number, number>()
+  let colours = 0
+  let untouched = 0
+  let unlabelled = 0
+  for (const b of bases) {
+    for (const c of b.colours) {
+      colours += 1
+      if (c.variants.length === 0) {
+        untouched += 1
+        continue
+      }
+      const best = c.variants
+        .map((v) => (v.label_id !== null ? rank.get(v.label_id) : undefined))
+        .filter((r): r is number => r !== undefined)
+        .reduce((m, r) => Math.max(m, r), -1)
+      if (best < 0) unlabelled += 1
+      else reached.set(best, (reached.get(best) ?? 0) + 1)
+    }
+  }
+  const done = ordered.length > 0 ? reached.get(ordered.length - 1) ?? 0 : 0
+  return {
+    colours,
+    untouched,
+    unlabelled,
+    byLabel: ordered.map((label, i) => ({ label, colours: reached.get(i) ?? 0 })).filter((one) => one.colours > 0),
+    donePercent: colours > 0 ? Math.round((done * 100) / colours) : 0,
+  }
+}
