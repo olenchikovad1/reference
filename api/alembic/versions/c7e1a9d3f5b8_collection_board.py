@@ -51,15 +51,23 @@ def upgrade() -> None:
             "label_id", sa.Integer(), sa.ForeignKey("collection_labels.id", ondelete="RESTRICT"), nullable=True
         ),
     )
+    op.add_column("reference_cards", sa.Column("external_key", sa.String(120), nullable=True))
     op.add_column("reference_cards", sa.Column("board_position", sa.Integer(), nullable=True))
     op.add_column("reference_cards", sa.Column("shelved_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("reference_cards", sa.Column("shelved_by", sa.String(64), nullable=True))
     op.create_check_constraint(
         "ck_reference_collection_keys",
         "reference_cards",
-        "(plm_release_id is null) = (plm_style_id is null) and (plm_colorway_id is null or plm_style_id is not null)",
+        "(plm_style_id is null or plm_release_id is not null) and (plm_colorway_id is null or plm_style_id is not null)",
     )
     op.create_index("ix_reference_cards_plm_release", "reference_cards", ["plm_release_id"])
+    op.create_index(
+        "uq_reference_cards_external_key",
+        "reference_cards",
+        ["plm_release_id", "external_key"],
+        unique=True,
+        postgresql_where=sa.text("external_key is not null"),
+    )
 
     op.create_table(
         "reference_label_events",
@@ -90,11 +98,13 @@ def downgrade() -> None:
     op.drop_table("reference_seen")
     op.drop_index("ix_reference_label_events_reference", table_name="reference_label_events")
     op.drop_table("reference_label_events")
+    op.drop_index("uq_reference_cards_external_key", table_name="reference_cards")
     op.drop_index("ix_reference_cards_plm_release", table_name="reference_cards")
     op.drop_constraint("ck_reference_collection_keys", "reference_cards", type_="check")
     op.drop_column("reference_cards", "shelved_by")
     op.drop_column("reference_cards", "shelved_at")
     op.drop_column("reference_cards", "board_position")
+    op.drop_column("reference_cards", "external_key")
     op.drop_column("reference_cards", "label_id")
     op.drop_column("reference_cards", "plm_colorway_id")
     op.drop_column("reference_cards", "plm_style_id")

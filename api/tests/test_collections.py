@@ -313,3 +313,25 @@ async def test_перенос_чужой_карточки_или_в_чужую_�
     assert wrong.status_code == 422
     missing = await client.put(f"{BASE}/{RELEASE}/place", json={"style_id": STYLE, "colorway_id": PINK, "ids": [variant, 999999]})
     assert missing.status_code == 404
+
+
+async def test_хранение_готово_к_пакету_codex_без_модели_и_с_ключом_серии(client) -> None:
+    """Пакет «lpr-reference/1» ляжет без переделок: вариант без модели
+    допустим, ключ серии один на коллекцию — r2 найдёт свою карточку, повтор
+    импорта дубля не даст (импорт — следующий срез)."""
+    from sqlalchemy.exc import IntegrityError
+
+    from reference_api.db import session_factory
+    from reference_api.models.references import Reference
+
+    async with session_factory() as db:
+        db.add(Reference(name="B01-V1-Б", plm_release_id=RELEASE, external_key="B01-V1-Б"))
+        await db.commit()
+    async with session_factory() as db:
+        db.add(Reference(name="B01-V1-Б повтор", plm_release_id=RELEASE, external_key="B01-V1-Б"))
+        with pytest.raises(IntegrityError):
+            await db.commit()
+    async with session_factory() as db:
+        db.add(Reference(name="без релиза, но с цветом", plm_colorway_id=PINK))
+        with pytest.raises(IntegrityError):
+            await db.commit()

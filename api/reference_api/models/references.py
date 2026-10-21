@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -71,15 +72,20 @@ class Reference(Base):
     #: ролей, полем не хранится (И-8).
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", server_default="draft")
     #: Вариант разработки коллекции (решение 0020): релиз PLM, его модель
-    #: (база) и цветомодель (колонка; пусто — идея базы, ещё не в цвете).
-    #: Внешние ключи PLM, не зеркало каталога (решение 0018). Пусто у релиза —
-    #: обычный референс витрины.
+    #: (база; пусто — «без модели»: пакет Codex бывает без LRTT) и цветомодель
+    #: (колонка; пусто — идея базы, ещё не в цвете). Внешние ключи PLM, не
+    #: зеркало каталога (решение 0018). Пусто у релиза — обычный референс витрины.
     plm_release_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     plm_style_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     plm_colorway_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: Метка из справочника людей (решение 0020) — не статус согласования:
     #: статус и ход остаются как были (И-8). Пусто — без метки.
     label_id: Mapped[int | None] = mapped_column(ForeignKey("collection_labels.id", ondelete="RESTRICT"))
+    #: Ключ серии варианта снаружи — `B01-V1-Б` из пакета «lpr-reference/1»
+    #: (Codex, Laretto-Team/lpr): по нему следующая выдача `…-r2` ложится новой
+    #: версией этой карточки, а повторный импорт не плодит дублей. Один на
+    #: коллекцию. Пусто — вариант положен руками.
+    external_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     #: Место варианта в колонке — общее для всех, как на доске Холста (Алиса
     #: 21.10): меньше — выше. Двигают перетаскиванием; данные карточки при
     #: этом не меняются.
@@ -90,13 +96,20 @@ class Reference(Base):
     shelved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
-        # Вариант стоит на базе коллекции; цвет — по желанию: без него это
-        # идея базы («Идеи»), которую потом переносят в колонку цвета.
+        # Вариант стоит в коллекции; модель — по желанию (пусто — «без
+        # модели»), цвет — только при модели (пусто — «Идеи» базы).
         CheckConstraint(
-            "(plm_release_id is null) = (plm_style_id is null) and (plm_colorway_id is null or plm_style_id is not null)",
+            "(plm_style_id is null or plm_release_id is not null) and (plm_colorway_id is null or plm_style_id is not null)",
             name="ck_reference_collection_keys",
         ),
         Index("ix_reference_cards_plm_release", "plm_release_id"),
+        Index(
+            "uq_reference_cards_external_key",
+            "plm_release_id",
+            "external_key",
+            unique=True,
+            postgresql_where=text("external_key is not null"),
+        ),
     )
 
     versions: Mapped[list["ReferenceVersion"]] = relationship(
