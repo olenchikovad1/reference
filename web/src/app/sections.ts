@@ -33,6 +33,8 @@ export const SECTIONS: SectionPlace[] = [
   { code: 'references', title: 'Референсы', path: '/references', plan: 'план 073 (US-0491)',
     about: 'Витрина референсов: все работы карточками, фильтр по дропу и адресату, большое рабочее окно поверх.',
     children: [] },
+  { code: 'collections', title: 'Коллекции', path: '/collections', plan: 'решение 0020',
+    about: 'Разработка коллекции: базы релиза PLM, под ними варианты по цветам с метками.', children: [] },
   { code: 'prints', title: 'Принты', path: '/prints', plan: 'план 073 (US-0495)',
     about: 'Принты библиотеки: где каждый использован, свои теги рядом с автотегами, поиск по смыслу.', children: [] },
   { code: 'texts', title: 'Тексты', path: '/texts', plan: 'план 073 (US-0496)',

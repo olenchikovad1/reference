@@ -18,10 +18,13 @@ __all__ = [
     "Color",
     "PlmUnavailable",
     "PlmRefused",
+    "PlmMissing",
     "list_drops",
     "list_colorways",
     "list_colors",
     "colorway_card",
+    "list_releases",
+    "release_card",
     "enrich_colorways",
     "fetch_image",
     "NO_FRAMES",
@@ -40,6 +43,11 @@ class PlmUnavailable(Exception):
 
 class PlmRefused(Exception):
     """Ключ не принят или маршрут запрещён — повтор бесполезен."""
+
+
+class PlmMissing(PlmRefused):
+    """plm ответил 404: записи нет. Отдельно — чтобы вызывающий сказал «нет
+    такой коллекции», а не «plm отказал»."""
 
 
 @dataclass(frozen=True)
@@ -113,6 +121,8 @@ async def _get(
         if response.status_code >= 500:
             last = PlmUnavailable(f"plm ответил {response.status_code}")
             continue
+        if response.status_code == 404:
+            raise PlmMissing(f"plm ответил 404: {response.text[:200]}")
         if response.status_code != 200:
             raise PlmRefused(f"plm ответил {response.status_code}: {response.text[:200]}")
         return response.json()
@@ -222,6 +232,37 @@ async def colorway_card(
     data = await _get(base_url, key, f"/api/machine/colorways/{colorway_id}", transport=transport)
     if not isinstance(data, dict):
         raise PlmRefused("plm вернул карточку не объектом")
+    return data
+
+
+async def list_releases(
+    base_url: str,
+    key: str,
+    *,
+    query: str | None = None,
+    limit: int = 50,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> list[dict[str, Any]]:
+    """Релизы plm — коллекции разработки (решение 0020): выбор по названию."""
+    params: dict[str, Any] = {"limit": limit}
+    if query:
+        params["q"] = query
+    data = await _get(base_url, key, "/api/machine/releases", params=params, transport=transport)
+    return list(data.get("items") or [])
+
+
+async def release_card(
+    base_url: str,
+    key: str,
+    release_id: str,
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> dict[str, Any]:
+    """Шапка коллекции и базы (модели релиза с цветомоделями) как отдаёт plm.
+    Нет такого релиза — PlmRefused: повтор не поможет."""
+    data = await _get(base_url, key, f"/api/machine/releases/{release_id}", transport=transport)
+    if not isinstance(data, dict):
+        raise PlmRefused("plm вернул релиз не объектом")
     return data
 
 

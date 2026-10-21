@@ -10,7 +10,18 @@
 
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -59,6 +70,34 @@ class Reference(Base):
     #: Только у карточки, не у слоя (запрет 9). Чей ход — вычисляется из него и
     #: ролей, полем не хранится (И-8).
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", server_default="draft")
+    #: Вариант разработки коллекции (решение 0020): релиз PLM, его модель
+    #: (база) и цветомодель (колонка; пусто — идея базы, ещё не в цвете).
+    #: Внешние ключи PLM, не зеркало каталога (решение 0018). Пусто у релиза —
+    #: обычный референс витрины.
+    plm_release_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    plm_style_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    plm_colorway_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Метка из справочника людей (решение 0020) — не статус согласования:
+    #: статус и ход остаются как были (И-8). Пусто — без метки.
+    label_id: Mapped[int | None] = mapped_column(ForeignKey("collection_labels.id", ondelete="RESTRICT"))
+    #: Место варианта в колонке — общее для всех, как на доске Холста (Алиса
+    #: 21.10): меньше — выше. Двигают перетаскиванием; данные карточки при
+    #: этом не меняются.
+    board_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: На полке «Отложено» у своей базы с этого момента — «подвал» вместо
+    #: удаления: ничего не стирается, возвращают одним движением. Пусто — в работе.
+    shelved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    shelved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    __table_args__ = (
+        # Вариант стоит на базе коллекции; цвет — по желанию: без него это
+        # идея базы («Идеи»), которую потом переносят в колонку цвета.
+        CheckConstraint(
+            "(plm_release_id is null) = (plm_style_id is null) and (plm_colorway_id is null or plm_style_id is not null)",
+            name="ck_reference_collection_keys",
+        ),
+        Index("ix_reference_cards_plm_release", "plm_release_id"),
+    )
 
     versions: Mapped[list["ReferenceVersion"]] = relationship(
         back_populates="reference",
@@ -71,6 +110,57 @@ class Reference(Base):
     forked_from: Mapped["ReferenceVersion | None"] = relationship(
         foreign_keys=[forked_from_version_id], lazy="raise"
     )
+
+
+class CollectionLabel(Base):
+    """Метка варианта в разработке коллекции: «Смотреть директору»,
+    «Согласовано директором»… (решение 0020). Справочник людей, а не код:
+    название и тон правят сами. Убирают гашением — стоящая на карточках метка
+    не удаляется, история её не теряет."""
+
+    __tablename__ = "collection_labels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+    #: Тон платформы по имени (TONES @platform/ui), не код цвета.
+    tone: Mapped[str] = mapped_column(String(16), nullable=False, default="slate", server_default="slate")
+    #: Порядок в шапке коллекции: смысловой, его задают люди.
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ReferenceLabelEvent(Base):
+    """Кто и когда поставил метку карточке (решение 0020). Только
+    дописывается: «что было» видно целиком. Пусто в label_id — метку сняли."""
+
+    __tablename__ = "reference_label_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reference_id: Mapped[int] = mapped_column(
+        ForeignKey("reference_cards.id", ondelete="CASCADE"), nullable=False
+    )
+    label_id: Mapped[int | None] = mapped_column(ForeignKey("collection_labels.id", ondelete="RESTRICT"))
+    by_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (Index("ix_reference_label_events_reference", "reference_id"),)
+
+
+class ReferenceSeen(Base):
+    """Какую версию карточки человек уже открывал — точка «новое» у варианта
+    (решение 0020). Своя у каждого: новое для меня не новое для автора."""
+
+    __tablename__ = "reference_seen"
+
+    reference_id: Mapped[int] = mapped_column(
+        ForeignKey("reference_cards.id", ondelete="CASCADE"), primary_key=True
+    )
+    viewer_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class ReferenceColourExclusion(Base):

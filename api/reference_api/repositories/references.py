@@ -225,7 +225,9 @@ async def latest(
             *(
                 [Reference.deleted_at.is_not(None)]
                 if trashed
-                else [ALIVE, Reference.status != "rejected"]
+                # Варианты разработки коллекции живут на её доске (решение
+                # 0020): это картинки на базе, окно работы их не открывает.
+                else [ALIVE, Reference.status != "rejected", Reference.plm_release_id.is_(None)]
             ),
         )
         .order_by(ReferenceVersion.created_at.desc(), ReferenceVersion.id.desc())

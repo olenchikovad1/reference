@@ -51,6 +51,16 @@ sections:
       - {code: export-techpack, name: Выгрузить техпакет}
       - {code: purge-trash, name: Очистить корзину}
       - {code: delete-forever, name: "Удалить насовсем, минуя корзину"}
+  # Разработка коллекции (решение 0020): релиз PLM — коллекция, его модели —
+  # базы, под базой варианты по колонке на цвет, с метками. Своим разделом:
+  # это главное рабочее место дизайнеров вместо доски Холста, а не вкладка
+  # витрины. Ставить метки и класть варианты — write; удаления нет вовсе.
+  - code: collections
+    name: Коллекции
+    shareable: false
+    icon: swatch-book
+    tone: teal
+    actions: [view, write]
   - code: prints
     name: Принты
     shareable: false
@@ -131,16 +141,19 @@ right_sets:
     name: Дизайнер
     # delete — в корзину и обратно (решение 0014): неудачные варианты дизайнер
     # убирает сам; стереть насовсем — функция очистки корзины, её нет.
-    grants: [references:view, references:write, references:delete, prints:view, prints:write,
+    grants: [references:view, references:write, references:delete, collections:view, collections:write,
+             prints:view, prints:write,
              texts:view, texts:write, drops:view, products:view, review:view, agenda:view, trash:view,
              rejects:view, dictionaries:view]
   - code: editor
     name: Редактор
-    grants: [references:view, review:view, review:write, agenda:view, prints:view, texts:view, drops:view,
+    grants: [references:view, collections:view, collections:write, review:view, review:write, agenda:view,
+             prints:view, texts:view, drops:view,
              drops:approve-in-drop, rejects:view, dictionaries:view]
   - code: chief-editor
     name: Суперредактор
-    grants: [references:view, references:write, references:delete, review:view, review:write, agenda:view,
+    grants: [references:view, references:write, references:delete, collections:view, collections:write,
+             review:view, review:write, agenda:view,
              trash:view, rejects:view,
              prints:view, prints:write,
              texts:view, texts:write, drops:view, drops:write, drops:approve-in-drop, dictionaries:view,

@@ -22,6 +22,7 @@ import { NotFound, Placeholder } from '../pages/Placeholder'
 import { Dictionaries } from '../pages/Dictionaries'
 import { Tasks } from '../pages/Tasks'
 import { Agenda } from '../pages/Agenda'
+import { Collections } from '../pages/Collections'
 import { fetchPeople, installStandAs, ROLE_NAMES, setStandAs, standAs } from '../shared/api/people'
 import { useProfile, useSections, WITHOUT_PLATFORM } from '../shared/api/platform'
 import { BASE, SECTIONS, type SectionPlace } from './sections'
@@ -38,6 +39,7 @@ const PLATFORM_URL = import.meta.env.VITE_PLATFORM_URL ?? 'http://localhost:8100
 /** Сделанные страницы разделов; остальные — заглушки со смыслом. */
 const PAGES: Record<string, () => ReactElement> = {
   references: () => <Showcase />,
+  collections: () => <Collections />,
   prints: () => <Prints />,
   texts: () => <Texts />,
   trash: () => <Trash />,
@@ -82,8 +84,16 @@ function Pages() {
         path="/references/:ref?"
         element={<Guarded section={SECTIONS.find((s) => s.code === 'references')!} overlay={<WorkWindow />} />}
       />
+      {/* Коллекция открывается по адресу (решение 0020): список и доска —
+          один маршрут с необязательным релизом, ссылку на доску можно переслать. */}
+      <Route
+        path="/collections/:release?"
+        element={<Guarded section={SECTIONS.find((s) => s.code === 'collections')!} />}
+      />
       {SECTIONS.flatMap((s) => [
-        ...(s.code === 'references' ? [] : [<Route key={s.code} path={s.path} element={<Guarded section={s} />} />]),
+        ...(s.code === 'references' || s.code === 'collections'
+          ? []
+          : [<Route key={s.code} path={s.path} element={<Guarded section={s} />} />]),
         ...s.children.map((c) => (
           <Route key={`${s.code}/${c.code}`} path={c.path} element={<Guarded section={s} sub={c.code} />} />
         )),
