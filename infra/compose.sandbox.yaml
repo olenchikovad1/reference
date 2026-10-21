@@ -48,6 +48,17 @@ services:
     image: reference-api:${REFERENCE_TAG:?тег сборки не задан}
     restart: unless-stopped
     env_file: ["../.env"]
+    # Каталог PLM — машинным входом hub PLM (US-0883, решение 0018): дропы,
+    # модели, цветомодели и релизы «Коллекций» (решение 0020). Вход объявлен в
+    # манифесте plm (`machine_entrances`), страж платформы пропускает его без
+    # токена человека, ключ проверяет сам plm — тот же у него в
+    # PLM_REFERENCE_MACHINE_KEY (infra/prod.env plm). Значения здесь, а не в
+    # .env установки: ключи и значения лежат в git (решение владельца 30.09,
+    # Алиса 21.10 — «кладём в git»). `environment` перекрывает `env_file`.
+    environment:
+      PLM_BASE_URL: https://platform.toribrands.ru/plm
+      PLM_WEB_URL: https://platform.toribrands.ru/plm
+      PLM_MACHINE_KEY: "OnT0-wRV7AbwMWxuuRHQTnbPuP6U31soXY-n8cEWI4k"
     # Разметка нейросетями — до ~2.6 ГБ на пике (замер стенда, US-0880).
     mem_limit: 3g
     depends_on:
