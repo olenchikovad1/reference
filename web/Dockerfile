@@ -23,7 +23,12 @@ COPY src ./src
 COPY public ./public
 
 # Процесс работает не от суперпользователя. Пользователь node есть в образе.
-RUN chown -R node:node /app
+# `chown -R /app` переписывает каждый файл node_modules в новый слой и на
+# выкатке держит сборку дольше предела, хотя процесс пакеты не меняет
+# (21.10.2026). Писать ему нужно в корень приложения — туда ляжет dist —
+# и в кэш vite.
+RUN mkdir -p /app/node_modules/.vite \
+    && chown node:node /app /app/node_modules/.vite
 USER node
 
 EXPOSE 5173
