@@ -1,0 +1,80 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 'c:\\Projects\\reference\\.codex\\hooks\\guard_commit_trailers.py'",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "py -X utf8 'c:\\Projects\\reference\\.codex\\hooks\\guard_shared_branch_push.py'",
+            "timeout": 20
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 'c:\\Projects\\reference\\.codex\\hooks\\guard_ui_boundary.py'",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 'c:\\Projects\\reference\\.codex\\hooks\\guard_ui_boundary.py' --changed",
+            "timeout": 20
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 'c:\\Projects\\reference\\.codex\\hooks\\push_task_branch.py'",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 'c:\\Projects\\reference\\.codex\\hooks\\require_skills.py' --index",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -X utf8 'c:\\Projects\\reference\\.codex\\hooks\\guard_claim_without_run.py'",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "py -X utf8 'c:\\Projects\\reference\\.codex\\hooks\\require_skills.py' --check",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
