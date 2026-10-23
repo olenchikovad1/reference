@@ -12,10 +12,11 @@ fi
 # Боевой адрес платформы вшивается в сборку фронтенда (VITE_PLATFORM_URL).
 platform_url="${REFERENCE_PLATFORM_URL:-https://platform.toribrands.ru}"
 registry="$(grep '^PLATFORM_NPM_REGISTRY=' infra/.env | cut -d= -f2-)"
+. deploy/release/_build-network.sh
 tag="$(date +%Y%m%d-%H%M)-$(git rev-parse --short HEAD)"
 echo "==> собираю образы, тег $tag"
 docker build -q -t "reference-api:$tag" api >/dev/null
-docker build -q --target prod -t "reference-web:$tag" \
+docker build --progress=plain "${build_network[@]}" --target prod -t "reference-web:$tag" \
   --build-arg PLATFORM_NPM_REGISTRY="$registry" --build-arg VITE_PLATFORM_URL="$platform_url" web >/dev/null
 docker build -q -t "reference-tunnel:$tag" infra/tunnel >/dev/null
 echo ""
