@@ -1,0 +1,418 @@
+{
+  "shared_branches": [],
+  "proof_commands": [
+    "pytest",
+    "ruff",
+    "mypy",
+    "vitest",
+    "npm test",
+    "npm run test",
+    "npm run build",
+    "tsc",
+    "eslint"
+  ],
+  "forbidden_trailers": [
+    "Co-Authored-By"
+  ],
+  "frontend_src": "web/src",
+  "ui_set_dir": "web/src/candidates",
+  "ui_root_dir": "web/src/candidates",
+  "component_libraries": [
+    "@radix-ui/",
+    "@tanstack/react-table",
+    "@headlessui/",
+    "antd",
+    "@mui/",
+    "@chakra-ui/",
+    "react-select"
+  ],
+  "version": 1,
+  "overrides": {},
+  "base_branch": "master",
+  "project_rules": "AGENTS.md",
+  "required": [
+    {
+      "name": "api-contracts",
+      "when": "добавляю или меняю эндпоинт, ошибку, пагинацию, версию контракта",
+      "purpose": "добавляю или меняю эндпоинт, ошибку, пагинацию, версию контракта",
+      "leaves": [
+        "contracts.md",
+        "idempotency.md",
+        "openapi.md",
+        "versioning.md"
+      ],
+      "hooks": [
+        "api-contracts"
+      ]
+    },
+    {
+      "name": "api-external-calls",
+      "when": "зову чужой сервис, ставлю таймаут, обрабатываю лимит",
+      "purpose": "зову чужой сервис, ставлю таймаут, обрабатываю лимит",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "api-contracts"
+      ]
+    },
+    {
+      "name": "architecture-configuration",
+      "when": "читаю переменную окружения, добавляю настройку",
+      "purpose": "читаю переменную окружения, добавляю настройку",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "architecture-boundaries",
+        "target-stack"
+      ]
+    },
+    {
+      "name": "architecture-dependencies",
+      "when": "добавляю библиотеку, обновляю зависимость, наткнулся на заброшенную",
+      "purpose": "добавляю библиотеку, обновляю зависимость, наткнулся на заброшенную",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "architecture-boundaries",
+        "target-stack"
+      ]
+    },
+    {
+      "name": "architecture-placement",
+      "when": "создаю файл, хелпер, сервис или компонент; папка распухла",
+      "purpose": "создаю файл, хелпер, сервис или компонент; папка распухла",
+      "leaves": [
+        "boundaries.md",
+        "layers.md",
+        "placement.md",
+        "reuse.md"
+      ],
+      "hooks": [
+        "architecture-boundaries",
+        "target-stack"
+      ]
+    },
+    {
+      "name": "architecture-untrusted-codebase",
+      "when": "задача упала в код, которому нельзя доверять",
+      "purpose": "задача упала в код, которому нельзя доверять",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "architecture-boundaries",
+        "target-stack"
+      ]
+    },
+    {
+      "name": "data-access",
+      "when": "достаю данные, открываю транзакцию, выбираю sync или async",
+      "purpose": "достаю данные, открываю транзакцию, выбираю sync или async",
+      "leaves": [
+        "orm.md",
+        "transactions.md"
+      ],
+      "hooks": [
+        "data-integrity"
+      ]
+    },
+    {
+      "name": "data-schema",
+      "when": "пишу модель, связь, ограничение, миграцию, денежное или временнóе поле",
+      "purpose": "пишу модель, связь, ограничение, миграцию, денежное или временнóе поле",
+      "leaves": [
+        "invariants.md",
+        "migrations.md",
+        "models.md",
+        "value-types.md"
+      ],
+      "hooks": [
+        "data-integrity"
+      ]
+    },
+    {
+      "name": "data-storage-choice",
+      "when": "решаю, где хранить новый вид данных; тянет завести вторую базу",
+      "purpose": "решаю, где хранить новый вид данных; тянет завести вторую базу",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "data-integrity"
+      ]
+    },
+    {
+      "name": "docs-context-files",
+      "when": "пишу или правлю CLAUDE.md",
+      "purpose": "пишу или правлю CLAUDE.md",
+      "leaves": [
+        "structure.md",
+        "target-stack.md"
+      ],
+      "hooks": [
+        "rule-authoring"
+      ]
+    },
+    {
+      "name": "docs-decisions",
+      "when": "выбираю между подходами, меняю технологию",
+      "purpose": "выбираю между подходами, меняю технологию",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "rule-authoring"
+      ]
+    },
+    {
+      "name": "docs-naming-and-comments",
+      "when": "называю переменную, функцию, таблицу, код ошибки; пишу комментарий",
+      "purpose": "называю переменную, функцию, таблицу, код ошибки; пишу комментарий",
+      "leaves": [
+        "comments.md",
+        "naming.md"
+      ],
+      "hooks": [
+        "rule-authoring"
+      ]
+    },
+    {
+      "name": "frontend-mockup",
+      "when": "Перед новым экраном или существенным изменением интерфейса",
+      "purpose": "Перед новым экраном или существенным изменением интерфейса",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "ui-decision",
+        "verification-evidence"
+      ]
+    },
+    {
+      "name": "frontend-ui",
+      "when": "делаю экран, беру компонент, ставлю цвет или отступ, добавляю состояние загрузки",
+      "purpose": "делаю экран, беру компонент, ставлю цвет или отступ, добавляю состояние загрузки",
+      "leaves": [
+        "components.md",
+        "hints.md",
+        "keyboard.md",
+        "states.md",
+        "tokens.md"
+      ],
+      "hooks": [
+        "ui-decision",
+        "verification-evidence"
+      ]
+    },
+    {
+      "name": "ops-background-jobs",
+      "when": "ставлю фоновую задачу, настраиваю повторы и очередь",
+      "purpose": "ставлю фоновую задачу, настраиваю повторы и очередь",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "operations-safety"
+      ]
+    },
+    {
+      "name": "ops-containers",
+      "when": "пишу Dockerfile, правлю compose, поднимаю стенд",
+      "purpose": "пишу Dockerfile, правлю compose, поднимаю стенд",
+      "leaves": [
+        "compose.md",
+        "dockerfile.md"
+      ],
+      "hooks": [
+        "operations-safety"
+      ]
+    },
+    {
+      "name": "ops-logging",
+      "when": "добавляю лог, не могу отладить по логам",
+      "purpose": "добавляю лог, не могу отладить по логам",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "operations-safety"
+      ]
+    },
+    {
+      "name": "ops-release",
+      "when": "выкладываю, откатываю, разбираю отказ на проде",
+      "purpose": "выкладываю, откатываю, разбираю отказ на проде",
+      "leaves": [
+        "deploy.md",
+        "incident.md"
+      ],
+      "hooks": [
+        "operations-safety"
+      ]
+    },
+    {
+      "name": "process-git",
+      "when": "ветвлюсь, коммичу, собираюсь пушить",
+      "purpose": "ветвлюсь, коммичу, собираюсь пушить",
+      "leaves": [
+        "branches.md",
+        "commits.md",
+        "conflicts.md",
+        "delivery-check.md",
+        "isolated-publication.md"
+      ],
+      "hooks": [
+        "commit-history",
+        "git-completion"
+      ]
+    },
+    {
+      "name": "process-project-rails",
+      "when": "В начале работы, при смене проекта или изменении требований",
+      "purpose": "В начале работы, при смене проекта или изменении требований",
+      "leaves": [
+        "discovery.md",
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "rails-installation"
+      ]
+    },
+    {
+      "name": "process-repo-service-files",
+      "when": "правлю `.gitignore`, `.gitattributes`, служебные файлы репозитория",
+      "purpose": "правлю `.gitignore`, `.gitattributes`, служебные файлы репозитория",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "commit-history",
+        "git-completion"
+      ]
+    },
+    {
+      "name": "quality-automated-enforcement",
+      "when": "добавляю линтер, хук, гейт CI",
+      "purpose": "добавляю линтер, хук, гейт CI",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "rails-installation",
+        "rule-authoring"
+      ]
+    },
+    {
+      "name": "quality-error-handling",
+      "when": "пишу путь ошибки, ловлю исключение, пробрасываю дальше",
+      "purpose": "пишу путь ошибки, ловлю исключение, пробрасываю дальше",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "verification-evidence"
+      ]
+    },
+    {
+      "name": "quality-refactoring",
+      "when": "правлю мешающий код, просят «прибраться»",
+      "purpose": "правлю мешающий код, просят «прибраться»",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "verification-evidence"
+      ]
+    },
+    {
+      "name": "quality-review",
+      "when": "смотрю чужой или свой диф перед сдачей",
+      "purpose": "смотрю чужой или свой диф перед сдачей",
+      "leaves": [
+        "conformance.md",
+        "review.md"
+      ],
+      "hooks": [
+        "verification-evidence"
+      ]
+    },
+    {
+      "name": "quality-root-cause",
+      "when": "что-то сломалось, тест упал, тянет добавить заглушку",
+      "purpose": "что-то сломалось, тест упал, тянет добавить заглушку",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "verification-evidence"
+      ]
+    },
+    {
+      "name": "quality-security",
+      "when": "трогаю секреты, вход с границы, эндпоинт, лог, зависимость",
+      "purpose": "трогаю секреты, вход с границы, эндпоинт, лог, зависимость",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "data-integrity",
+        "private-boundary"
+      ]
+    },
+    {
+      "name": "quality-testing",
+      "when": "пишу логику, чиню баг, который не должен вернуться",
+      "purpose": "пишу логику, чиню баг, который не должен вернуться",
+      "leaves": [
+        "suite.md",
+        "tdd.md"
+      ],
+      "hooks": [
+        "verification-evidence"
+      ]
+    },
+    {
+      "name": "quality-typing",
+      "when": "пишу сигнатуру, добавляю аннотацию, тянет поставить `Any`",
+      "purpose": "пишу сигнатуру, добавляю аннотацию, тянет поставить `Any`",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "verification-evidence"
+      ]
+    },
+    {
+      "name": "quality-verification",
+      "when": "собираюсь сказать «готово», «работает», «исправил»",
+      "purpose": "собираюсь сказать «готово», «работает», «исправил»",
+      "leaves": [
+        "rules.md",
+        "verification.md"
+      ],
+      "hooks": [
+        "verification-evidence"
+      ]
+    }
+  ]
+}
