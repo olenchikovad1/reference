@@ -74,6 +74,25 @@ async def test_page_is_bounded_but_legacy_list_is_complete(catalogue):
     assert len((await client.get("/reference/api/references")).json()) == len(cards)
 
 
+async def test_reject_and_revive_availability_follows_role_and_status(catalogue):
+    db, client, cards = catalogue
+    person = await db.get(AppPerson, "page-owner")
+    if person is None:
+        person = AppPerson(subject_id="page-owner", full_name="Page owner", role="chief")
+        db.add(person)
+    cards[-1].status, cards[-2].status = "final", "rejected"
+    for role in ("chief", "editor", "designer"):
+        person.role = role
+        await db.flush()
+        result = await page(client)
+        shown = {item["id"]: item for item in result["items"]}
+        assert shown[cards[-3].id].get("can_reject") is (role in {"chief", "editor"})
+        assert shown[cards[-1].id].get("can_reject") is False
+        rejected = (await client.get("/reference/api/references/rejected")).json()
+        row = next(item for item in rejected if item["id"] == cards[-2].id)
+        assert row.get("can_revive") is (role == "chief")
+
+
 async def test_equal_dates_and_insertion_or_deletion_do_not_shift_pages(catalogue):
     db, client, cards = catalogue
     first = await page(client, limit=23)
