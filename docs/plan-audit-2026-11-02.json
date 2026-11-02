@@ -1,0 +1,759 @@
+{
+  "project": "reference",
+  "plans": [
+    {
+      "file": "063-reference-stend-naneseniya.md",
+      "title": "063 — Стенд нанесения принта на изделие",
+      "status": "done",
+      "stories": [
+        "US-0419",
+        "US-0420",
+        "US-0421",
+        "US-0422",
+        "US-0423",
+        "US-0424",
+        "US-0425",
+        "US-0426",
+        "US-0427",
+        "US-0428",
+        "US-0429",
+        "US-0430",
+        "US-0431",
+        "US-0432",
+        "US-0433"
+      ],
+      "commits": []
+    },
+    {
+      "file": "068-reference-stend-posle-prosmotra.md",
+      "title": "068 — Стенд после первого просмотра",
+      "status": "done",
+      "stories": [
+        "US-0465",
+        "US-0466",
+        "US-0467",
+        "US-0468",
+        "US-0469",
+        "US-0470"
+      ],
+      "commits": []
+    },
+    {
+      "file": "069-reference-obyom-torsa.md",
+      "title": "069 — Объём торса: принт огибает изделие",
+      "status": "done",
+      "stories": [
+        "US-0471",
+        "US-0472",
+        "US-0473"
+      ],
+      "commits": []
+    },
+    {
+      "file": "070-reference-gradaciya-i-sohranenie.md",
+      "title": "070 — Градация принта по размерам и сохранение работы",
+      "status": "done",
+      "stories": [
+        "US-0474",
+        "US-0475",
+        "US-0476"
+      ],
+      "commits": []
+    },
+    {
+      "file": "071-reference-avtotegi.md",
+      "title": "071 — Автотеги и поиск по ним",
+      "status": "done",
+      "stories": [
+        "US-0477",
+        "US-0478",
+        "US-0482",
+        "US-0479",
+        "US-0480",
+        "US-0481"
+      ],
+      "commits": [
+        {
+          "commit": "3e77110",
+          "in_origin_master": true
+        },
+        {
+          "commit": "cc74155",
+          "in_origin_master": true
+        },
+        {
+          "commit": "d3074a6",
+          "in_origin_master": true
+        },
+        {
+          "commit": "e4b628d",
+          "in_origin_master": true
+        },
+        {
+          "commit": "ee4619b",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "072-platform-podklyuchenie-referensa.md",
+      "title": "072 — Референс подключается к платформе",
+      "status": "done",
+      "stories": [
+        "US-0483",
+        "US-0484",
+        "US-0485",
+        "US-0486",
+        "US-0487",
+        "US-0508"
+      ],
+      "commits": [
+        {
+          "commit": "2aad650",
+          "in_origin_master": true
+        },
+        {
+          "commit": "523dac6",
+          "in_origin_master": true
+        },
+        {
+          "commit": "672fbd3",
+          "in_origin_master": true
+        },
+        {
+          "commit": "8c64e22",
+          "in_origin_master": true
+        },
+        {
+          "commit": "af480dd",
+          "in_origin_master": true
+        },
+        {
+          "commit": "b16513f",
+          "in_origin_master": true
+        },
+        {
+          "commit": "d1dda82",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "073-reference-vitrina-i-rabochee-okno.md",
+      "title": "073 — Витрина референсов, рабочее окно и дропы",
+      "status": "done",
+      "stories": [
+        "US-0488",
+        "US-0489",
+        "US-0490",
+        "US-0491",
+        "US-0492",
+        "US-0493",
+        "US-0494",
+        "US-0495",
+        "US-0496",
+        "US-0497",
+        "US-0506",
+        "US-0507",
+        "US-0498",
+        "US-0499",
+        "US-0500",
+        "US-0501"
+      ],
+      "commits": []
+    },
+    {
+      "file": "074-reference-perekraska-i-obrezka.md",
+      "title": "074 — Перекраска, прозрачность и обрезка принта без новой картинки",
+      "status": "done",
+      "stories": [
+        "US-0502",
+        "US-0503",
+        "US-0504",
+        "US-0505"
+      ],
+      "commits": []
+    },
+    {
+      "file": "075-reference-soglasovanie.md",
+      "title": "075 — Согласование: исполнитель, ход, замечания голосом",
+      "status": "done",
+      "stories": [
+        "US-0509",
+        "US-0510",
+        "US-0511",
+        "US-0512",
+        "US-0513"
+      ],
+      "commits": [
+        {
+          "commit": "0a9acfc",
+          "in_origin_master": true
+        },
+        {
+          "commit": "16907ce",
+          "in_origin_master": true
+        },
+        {
+          "commit": "2125afb",
+          "in_origin_master": true
+        },
+        {
+          "commit": "780d253",
+          "in_origin_master": true
+        },
+        {
+          "commit": "8bd44aa",
+          "in_origin_master": true
+        },
+        {
+          "commit": "d7a0d3b",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "076-reference-skripty-i-dannye-stenda.md",
+      "title": "076 — Скрипты и данные стенда живут в проекте, опущенный капюшон размечен",
+      "status": "done",
+      "stories": [
+        "US-0514",
+        "US-0515",
+        "US-0516",
+        "US-0517",
+        "US-0518",
+        "US-0519",
+        "US-0520"
+      ],
+      "commits": [
+        {
+          "commit": "051cd57",
+          "in_origin_master": true
+        },
+        {
+          "commit": "25a6074",
+          "in_origin_master": true
+        },
+        {
+          "commit": "3e77110",
+          "in_origin_master": true
+        },
+        {
+          "commit": "9b4379a",
+          "in_origin_master": true
+        },
+        {
+          "commit": "c586f85",
+          "in_origin_master": true
+        },
+        {
+          "commit": "c8375c1",
+          "in_origin_master": true
+        },
+        {
+          "commit": "c96e4d3",
+          "in_origin_master": true
+        },
+        {
+          "commit": "e4893b6",
+          "in_origin_master": true
+        },
+        {
+          "commit": "e8e3204",
+          "in_origin_master": true
+        },
+        {
+          "commit": "ee4619b",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "082-reference-chernovik-poryadok-i-skorost.md",
+      "title": "082 — Черновик без вопросов, свой порядок карточек и мгновенное листание",
+      "status": "done",
+      "stories": [
+        "US-0598",
+        "US-0599",
+        "US-0600",
+        "US-0601"
+      ],
+      "commits": []
+    },
+    {
+      "file": "087-reference-tegi-neskolkimi-modelyami.md",
+      "title": "087 — Теги несколькими моделями: своя модель на аниме, рисунок и фото",
+      "status": "done",
+      "stories": [
+        "US-0623",
+        "US-0624",
+        "US-0625",
+        "US-0626",
+        "US-0627",
+        "US-0628",
+        "US-0629"
+      ],
+      "commits": [
+        {
+          "commit": "00462fe",
+          "in_origin_master": true
+        },
+        {
+          "commit": "31773ae",
+          "in_origin_master": true
+        },
+        {
+          "commit": "34eed67",
+          "in_origin_master": true
+        },
+        {
+          "commit": "5e78afb",
+          "in_origin_master": true
+        },
+        {
+          "commit": "7266d30",
+          "in_origin_master": true
+        },
+        {
+          "commit": "83814ae",
+          "in_origin_master": true
+        },
+        {
+          "commit": "846c03c",
+          "in_origin_master": true
+        },
+        {
+          "commit": "9e2e977",
+          "in_origin_master": true
+        },
+        {
+          "commit": "9eb500e",
+          "in_origin_master": true
+        },
+        {
+          "commit": "cb90e83",
+          "in_origin_master": true
+        },
+        {
+          "commit": "dbfc964",
+          "in_origin_master": true
+        },
+        {
+          "commit": "defc35c",
+          "in_origin_master": true
+        },
+        {
+          "commit": "f20a838",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "088-reference-klavishi-podskazki-i-sostoyaniya.md",
+      "title": "088 — Клавиши без Shift, подсказка «?» на странице, что сохранено, а что нет",
+      "status": "done",
+      "stories": [
+        "US-0630",
+        "US-0631",
+        "US-0632"
+      ],
+      "commits": []
+    },
+    {
+      "file": "092-reference-bagi-vitriny-otmeny-i-chernovikov.md",
+      "title": "092 — Баги витрины, отмены и черновиков",
+      "status": "done",
+      "stories": [
+        "US-0683",
+        "US-0684",
+        "US-0685",
+        "US-0686"
+      ],
+      "commits": [
+        {
+          "commit": "ddcf1cb",
+          "in_origin_master": true
+        },
+        {
+          "commit": "df3d996",
+          "in_origin_master": true
+        },
+        {
+          "commit": "e9e624f",
+          "in_origin_master": true
+        },
+        {
+          "commit": "f8a2449",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "093-reference-soglasovanie-udobno.md",
+      "title": "093 — Согласование удобно: вкладки, карточки, панель обсуждения, цвет по смыслу",
+      "status": "done",
+      "stories": [
+        "US-0687",
+        "US-0688",
+        "US-0689",
+        "US-0690"
+      ],
+      "commits": [
+        {
+          "commit": "07315ca",
+          "in_origin_master": true
+        },
+        {
+          "commit": "4688c1d",
+          "in_origin_master": true
+        },
+        {
+          "commit": "6ad980d",
+          "in_origin_master": true
+        },
+        {
+          "commit": "a68374a",
+          "in_origin_master": true
+        },
+        {
+          "commit": "ef10b34",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "094-reference-resheniya-soglasovaniya.md",
+      "title": "094 — Решения согласования: кнопки внизу окна и новые переходы",
+      "status": "done",
+      "stories": [
+        "US-0691",
+        "US-0692"
+      ],
+      "commits": [
+        {
+          "commit": "4f7731d",
+          "in_origin_master": true
+        },
+        {
+          "commit": "9674625",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "095-reference-soglasovanie-bez-lomki.md",
+      "title": "095 — Согласование, которое не ломает работу",
+      "status": "done",
+      "stories": [
+        "US-0693",
+        "US-0694",
+        "US-0695",
+        "US-0696",
+        "US-0697",
+        "US-0698",
+        "US-0699",
+        "US-0700"
+      ],
+      "commits": [
+        {
+          "commit": "28b0a74",
+          "in_origin_master": true
+        },
+        {
+          "commit": "521aec2",
+          "in_origin_master": true
+        },
+        {
+          "commit": "5d10f77",
+          "in_origin_master": true
+        },
+        {
+          "commit": "85b4b7f",
+          "in_origin_master": true
+        },
+        {
+          "commit": "9244f82",
+          "in_origin_master": true
+        },
+        {
+          "commit": "adf13d9",
+          "in_origin_master": true
+        },
+        {
+          "commit": "b60473d",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "096-reference-lajk-i-status.md",
+      "title": "096 — Решение лайком и крестиком, статус и перенос — меню",
+      "status": "done",
+      "stories": [
+        "US-0704",
+        "US-0705"
+      ],
+      "commits": [
+        {
+          "commit": "b6625c3",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "097-reference-obsuzhdenie-i-povestka.md",
+      "title": "097 — Выдвинуть на обсуждение и повестка встречи",
+      "status": "done",
+      "stories": [
+        "US-0706",
+        "US-0707",
+        "US-0708"
+      ],
+      "commits": [
+        {
+          "commit": "0ffed5e",
+          "in_origin_master": true
+        },
+        {
+          "commit": "505e539",
+          "in_origin_master": true
+        },
+        {
+          "commit": "f07db32",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "098-reference-povestka-vitrinoy.md",
+      "title": "098 — Повестка — витрина того, что требует обсуждения",
+      "status": "done",
+      "stories": [
+        "US-0709"
+      ],
+      "commits": []
+    },
+    {
+      "file": "099-reference-povestka-razdelom.md",
+      "title": "099 — Повестка и корзина своими разделами, суть обсуждения — в окне",
+      "status": "done",
+      "stories": [
+        "US-0710",
+        "US-0711",
+        "US-0712"
+      ],
+      "commits": [
+        {
+          "commit": "31a9629",
+          "in_origin_master": true
+        },
+        {
+          "commit": "bdb16e1",
+          "in_origin_master": true
+        },
+        {
+          "commit": "e130bb1",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "100-reference-printy-i-teksty.md",
+      "title": "100 — Принты и тексты: понятно, что с ними делать",
+      "status": "done",
+      "stories": [
+        "US-0713",
+        "US-0714",
+        "US-0715",
+        "US-0716",
+        "US-0717",
+        "US-0721"
+      ],
+      "commits": []
+    },
+    {
+      "file": "101-reference-izdeliya-i-dropy.md",
+      "title": "101 — Изделия и дропы: открыть, поправить, завести, удалить",
+      "status": "done",
+      "stories": [
+        "US-0718",
+        "US-0719",
+        "US-0720"
+      ],
+      "commits": []
+    },
+    {
+      "file": "114-reference-kachestvo-proverok-i-koda.md",
+      "title": "114 — Проверки, которые ловят дефекты, и код без накопившейся чуши",
+      "status": "done",
+      "stories": [
+        "US-0831",
+        "US-0832",
+        "US-0833",
+        "US-0834",
+        "US-0835",
+        "US-0894",
+        "US-0895"
+      ],
+      "commits": [
+        {
+          "commit": "0d70365",
+          "in_origin_master": true
+        },
+        {
+          "commit": "6c7cdb8",
+          "in_origin_master": true
+        },
+        {
+          "commit": "730a59c",
+          "in_origin_master": true
+        },
+        {
+          "commit": "9582958",
+          "in_origin_master": true
+        },
+        {
+          "commit": "a1c1afe",
+          "in_origin_master": true
+        },
+        {
+          "commit": "b0810e1",
+          "in_origin_master": true
+        },
+        {
+          "commit": "d712dd4",
+          "in_origin_master": true
+        },
+        {
+          "commit": "dc77afe",
+          "in_origin_master": true
+        },
+        {
+          "commit": "e03c8e2",
+          "in_origin_master": true
+        },
+        {
+          "commit": "ee69d77",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "119-reference-mcp-sloy.md",
+      "title": "119 — MCP-слой «Референса»: помощник работает с референсами через платформу",
+      "status": "in-progress",
+      "stories": [
+        "US-0896",
+        "US-0897",
+        "US-0898"
+      ],
+      "commits": [
+        {
+          "commit": "376e531",
+          "in_origin_master": true
+        },
+        {
+          "commit": "7c86929",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "120-installation-referens-na-prode.md",
+      "title": "120 — «Референс» на проде: установка, вход через платформу, чтение plm",
+      "status": "in-progress",
+      "stories": [
+        "US-0880",
+        "US-0881",
+        "US-0882",
+        "US-0883"
+      ],
+      "commits": [
+        {
+          "commit": "118188e",
+          "in_origin_master": true
+        },
+        {
+          "commit": "509cb8f",
+          "in_origin_master": true
+        },
+        {
+          "commit": "65095a1",
+          "in_origin_master": true
+        },
+        {
+          "commit": "730a59c",
+          "in_origin_master": true
+        },
+        {
+          "commit": "7c642e9",
+          "in_origin_master": true
+        }
+      ]
+    },
+    {
+      "file": "121-reference-semeystva-plm-brak-filtry.md",
+      "title": "121 — Семейства карточек, данные из PLM, брак, фильтры, примерка",
+      "status": "in-progress",
+      "stories": [
+        "US-0884",
+        "US-0885",
+        "US-0886",
+        "US-0887",
+        "US-0888",
+        "US-0889",
+        "US-0890",
+        "US-0891",
+        "US-0892",
+        "US-0893"
+      ],
+      "commits": []
+    }
+  ],
+  "related_shared_plans": [
+    {
+      "file": "021-assemblage-quality-statuses-disassembly-returns.md",
+      "status": "done"
+    },
+    {
+      "file": "062-platform-vybor-yazyka-v-ramke.md",
+      "status": "closed"
+    },
+    {
+      "file": "067-platform-kartinki-pechatnye-ishodniki.md",
+      "status": "merged"
+    },
+    {
+      "file": "083-platform-znachki-prilozheniy.md",
+      "status": "merged"
+    },
+    {
+      "file": "084-platform-sostav-ustanovki-i-podklyuchenie.md",
+      "status": "merged"
+    },
+    {
+      "file": "085-installation-repozitoriy-ustanovki.md",
+      "status": "in-progress"
+    },
+    {
+      "file": "123-common-interfeysy-glazami.md",
+      "status": "merged"
+    },
+    {
+      "file": "133-installation-coalescing.md",
+      "status": "unknown"
+    },
+    {
+      "file": "141-application-build-adoption.md",
+      "status": "proposed"
+    },
+    {
+      "file": "154-plm-fast-images.md",
+      "status": "unknown"
+    },
+    {
+      "file": "198-plm-release-production-copy.md",
+      "status": "in_progress"
+    }
+  ]
+}
