@@ -6,6 +6,7 @@
 """
 
 from typing import Any
+from threading import Lock
 
 import boto3
 from botocore.client import Config
@@ -16,21 +17,35 @@ from botocore.exceptions import ClientError
 from reference_api.config import settings
 
 _client: Any = None
+_client_lock = Lock()
 
 
 def client() -> Any:
     """Один клиент на процесс: создание соединения — не то, что делают в цикле."""
     global _client
     if _client is None:
-        cfg = settings()
-        _client = boto3.client(
-            "s3",
-            endpoint_url=cfg.s3_endpoint,
-            aws_access_key_id=cfg.s3_access_key,
-            aws_secret_access_key=cfg.s3_secret_key,
-            region_name=cfg.s3_region,
-            config=Config(signature_version="s3v4"),
-        )
+        # Первые миниатюры приходят одновременно в пул потоков FastAPI.
+        # Без второй проверки под замком каждый поток создавал свой клиент:
+        # на холодном процессе 8 чтений создавали 8 клиентов, а не один.
+        with _client_lock:
+            if _client is None:
+                cfg = settings()
+                _client = boto3.client(
+                    "s3",
+                    endpoint_url=cfg.s3_endpoint,
+                    aws_access_key_id=cfg.s3_access_key,
+                    aws_secret_access_key=cfg.s3_secret_key,
+                    region_name=cfg.s3_region,
+                    config=Config(
+                        signature_version="s3v4",
+                        # Соединения переиспользуются всем пулом обработчиков,
+                        # а отказ хранилища не держит их минуту на попытку.
+                        max_pool_connections=40,
+                        connect_timeout=3,
+                        read_timeout=15,
+                        retries={"mode": "standard", "total_max_attempts": 2},
+                    ),
+                )
     return _client
 
 
