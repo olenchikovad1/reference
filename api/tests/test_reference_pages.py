@@ -19,27 +19,33 @@ from reference_api.services import references as service
 @pytest_asyncio.fixture
 async def catalogue():
     assert engine.url.database.endswith("_test"), "проверка разрешена только в тестовой БД"
-    async with session_factory() as db:
-        await db.execute(text("truncate table reference_cards cascade"))
-        cards = [Reference(name=f"Page {i}", status="draft", executor_id="page-owner" if i % 2 else None)
-                 for i in range(185)]
-        db.add_all(cards)
-        await db.flush()
-        instant = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        db.add_all([ReferenceVersion(reference_id=c.id, number=1, sheet_digest="a" * 64,
-                                    created_at=instant, image_digests=[], views={}, work={"payload": "x" * 1000})
-                    for c in cards])
-        await db.flush()
-        app = create_app(without_platform=True)
+    # PUT фиксирует свою транзакцию: внешний rollback сохраняет тестовую БД
+    # даже при настоящем commit сервиса, а не при подмене commit заглушкой.
+    async with engine.connect() as connection:
+        transaction = await connection.begin()
+        try:
+            async with session_factory(bind=connection, join_transaction_mode="create_savepoint") as db:
+                await db.execute(text("truncate table reference_cards cascade"))
+                cards = [Reference(name=f"Page {i}", status="draft", executor_id="page-owner" if i % 2 else None)
+                         for i in range(185)]
+                db.add_all(cards)
+                await db.flush()
+                instant = datetime(2026, 1, 1, tzinfo=timezone.utc)
+                db.add_all([ReferenceVersion(reference_id=c.id, number=1, sheet_digest="a" * 64,
+                                            created_at=instant, image_digests=[], views={}, work={"payload": "x" * 1000})
+                            for c in cards])
+                await db.flush()
+                app = create_app(without_platform=True)
 
-        async def test_session():
-            yield db
+                async def test_session():
+                    yield db
 
-        app.dependency_overrides[session] = test_session
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test",
-                                    headers={"X-Stand-As": "page-owner"}) as client:
-            yield db, client, cards
-        await db.rollback()
+                app.dependency_overrides[session] = test_session
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test",
+                                            headers={"X-Stand-As": "page-owner"}) as client:
+                    yield db, client, cards
+        finally:
+            await transaction.rollback()
     await engine.dispose()
 
 
@@ -262,3 +268,33 @@ async def test_large_catalogue_reads_only_a_bounded_page(catalogue, size):
     result = await page(client, limit=60)
     assert len(result["items"]) == 60 and result["total"] == size
     assert result["next_cursor"]
+
+
+@pytest.mark.parametrize("size", [5000, 33000])
+async def test_real_http_saves_and_restores_large_order(catalogue, size):
+    db, client, cards = catalogue
+    extra = [Reference(name=f"Order {i}") for i in range(size - len(cards))]
+    db.add_all(extra)
+    await db.flush()
+    db.add_all([ReferenceVersion(reference_id=c.id, number=1, sheet_digest="d" * 64, image_digests=[], work={})
+                for c in extra])
+    await db.flush()
+    original = (await client.get("/reference/api/references/order?sort=own")).json()
+    assert len(original) == size
+    moved = original[1:] + original[:1]
+    for order in (moved, original, original):
+        response = await client.put("/reference/api/references/order", json={"ids": order})
+        assert response.status_code == 204, response.text[:1000]
+        assert (await client.get("/reference/api/references/order?sort=own")).json() == order
+        first = await page(client, sort="own")
+        assert [item["id"] for item in first["items"]] == order[:60]
+        assert first["total"] == size
+    # Повтор допустим, а неверный порядок не должен затереть сохранённый.
+    response = await client.put("/reference/api/references/order", json={"ids": original + original[:1]})
+    assert response.status_code == 422
+    assert (await client.get("/reference/api/references/order?sort=own")).json() == original
+    if size == 5000:
+        response = await client.put("/reference/api/references/order", json={"ids": list(range(1, 100002))})
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["type"] == "too_long"
+        assert (await client.get("/reference/api/references/order?sort=own")).json() == original

@@ -8,7 +8,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import Float, Integer, and_, case, cast, delete, exists, false, func, literal, or_, select, update
+from sqlalchemy import Float, Integer, and_, any_, case, cast, delete, exists, false, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import ARRAY, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Load, defer
@@ -634,7 +634,10 @@ async def alive_ids(db: AsyncSession, card_ids: list[int]) -> set[int]:
     """Какие из номеров — живые карточки, не в корзине."""
     if not card_ids:
         return set()
-    return set((await db.execute(select(Reference.id).where(Reference.id.in_(card_ids), ALIVE))).scalars())
+    # Один массив вместо отдельного bind на номер: длинный личный порядок
+    # иначе упирается в предел параметров asyncpg раньше предела HTTP-схемы.
+    return set((await db.execute(select(Reference.id).where(
+        Reference.id == any_(cast(card_ids, ARRAY(Integer))), ALIVE))).scalars())
 
 
 async def pass_to(db: AsyncSession, reference_id: int, to_id: str, by_id: str | None) -> None:

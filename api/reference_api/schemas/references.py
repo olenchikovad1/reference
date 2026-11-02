@@ -183,7 +183,9 @@ class CardOut(Saver):
 class OrderIn(BaseModel):
     """Личный порядок витрины целиком — номера карточек от начала."""
 
-    ids: list[int] = Field(max_length=1000)
+    # Порционная витрина передаёт полный порядок только по явному действию.
+    # Прежний предел 1000 делал перестановку невозможной в большом каталоге.
+    ids: list[int] = Field(max_length=100_000)
 
 
 class DraftIn(BaseModel):
