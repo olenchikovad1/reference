@@ -294,7 +294,7 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
   // отдать, а «назад» по-прежнему ведёт на витрину.
   useEffect(() => {
     if (windowOpen && current && ref !== String(current.id) && (aimed.current === null || aimed.current === current.id))
-      navigate(`/references/${current.id}`, { replace: true, state: location.state })
+      navigate(`/references/${current.id}${location.search}`, { replace: true, state: location.state })
   }, [current?.id])
 
   // Адрес окна сменился (US-0600): окно живёт всё время, и открыть карточку,

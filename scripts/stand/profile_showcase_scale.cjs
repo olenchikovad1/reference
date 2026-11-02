@@ -24,13 +24,37 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       : { id: 'scale-fixture', display_name: 'Scale fixture', external: false }
   }));
   let imageRequests = 0;
+  let pageRequests = 0, legacyRequests = 0, orderReads = 0;
+  let failNext = true;
+  let ownIds = cards.map(card => card.id);
+  const writes = [];
   await context.route(origin + '/reference/api/**', async route => {
     const url = new URL(route.request().url());
-    if (url.pathname.endsWith('/references')) {
-      await new Promise(resolve => setTimeout(resolve, 600));
-      return route.fulfill({ json: cards });
+    const filtered = () => {
+      let result = url.searchParams.get('sort') === 'own' ? ownIds.map(id => cards[id - 100000]) : cards;
+      if (url.searchParams.has('status')) result = result.filter(card => card.status === url.searchParams.get('status'));
+      if (url.searchParams.has('q')) result = result.filter(card => card.name === url.searchParams.get('q'));
+      if (url.searchParams.get('only_mine') === 'true') result = [];
+      return result.map(card => ({ ...card, my_position: ownIds.indexOf(card.id), reasons: ['Scale 5000'] }));
+    };
+    if (url.pathname.endsWith('/references/page')) {
+      pageRequests++;
+      const offset = Number(url.searchParams.get('cursor') || 0);
+      if (offset && failNext) return route.fulfill({ status: 503, json: { detail: 'Synthetic failure' } });
+      await new Promise(resolve => setTimeout(resolve, offset ? 80 : 600));
+      const result = filtered(), end = offset + Number(url.searchParams.get('limit'));
+      return route.fulfill({ json: { items: result.slice(offset, end), total: result.length, next_cursor: end < result.length ? String(end) : null } });
     }
-    if (url.pathname.endsWith('/references/find')) return route.fulfill({ json: [{ id: 104999, reasons: ['Scale 5000'] }] });
+    if (url.pathname.endsWith('/references/order')) {
+      if (route.request().method() === 'PUT') {
+        ownIds = route.request().postDataJSON().ids;
+        writes.push([...ownIds]);
+        return route.fulfill({ status: 204 });
+      }
+      orderReads++;
+      return route.fulfill({ json: filtered().map(card => card.id) });
+    }
+    if (url.pathname.endsWith('/references')) { legacyRequests++; return route.fulfill({ status: 500 }); }
     if (url.pathname.endsWith('/library/texts')) {
       await new Promise(resolve => setTimeout(resolve, 900));
       return route.fulfill({ json: [] });
@@ -48,7 +72,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.getByRole('status').filter({ hasText: 'Получаем список референсов' }).waitFor();
   await page.locator('[data-card-id]').first().waitFor();
   const mounted = await page.locator('[data-card-id]').count();
-  console.log(JSON.stringify({ syntheticCards: count, mounted, imageRequests }));
+  await page.getByText('Загружено 60 из 5000', { exact: true }).waitFor();
+  if (pageRequests !== 1 || orderReads || legacyRequests) throw new Error('First screen read the full catalogue');
+  console.log(JSON.stringify({ syntheticCards: count, firstPage: 60, mounted, imageRequests, pageRequests, orderReads, legacyRequests }));
   if (mounted > 80) throw new Error('Thousands of cards mounted in DOM: ' + mounted);
   await page.getByRole('progressbar', { name: 'Миниатюры на экране' }).waitFor();
   await page.waitForFunction(() => {
@@ -60,23 +86,30 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.waitForFunction(() => [...document.querySelectorAll('[data-card-id] img')].filter(img => {
     const r = img.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0;
   }).every(img => img.complete && img.naturalWidth > 0));
-  // Полная высота сохраняется без тысяч невидимых DOM-элементов.
+  // Следующая порция падает: прежние карточки остаются, повтор явный.
+  await page.locator('[data-card-id="100000"]').click({ modifiers: ['Control'] });
   await page.locator('[data-card-id]').first().evaluate(el => {
     let scroller = el.parentElement;
     while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
     else window.scrollTo(0, document.documentElement.scrollHeight);
   });
-  await page.locator('[data-card-id="104999"]').waitFor();
+  await page.getByRole('button', { name: 'повторить дозагрузку', exact: true }).waitFor();
+  await page.getByText('Загружено 60 из 5000', { exact: true }).waitFor();
+  failNext = false;
+  await page.getByRole('button', { name: 'повторить дозагрузку', exact: true }).click();
+  await page.getByText('Загружено 120 из 5000', { exact: true }).waitFor();
   if (await page.locator('[data-card-id]').count() > 80) throw new Error('DOM grew after scrolling');
-  const last = page.locator('[data-card-id="104999"]');
+  const last = page.locator('[data-card-id]').last();
+  const lastId = await last.getAttribute('data-card-id');
   await last.focus();
   await last.press('ArrowUp');
-  await page.waitForFunction(() => {
-    const id = document.activeElement?.getAttribute('data-card-id'); return id && id !== '104999';
-  }, null, { timeout: 2000 });
+  await page.waitForFunction(before => {
+    const id = document.activeElement?.getAttribute('data-card-id'); return id && id !== before;
+  }, lastId, { timeout: 2000 });
   await page.screenshot({ path: path.join(process.env.PROFILE_OUTPUT, 'scale-end.png') });
-  console.log(JSON.stringify({ lastCardReachable: true, keyboard: true, mountedAtEnd: await page.locator('[data-card-id]').count(), imageRequests }));
+  await page.getByRole('button', { name: 'снять выделение', exact: true }).waitFor();
+  console.log(JSON.stringify({ secondPage: 120, failedPageRetained: true, retry: true, keyboard: true, mountedAfterPaging: await page.locator('[data-card-id]').count(), imageRequests }));
   await page.getByRole('combobox', { name: 'статус', exact: true }).selectOption('approved');
   await page.locator('[data-card-id="104999"]').waitFor();
   await page.waitForFunction(() => document.querySelectorAll('[data-card-id]').length === 1);
@@ -85,6 +118,22 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.waitForFunction(() => document.querySelectorAll('[data-card-id]').length === 1);
   if (!await page.locator('[data-card-id="104999"]').count()) throw new Error('Search lost offscreen record');
   console.log(JSON.stringify({ filtersSeeLastCard: true, searchSeesLastCard: true }));
+  // Один явный перенос запрашивает номера всего каталога, не его содержимое.
+  await page.getByRole('textbox', { name: 'поиск по картинкам и надписям референсов' }).fill('');
+  await page.getByText('Загружено 120 из 5000', { exact: true }).waitFor();
+  await page.evaluate(() => { const main = document.querySelector('main'); for (let el = main; el; el = el.parentElement) el.scrollTop = 0; window.scrollTo(0, 0); });
+  await page.getByRole('button', { name: 'переместить №100000', exact: true }).click();
+  await page.getByRole('button', { name: 'в конец', exact: true }).click();
+  await page.waitForFunction(() => new URL(location.href).searchParams.get('sort') === 'own');
+  await page.getByText('Загружено 60 из 5000', { exact: true }).waitFor();
+  if (writes.length !== 1 || writes[0].length !== count || writes[0].at(-1) !== 100000 || new Set(writes[0]).size !== count) throw new Error('Move lost unloaded cards');
+  await page.locator('main').last().click({ position: { x: 5, y: 5 } });
+  await Promise.all([
+    page.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes('/references/order')),
+    page.keyboard.press('Control+z'),
+  ]);
+  if (writes.length !== 2 || writes[1][0] !== 100000 || writes[1].length !== count) throw new Error('Undo lost full order');
+  console.log(JSON.stringify({ globalMove: true, undo: true, orderReads, fullOrderCount: writes[0].length }));
   await page.getByRole('link', { name: 'Тексты', exact: true }).click();
   await page.getByRole('status').filter({ hasText: 'Получаем надписи' }).waitFor();
   await page.screenshot({ path: path.join(process.env.PROFILE_OUTPUT, 'texts-spinner.png') });

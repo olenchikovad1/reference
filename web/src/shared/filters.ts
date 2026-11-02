@@ -5,7 +5,7 @@
 // соседнюю страницу фильтр не теряет: последний заданный помнится на вкладку
 // и подставляется в адрес страницы, открытой без своего.
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import type { Status } from './api/references'
@@ -69,6 +69,27 @@ export function passes(p: Placed, f: DropFilter): boolean {
 
 const MEMORY = 'reference.filter'
 const KEYS = ['drop', 'audience', 'category', 'status', 'executor', 'my_turn', 'season', 'decision'] as const
+
+/** Текст поиска переживает ссылку и возврат; сеть читает только принятый запрос. */
+export function useSearchText() {
+  const [params, setParams] = useSearchParams()
+  const urlQuery = params.get('q') ?? ''
+  const [query, setQuery] = useState(urlQuery)
+  const [asked, setAsked] = useState(urlQuery.trim())
+  useEffect(() => { setQuery(urlQuery); setAsked(urlQuery.trim()) }, [urlQuery])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const value = query.trim()
+      setAsked(value)
+      const next = new URLSearchParams(window.location.search)
+      if ((next.get('q') ?? '') === value) return
+      if (value) next.set('q', value); else next.delete('q')
+      setParams(next, { replace: true })
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [query])
+  return { query, setQuery, asked }
+}
 
 const EMPTY: DropFilter = {
   drop: null,

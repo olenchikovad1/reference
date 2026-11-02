@@ -12,6 +12,7 @@ import { fetchTexts } from '../../shared/api/texts'
 import { type Pick as Picked } from '../WorkPicker'
 import { readBuffer, type DraftBody } from '../../shared/draftWriter'
 import { cardKey, cardNow, ORDER_KEY, prefetchCard, rememberDraft } from '../../shared/cardCache'
+import { viewOrder } from '../../shared/referenceFeed'
 import { onImageLoad, warmImage } from '../../shared/imageCache'
 import { neighbour, workKey } from '../../shared/versions'
 import { describe as describeSheet, render as renderSheet } from '../../shared/sheet'
@@ -339,10 +340,12 @@ export function useWindowActions(s: WindowState) {
   /** Соседняя карточка витрины по A/D (US-0600): в порядке витрины, с её
    *  фильтром. Считается от последней запрошенной, а не от показанной: при
    *  быстрых нажатиях показанная отстаёт. */
-  function flip(back: boolean) {
-    const order =
-      queries.getQueryData<number[]>(ORDER_KEY) ??
-      (queries.getQueryData<{ id: number }[]>(['references']) ?? []).map((c) => c.id)
+  async function flip(back: boolean) {
+    let order: number[]
+    try { order = await viewOrder(queries) } catch (e) {
+      setDropHint(`Соседние карточки не пришли: ${e instanceof Error ? e.message : String(e)}. Повторите переход.`)
+      return
+    }
     const from = aimed.current ?? current?.id
     if (from == null || order.length === 0) return
     const at = order.indexOf(from)
@@ -355,7 +358,7 @@ export function useWindowActions(s: WindowState) {
     // ложится раньше, чем React отрисует смену адреса, и оба изменения
     // приходят одним кадром — без обложки и без прежней карточки.
     void openCard(next)
-    navigate(`/references/${next}`, { replace: true, state: location.state })
+    navigate(`/references/${next}${location.search}`, { replace: true, state: location.state })
   }
 
   // Соседи по витрине готовятся заранее — данные и картинки: следующее A или
@@ -722,9 +725,14 @@ export function useWindowActions(s: WindowState) {
   function close() {
     const state = location.state as { inApp?: boolean; fromFamily?: number } | null
     // Esc из окна — к семейству, ещё раз — к витрине (US-0891).
-    if (state?.fromFamily) navigate(`/references?family=${state.fromFamily}`, { replace: true })
+    if (state?.fromFamily) {
+      const next = new URLSearchParams(location.search)
+      next.delete('colour')
+      next.set('family', String(state.fromFamily))
+      navigate(`/references?${next}`, { replace: true })
+    }
     else if (state?.inApp) navigate(-1)
-    else navigate('/references', { replace: true })
+    else navigate(`/references${location.search}`, { replace: true })
   }
 
   /** «Перенести на спину» («на перед»): тот же размер и высота, вид идёт

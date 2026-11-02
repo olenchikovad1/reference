@@ -389,6 +389,54 @@ async function get<T>(path: string, what: string): Promise<T> {
 /** Референсы, свежие по последней версии первыми. */
 export const listReferences = () => get<Card[]>('references', 'Список')
 
+export interface ReferenceFeedFilters {
+  q?: string
+  drop?: number | null
+  audience?: string | null
+  category?: string | null
+  status?: Status | null
+  executor?: string | null
+  my_turn?: boolean
+  season?: 'in' | 'ending' | 'out' | null
+  only_mine?: boolean
+  only_drafts?: boolean
+  sort?: 'date' | 'own'
+}
+
+export interface ReferencePage {
+  items: (Card & { reasons?: string[] })[]
+  total: number
+  next_cursor: string | null
+}
+
+export class ReferenceReadError extends Error {
+  constructor(readonly status: number, message: string) { super(message) }
+}
+
+export function referenceFeedParams(filters: ReferenceFeedFilters): URLSearchParams {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && value !== '' && value !== false) params.set(key, String(value))
+  }
+  return params
+}
+
+export async function fetchReferencePage(filters: ReferenceFeedFilters, cursor: string | null, signal?: AbortSignal): Promise<ReferencePage> {
+  const params = referenceFeedParams(filters)
+  params.set('limit', '60')
+  if (cursor) params.set('cursor', cursor)
+  const response = await fetch(`${BASE}references/page?${params}`, { signal })
+  if (!response.ok) throw new ReferenceReadError(response.status, (await refusal(response, 'Порция не пришла')).message)
+  return response.json()
+}
+
+/** Номера запрашиваются по действию: окно и ручная раскладка, не первый экран. */
+export async function fetchReferenceOrder(filters: ReferenceFeedFilters, signal?: AbortSignal): Promise<number[]> {
+  const response = await fetch(`${BASE}references/order?${referenceFeedParams(filters)}`, { signal })
+  if (!response.ok) throw new ReferenceReadError(response.status, (await refusal(response, 'Порядок не пришёл')).message)
+  return response.json()
+}
+
 /** Референс с версиями и работой последней. work пусто — сохранена до того,
  *  как работу начали хранить. */
 export const openReference = (id: number) => get<ReferenceFull>(`references/${id}`, 'Открыть')
