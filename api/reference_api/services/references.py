@@ -236,7 +236,7 @@ async def open_version(db: AsyncSession, reference_id: int, number: int):
 
 
 async def latest(db: AsyncSession):
-    return await repo.latest(db)
+    return await repo.latest(db, summary=True)
 
 
 def normalise_tag(name: str) -> str:

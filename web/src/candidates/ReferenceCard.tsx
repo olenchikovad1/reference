@@ -2,7 +2,7 @@
 // вид с миниатюрами сторон, по которому референс узнают глазом, а не строка
 // с номером. Кандидат в платформу только раскладкой (решение 0005).
 
-import { buttonClass } from '@platform/ui'
+import { Spinner, buttonClass } from '@platform/ui'
 import { memo, type PointerEvent as ReactPointerEvent, useState } from 'react'
 
 import { meaningClass } from './meaning'
@@ -24,6 +24,7 @@ export const ReferenceCard = memo(
   ReferenceCardView,
   (a, b) =>
     a.card === b.card &&
+    a.gridPosition?.row === b.gridPosition?.row && a.gridPosition?.column === b.gridPosition?.column &&
     a.selected === b.selected &&
     a.dragging === b.dragging &&
     !a.onGrip === !b.onGrip &&
@@ -39,6 +40,7 @@ export const ReferenceCard = memo(
 
 function ReferenceCardView({
   card,
+  gridPosition,
   onOpen,
   onHover,
   dragging,
@@ -54,6 +56,7 @@ function ReferenceCardView({
   onDiscard,
 }: {
   card: Card
+  gridPosition?: { row: number; column: number }
   /** Выделена для действия над несколькими (US-0501). */
   selected?: boolean
   /** Почему найдена — при поиске (US-0498). */
@@ -84,7 +87,7 @@ function ReferenceCardView({
   const [menu, setMenu] = useState(false)
   const [before, setBefore] = useState('')
   return (
-    <div data-flip={card.id} className={`group relative flex min-h-0 min-w-0 flex-col ${dragging ? 'opacity-40' : ''}`}>
+    <div data-flip={card.id} style={gridPosition ? { gridRow: gridPosition.row, gridColumn: gridPosition.column } : undefined} className={`group relative flex min-h-0 min-w-0 flex-col ${dragging ? 'opacity-40' : ''}`}>
       {/* Куда встанет — видно заранее: черта над местом переносимой. */}
       {dragging && <div aria-hidden className="absolute -top-2 left-0 right-0 z-10 h-1 rounded bg-primary" />}
     <button
@@ -247,7 +250,7 @@ function CardImage({ digest, side, className }: { digest: string; side: string; 
         onError={() => setStatus('error')}
         className="h-full w-full object-contain"
       />
-      {status === 'loading' && <span aria-label={`Загрузка: ${side}`} className="absolute inset-0 animate-pulse rounded bg-muted" />}
+      {status === 'loading' && <span className="absolute inset-0 flex items-center justify-center rounded bg-muted"><Spinner label={`Готовим снимок: ${side}`} /></span>}
       {status === 'error' && (
         <span className="absolute inset-0 flex items-center justify-center bg-background p-2 text-center text-xs text-muted-foreground">
           Снимок не загрузился. Обновите страницу.
