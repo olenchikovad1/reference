@@ -109,7 +109,7 @@ async def _get(
     url = f"{_base(base_url)}{path}"
     headers = {"Authorization": f"Bearer {key}"}
     last: Exception | None = None
-    for attempt in range(MAX_ATTEMPTS):
+    for _attempt in range(MAX_ATTEMPTS):
         try:
             async with httpx.AsyncClient(transport=transport, timeout=TIMEOUT_SECONDS) as client:
                 response = await client.get(url, headers=headers, params=params)
@@ -205,7 +205,7 @@ async def list_colors(
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> list[Color]:
     data = await _get(base_url, key, "/api/machine/colors", transport=transport)
-    items = data.get("items") or data
+    items = data.get("items", []) if isinstance(data, dict) else data
     return [
         Color(
             id=str(row["id"]),
