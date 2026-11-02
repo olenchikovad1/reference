@@ -15,6 +15,8 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CODE } from '../app/shell'
 import { DropFilterBar } from '../candidates/DropFilter'
 import { useFlip } from '../candidates/useFlip'
+import { useTileWindow } from '../candidates/useTileWindow'
+import { ThumbnailProgress } from '../candidates/ThumbnailProgress'
 import { meaningClass } from '../candidates/meaning'
 import { FamilyPopup } from '../candidates/FamilyPopup'
 import { ReferenceCard as ShowcaseCard } from '../candidates/ReferenceCard'
@@ -209,6 +211,10 @@ export function Showcase() {
   const display = shown && drag ? preview(shown, drag.ids, drag.at) : shown
   useFlip(grid, (display ?? []).map((c) => c.id).join(','))
   const rowHeight = Math.max(120, (height.value - GAP * (ROWS - 1)) / ROWS)
+  const tiles = useTileWindow(grid, display?.length ?? 0, rowHeight, Math.round(rowHeight * ASPECT), GAP)
+  const [focusedId, setFocusedId] = useState<number | null>(null)
+  const visibleCards = (display ?? []).map((card, index) => ({ card, index }))
+    .filter(({ card, index }) => (index >= tiles.first && index < tiles.end) || card.id === focusedId)
 
   shownRef.current = shown
 
@@ -404,9 +410,10 @@ export function Showcase() {
   /** Стрелки ходят по карточкам: вбок — соседняя, вверх-вниз — ряд выше или
    *  ниже; пробел выделяет. */
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
-    const all = [...(grid.current?.querySelectorAll<HTMLButtonElement>('[data-card]') ?? [])]
-    const at = all.indexOf(document.activeElement as HTMLButtonElement)
-    if (at < 0) return
+    const active = document.activeElement as HTMLElement | null
+    if (!active?.hasAttribute('data-card')) return
+    const id = Number(active.dataset.cardId)
+    const at = id ? (display ?? []).findIndex(card => card.id === id) + 1 : 0
     if (e.key === ' ') {
       const id = Number((document.activeElement as HTMLElement).dataset.cardId)
       if (id) {
@@ -416,16 +423,19 @@ export function Showcase() {
       return
     }
     // Карточек в ряду — сколько стоит на одной высоте с первой.
-    const top0 = all[0]?.getBoundingClientRect().top
-    const perRow = Math.max(1, all.filter((b) => Math.abs(b.getBoundingClientRect().top - top0) < 4).length)
+    const perRow = tiles.columns
     const by: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: perRow, ArrowUp: -perRow }
     if (!(e.key in by)) return
     e.preventDefault()
     // Переставлять карточки с клавиатуры нельзя (владелец 26.09): порядок
     // меняется только мышью. Alt со стрелками — просто стрелки.
-    const next = all[Math.min(all.length - 1, Math.max(0, at + by[e.key]))]
-    next.focus()
-    next.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const next = Math.min(display?.length ?? 0, Math.max(0, at + by[e.key]))
+    tiles.reveal(next)
+    // Прокрутка сначала монтирует соседний ряд, затем фокус входит в него.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const selector = next === 0 ? '[data-card]:not([data-card-id])' : `[data-card-id="${display![next - 1].id}"]`
+      grid.current?.querySelector<HTMLElement>(selector)?.focus()
+    }))
   }
 
   return (
@@ -587,7 +597,8 @@ export function Showcase() {
       {found.error && <p className="text-sm text-muted-foreground">{found.error} — поиск повторится, если изменить запрос.</p>}
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}
 
-      {cards.isError ? (
+      <ThumbnailProgress root={grid} pending={cards.isPending} />
+      {cards.isError && (
         <EmptyState
           title="Референсы не пришли"
           description="Сервис не ответил. Обновите страницу; если повторится — стенд сервиса не поднят."
@@ -597,23 +608,26 @@ export function Showcase() {
             </button>
           }
         />
-      ) : (
+      )}
         <div
           ref={(el) => {
             grid.current = el
             height.measure(el)
           }}
           onKeyDown={onKey}
+          onFocusCapture={(e) => setFocusedId(Number((e.target as HTMLElement).dataset.cardId) || null)}
           style={{
-            display: 'grid',
+            display: cards.isError ? 'none' : 'grid',
             gridTemplateColumns: `repeat(auto-fill, minmax(${Math.round(rowHeight * ASPECT)}px, 1fr))`,
             gridAutoRows: rowHeight,
+            gridTemplateRows: `repeat(${tiles.rows}, ${rowHeight}px)`,
             gap: GAP,
             paddingBottom: 4,
           }}
         >
           <button
             data-card
+            style={{ gridRow: 1, gridColumn: 1 }}
             onClick={() => setCreating(true)}
             className="pf-card flex flex-col items-center justify-center gap-1 border border-dashed border-line text-muted-foreground"
             title="Новый референс: выбрать изделие и цвет"
@@ -621,11 +635,11 @@ export function Showcase() {
             <span style={{ fontSize: rowHeight / 3, lineHeight: 1 }}>+</span>
             <span className="text-sm">новый референс</span>
           </button>
-          {cards.isPending && <p className="text-sm text-muted-foreground">Загружаю референсы…</p>}
-          {display?.map((c) => (
+          {visibleCards.map(({ card: c, index }) => (
             <ShowcaseCard
               key={c.id}
               card={c}
+              gridPosition={tiles.position(index + 1)}
               dragging={drag?.ids.includes(c.id) ?? false}
               onGrip={found.ids === null ? (e) => live.current.gripStart(c.id, e) : undefined}
               onPress={found.ids === null ? (e) => live.current.pressStart(c.id, e) : undefined}
@@ -661,7 +675,6 @@ export function Showcase() {
             </p>
           )}
         </div>
-      )}
 
       <Modal
         open={trashing !== null}

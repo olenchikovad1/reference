@@ -4,7 +4,7 @@
 // «ЛЕТО 2025» находит и «ЛЕТО 2024» — похожим, с отметкой (решение 0010).
 // Надпись можно завести заранее, под будущий дроп.
 
-import { Checkbox, DataTable, EmptyState, PageHeader, TextInput, buttonClass, type DataColumn } from '@platform/ui'
+import { Checkbox, DataTable, EmptyState, PageHeader, Spinner, TextInput, buttonClass, type DataColumn } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -186,12 +186,15 @@ export function Texts() {
       {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
       {texts.isError ? (
         <EmptyState title="Тексты не пришли" description="Сервис не ответил. Обновите страницу; если повторится — стенд сервиса не поднят." />
+      ) : texts.isPending ? (
+        // У таблицы текущей версии только статичная подпись ожидания.
+        // До данных показываем общий Spinner, затем монтируем саму таблицу.
+        <div role="status" className="my-4 flex items-center gap-2 text-sm text-muted-foreground"><Spinner />Получаем надписи и связи с референсами…</div>
       ) : (
         <DataTable
           rows={shown}
           columns={columns}
           rowKey={(r) => r.text}
-          isLoading={texts.isPending}
           empty={
             asked
               ? 'Такой надписи не было — ни дословно, ни похожей. Можно завести её заранее.'

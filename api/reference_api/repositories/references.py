@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Load, defer
 
 from reference_api.models.references import (
     ReferenceTransfer,
@@ -201,7 +202,7 @@ async def search(db: AsyncSession, normalised: str, limit: int = 20) -> list[Ref
 
 
 async def latest(
-    db: AsyncSession, limit: int | None = None, trashed: bool = False
+    db: AsyncSession, limit: int | None = None, trashed: bool = False, *, summary: bool = False
 ) -> list[tuple[Reference, ReferenceVersion]]:
     """Карточки с последней версией, свежие по ней первыми: открывают почти
     всегда то, что сохраняли последним. `trashed` — корзина вместо витрины.
@@ -215,6 +216,12 @@ async def latest(
     )
     rows = await db.execute(
         select(Reference, ReferenceVersion)
+        .options(*(
+            # Витрине нужны только метаданные. work и надписи читаются
+            # при открытии/поиске; их объём растёт вместе с работами GPT.
+            [Load(ReferenceVersion).raiseload("*"), defer(ReferenceVersion.work, raiseload=True)]
+            if summary else []
+        ))
         .join(newest, newest.c.reference_id == Reference.id)
         .join(
             ReferenceVersion,
