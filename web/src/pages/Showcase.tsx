@@ -13,8 +13,6 @@ import { type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, 
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
-import { warmGarments } from '../candidates/GarmentCanvas'
-import { frameUrl, productQuery } from '../shared/api/products'
 import { DropFilterBar } from '../candidates/DropFilter'
 import { useFlip } from '../candidates/useFlip'
 import { meaningClass } from '../candidates/meaning'
@@ -68,7 +66,7 @@ const GAP = 12
 const ASPECT = 0.8
 
 export function Showcase() {
-  const cards = useQuery({ queryKey: ['references'], queryFn: listReferences })
+  const cards = useQuery({ queryKey: ['references'], queryFn: listReferences, staleTime: 30_000 })
   const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
   const [query, setQuery] = useState('')
@@ -77,11 +75,6 @@ export function Showcase() {
   const height = useFreeHeight()
   const grid = useRef<HTMLDivElement | null>(null)
   const queries = useQueryClient()
-  // Окно откроется мгновенно: изделие и его кадры грузятся, пока человек
-  // выбирает карточку. Изделие на стенде одно — B-HDY-14.
-  useEffect(() => {
-    void queries.fetchQuery(productQuery('B-HDY-14')).then((p) => warmGarments(p.states.map((s) => frameUrl(p.code, s.code))))
-  }, [queries])
   const canCopy = useCan(CODE, 'references', 'write')
   const canTrash = useCan(CODE, 'references', 'delete')
   const canErase = useCan(CODE, 'references', 'delete-forever')
@@ -102,7 +95,7 @@ export function Showcase() {
   const usePlm = Boolean(plmStatus.data?.configured && plmStatus.data.reachable)
   const plmDrops = useQuery({ queryKey: ['plm-drops'], queryFn: () => fetchPlmDrops(), enabled: usePlm })
   const people = useQuery({ queryKey: ['people'], queryFn: fetchPeople })
-  const tasks = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks })
+  const tasks = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks, enabled: drop.filter.myTurn })
   const myTurnIds = new Set((tasks.data?.mine ?? []).map((t) => t.id))
   // Свой порядок (US-0601): «по дате» или «мой». Выбор помнит браузер —
   // это удобство смотрящего, а не данные.

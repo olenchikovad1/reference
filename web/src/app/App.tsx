@@ -7,8 +7,8 @@
 
 import { readAppearance, type Appearance } from '@platform/shell'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
-import { useState, type ReactElement, type ReactNode } from 'react'
-import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 'react-router-dom'
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes, useParams } from 'react-router-dom'
 
 import { WorkWindow } from '../pages/WorkWindow'
 import { Drops } from '../pages/Drops'
@@ -82,7 +82,7 @@ function Pages() {
           скрыто, и открыть карточку — значит показать её, а не собрать экран. */}
       <Route
         path="/references/:ref?"
-        element={<Guarded section={SECTIONS.find((s) => s.code === 'references')!} overlay={<WorkWindow />} />}
+        element={<Guarded section={SECTIONS.find((s) => s.code === 'references')!} overlay={<DeferredWorkWindow />} />}
       />
       {/* Коллекция открывается по адресу (решение 0020): список и доска —
           один маршрут с необязательным релизом, ссылку на доску можно переслать. */}
@@ -101,6 +101,18 @@ function Pages() {
       <Route path="*" element={<NotFound />} />
     </Routes>
   )
+}
+
+/** До первого открытия окно не запрашивает палитру PLM, принты и кадры.
+ * После открытия сохраняем экземпляр: закрытие не должно терять черновик. */
+function DeferredWorkWindow() {
+  const { ref } = useParams()
+  const open = Boolean(ref)
+  const [opened, setOpened] = useState(open)
+  useEffect(() => {
+    if (open) setOpened(true)
+  }, [open])
+  return open || opened ? <WorkWindow /> : null
 }
 
 /** Открыт в обход шлюза — по своему порту: ядра платформы здесь нет. Не

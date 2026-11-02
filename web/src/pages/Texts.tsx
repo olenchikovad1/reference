@@ -23,7 +23,7 @@ const MATCH: Record<string, string> = { same: 'дословно', words: 'все
 export function Texts() {
   const [query, setQuery] = useState('')
   const [asked, setAsked] = useState('')
-  const texts = useQuery({ queryKey: ['texts', asked], queryFn: () => fetchTexts(asked) })
+  const texts = useQuery({ queryKey: ['texts', asked], queryFn: () => fetchTexts(asked), staleTime: 30_000 })
   const queries = useQueryClient()
   const navigate = useNavigate()
   const canPlan = useCan(CODE, 'texts', 'write')
