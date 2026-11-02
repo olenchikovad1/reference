@@ -6,13 +6,22 @@
 """
 
 import re
+import asyncio
+import base64
+import hashlib
+import json
+from binascii import Error as Base64Error
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from dataclasses import asdict, replace
+from datetime import UTC, date, datetime, timedelta
+
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, ValidationError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.config import settings
 from reference_api.repositories import references as repo
+from reference_api.models.references import Reference, ReferenceVersion
 from reference_api.services import assets, embeddings
 from reference_api.services import library
 
@@ -20,6 +29,141 @@ from reference_api.services import library
 #: видом: вопросы у них разные, и смешанные они дают поиск, который молча
 #: меряет не то.
 SHEET = "sheet"
+
+
+# Критерии чтения общие у страницы и компактного порядка, чтобы отборы не расходились.
+PageFilters = repo.PageFilters
+
+
+class InvalidCursor(ValueError):
+    """Курсор повреждён или относится к другому отбору/смотрящему."""
+
+
+class _Cursor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    v: int = Field(default=1, ge=1, le=1)
+    scope: str = Field(min_length=64, max_length=64)
+    saved_at: datetime
+    version_id: int = Field(gt=0, le=2147483647)
+    bucket: int = Field(default=0, ge=0, le=1)
+    position: int = Field(default=0, ge=-2147483648, le=2147483647)
+    score: FiniteFloat = 0
+
+
+def _page_scope(filters: PageFilters, viewer: str | None) -> str:
+    return hashlib.sha256(json.dumps({"filters": asdict(filters), "viewer": viewer},
+                                     sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def _read_cursor(cursor: str | None, scope: str) -> repo.PageAnchor | None:
+    if not cursor:
+        return None
+    try:
+        if len(cursor) > 2048:
+            raise InvalidCursor("Курсор слишком длинный")
+        data = base64.b64decode(cursor + "=" * (-len(cursor) % 4), altchars=b"-_", validate=True)
+        value = _Cursor.model_validate_json(data)
+        if value.scope != scope or value.saved_at.utcoffset() is None:
+            raise InvalidCursor("Курсор другого запроса")
+        return repo.PageAnchor(value.saved_at, value.version_id, value.bucket, value.position, value.score)
+    except (Base64Error, ValidationError, ValueError) as failure:
+        raise InvalidCursor("Обновите список: курсор повреждён или отбор изменился") from failure
+
+
+def _write_cursor(anchor: repo.PageAnchor | None, scope: str) -> str | None:
+    if anchor is None:
+        return None
+    value = _Cursor(scope=scope, **asdict(anchor))
+    return base64.urlsafe_b64encode(value.model_dump_json().encode()).decode().rstrip("=")
+
+
+def _week_in_window(week: int, intake: int | None, exit: int | None) -> bool:
+    if intake is None or exit is None:
+        return True
+    return intake <= week <= exit if intake <= exit else week >= intake or week <= exit
+
+
+async def _page_context(db: AsyncSession, filters: PageFilters, viewer: str | None,
+                        can_review: bool, can_final: bool, today: date | None = None
+                        ) -> tuple[repo.PageContext, dict[int, tuple[str, ...]]]:
+    from reference_api.repositories import drops as drop_repo, people as people_repo
+    from reference_api.services import drops as drop_service, plm
+
+    category_ids = None
+    if filters.category is not None or filters.audience is not None:
+        nodes = await drop_repo.nodes(db, summary=True)
+        category_ids = tuple(n.id for n in nodes.values() if n.level == "category"
+                             and (filters.category is None or n.name == filters.category)
+                             and (filters.audience is None or drop_service.audience_of(n.id, nodes)
+                                  in ({filters.audience, "all"} if filters.audience != "all" else {"all"})))
+    turn: tuple[str, ...] = ()
+    if filters.my_turn and viewer and can_review:
+        person = await people_repo.app_person(db, viewer)
+        role = person.role if person else None
+        turn = ("review", "approved") if role == "chief" and can_final else ("review",) if role in {"chief", "editor"} else ()
+    in_drops: list[int] = []
+    ending_drops: list[int] = []
+    in_codes: list[str] = []
+    ending_codes: list[str] = []
+    if filters.season:
+        day = today or date.today()
+        week = day.isocalendar().week
+        directory = []
+        cfg = settings()
+        if cfg.plm_base_url and cfg.plm_machine_key:
+            try:
+                # Справочник не должен удерживать первый экран до трёх
+                # десятисекундных попыток общего клиента PLM.
+                async with asyncio.timeout(2):
+                    directory = await plm.list_drops(cfg.plm_base_url, cfg.plm_machine_key, active_only=False)
+            except (plm.PlmUnavailable, plm.PlmRefused, TimeoutError):
+                # Как у прежней витрины: при недоступности PLM используем
+                # известные даты примеров, а неизвестные не считаем просроченными.
+                directory = []
+        for item in directory:
+            if _week_in_window(week, item.intake_week, item.exit_week):
+                in_codes.append(item.code)
+                if item.intake_week is not None and item.exit_week is not None and (item.exit_week - week) % 53 <= 2:
+                    ending_codes.append(item.code)
+        for local_drop in await drop_repo.drops(db, summary=True):
+            matches = [d for d in directory if local_drop.name in {d.code, d.description}]
+            within = any(d.code in in_codes for d in matches) if matches else local_drop.release_from <= day <= local_drop.release_to
+            ending = any(d.code in ending_codes for d in matches) if matches else within and (local_drop.release_to - day).days <= 14
+            if within:
+                in_drops.append(local_drop.id)
+            if ending:
+                ending_drops.append(local_drop.id)
+    found = await find(db, filters.q) if filters.q.strip() else []
+    scores = tuple((f.reference_id, f.rank) for f in found)
+    return (repo.PageContext(viewer, category_ids, tuple(in_drops), tuple(ending_drops), turn, can_review, scores),
+            {f.reference_id: f.reasons for f in found})
+
+
+@dataclass
+class PageResult:
+    rows: list[tuple[Reference, ReferenceVersion]]
+    total: int
+    next_cursor: str | None
+    reasons: dict[int, tuple[str, ...]]
+
+
+async def page(db: AsyncSession, filters: PageFilters, viewer: str | None, limit: int = 60,
+               cursor: str | None = None, *, can_review: bool = False, can_final: bool = False) -> PageResult:
+    filters = replace(filters, q=filters.q.strip())
+    scope = _page_scope(filters, viewer)
+    anchor = _read_cursor(cursor, scope)
+    context, reasons = await _page_context(db, filters, viewer, can_review, can_final)
+    result = await repo.page(db, filters, context, limit, anchor)
+    shown = {c.id for c, _ in result.rows}
+    return PageResult(result.rows, result.total, _write_cursor(result.next_anchor, scope),
+                      {i: why for i, why in reasons.items() if i in shown})
+
+
+async def ordered_ids(db: AsyncSession, filters: PageFilters, viewer: str | None,
+                      *, can_review: bool = False, can_final: bool = False) -> list[int]:
+    filters = replace(filters, q=filters.q.strip())
+    context, _ = await _page_context(db, filters, viewer, can_review, can_final)
+    return await repo.ordered_ids(db, filters, context)
 
 
 @dataclass(frozen=True)
@@ -341,7 +485,7 @@ async def find(db: AsyncSession, query: str) -> list[FoundReference]:
 
     matched = await drops_service.match_drops(db, query)
     if matched:
-        rows = await repo.latest(db, limit=10_000)
+        rows = await repo.latest(db, summary=True)
         places = await drops_service.colour_models_of(db, [c.colour_model_id for c, _ in rows if c.colour_model_id])
         for m in matched:
             for card, _ in rows:

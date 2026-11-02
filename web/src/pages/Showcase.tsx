@@ -7,9 +7,9 @@
 // отрисовка на лету: шестьдесят карточек не должны рисовать сто двадцать
 // изделий.
 
-import { EmptyState, IconButton, Modal, PageHeader, Select, TextInput, buttonClass } from '@platform/ui'
+import { EmptyState, IconButton, Modal, PageHeader, Select, Spinner, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
@@ -23,7 +23,8 @@ import { ReferenceCard as ShowcaseCard } from '../candidates/ReferenceCard'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { SHOWCASE_KEYS } from '../shared/keys'
 import { moveTo, ownOrder, placeOf, preview } from '../shared/order'
-import { SEASON_NAMES, passes, useDropFilter, type SeasonFilter } from '../shared/filters'
+import { SEASON_NAMES, useDropFilter, type SeasonFilter } from '../shared/filters'
+import { fullOwnOrder, patchReferencePositions, useReferenceFeed, useShowcaseOptions } from '../shared/referenceFeed'
 import { fetchPeople } from '../shared/api/people'
 import { useCan } from '../shared/api/platform'
 
@@ -33,9 +34,6 @@ import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
 import {
   copyReference,
   eraseForever,
-  fetchTasks,
-  findReferences,
-  listReferences,
   moveToDrop,
   setOrder,
   restoreReference,
@@ -47,18 +45,11 @@ import {
 import { fetchDrops, type Drop } from '../shared/api/drops'
 import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, plmImageUrl, rgbCss, type PlmColorway, type PlmDrop } from '../shared/api/plm'
 import {
-  endingDates,
-  endingWeeks,
-  inSeasonDates,
-  inSeasonWeeks,
   profileFromDates,
   profileFromWeeks,
   untilDateLabel,
   untilWeekLabel,
 } from '../shared/season'
-
-/** Где браузер помнит выбранный порядок витрины. */
-const SORT_KEY = 'reference.showcase.sort'
 
 /** На экран помещается три ряда карточек при любой высоте окна; дальше —
  *  колесом вниз (US-0721, владелец 29.09: «людям привычнее колёсиком»). */
@@ -68,12 +59,19 @@ const GAP = 12
 const ASPECT = 0.8
 
 export function Showcase() {
-  const cards = useQuery({ queryKey: ['references'], queryFn: listReferences, staleTime: 30_000 })
   const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
-  const [query, setQuery] = useState('')
-  const found = useFound(query)
   const drop = useDropFilter()
+  const { query, setQuery, asked, sortOwn, setSortOwn, onlyMine, setOnlyMine, onlyDrafts, setOnlyDrafts } = useShowcaseOptions()
+  const feedFilters = useMemo(() => ({
+    q: asked, drop: drop.filter.drop, audience: drop.filter.audience, category: drop.filter.category,
+    status: drop.filter.status, executor: drop.filter.executor, my_turn: drop.filter.myTurn,
+    season: drop.filter.season ?? 'in' as const, only_mine: onlyMine, only_drafts: onlyDrafts,
+    sort: sortOwn ? 'own' as const : 'date' as const,
+  }), [asked, drop.filter.drop, drop.filter.audience, drop.filter.category, drop.filter.status,
+    drop.filter.executor, drop.filter.myTurn, drop.filter.season, onlyMine, onlyDrafts, sortOwn])
+  const cards = useReferenceFeed(feedFilters)
+  const found = { ids: asked ? true : null, why: new Map((cards.data ?? []).map(c => [c.id, c.reasons ?? []])) }
   const height = useFreeHeight()
   const grid = useRef<HTMLDivElement | null>(null)
   const queries = useQueryClient()
@@ -97,24 +95,6 @@ export function Showcase() {
   const usePlm = Boolean(plmStatus.data?.configured && plmStatus.data.reachable)
   const plmDrops = useQuery({ queryKey: ['plm-drops'], queryFn: () => fetchPlmDrops(), enabled: usePlm })
   const people = useQuery({ queryKey: ['people'], queryFn: fetchPeople })
-  const tasks = useQuery({ queryKey: ['tasks'], queryFn: fetchTasks, enabled: drop.filter.myTurn })
-  const myTurnIds = new Set((tasks.data?.mine ?? []).map((t) => t.id))
-  // Свой порядок (US-0601): «по дате» или «мой». Выбор помнит браузер —
-  // это удобство смотрящего, а не данные.
-  const [sortOwn, setSortOwn] = useState(() => {
-    try {
-      return localStorage.getItem(SORT_KEY) === 'own'
-    } catch {
-      return false
-    }
-  })
-  useEffect(() => {
-    try {
-      localStorage.setItem(SORT_KEY, sortOwn ? 'own' : 'date')
-    } catch {
-      // хранилище запрещено — выбор проживёт до перезагрузки
-    }
-  }, [sortOwn])
   // Перенос мышью: какие карточки, на какое место среди видимых, видимые на
   // момент начала. Во время переноса витрина показывает предварительный
   // порядок — остальные раздвигаются, место видно заранее.
@@ -131,6 +111,17 @@ export function Showcase() {
   const [search, setSearch] = useSearchParams()
   const familyId = Number(search.get('family') || 0) || null
   const familyCard = familyId ? (cards.data ?? []).find((c) => c.id === familyId) : undefined
+  const more = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const node = more.current
+    if (!node || !cards.hasNextPage || cards.isFetching || cards.loadMoreError) return
+    // Запас около одного ряда: следующая порция приходит до упора в конец.
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) void cards.fetchNextPage()
+    }, { rootMargin: '240px' })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [cards.hasNextPage, cards.isFetching, cards.loadMoreError, cards.fetchNextPage, cards.data?.length])
 
   function pick(id: number, e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) {
     const order = (shownRef.current ?? []).map((c) => c.id)
@@ -187,23 +178,7 @@ export function Showcase() {
   const shownRef = useRef<Card[] | undefined>(undefined)
   // Отборы «только мои» и «мои черновики» (US-0686) — рядом с дропом и
   // адресатом; выбор помнит браузер, как и порядок.
-  const [onlyMine, setOnlyMine] = useRemembered(MINE_KEY)
-  const [onlyDrafts, setOnlyDrafts] = useRemembered(DRAFTS_KEY)
-  const seasonMode: SeasonFilter = drop.filter.season ?? 'in'
-  const filtered = (
-    found.ids === null ? cards.data : found.ids.flatMap((id) => cards.data?.find((c) => c.id === id) ?? [])
-  )
-    ?.filter((c) => (!onlyMine || c.mine) && (!onlyDrafts || c.my_draft))
-    .filter((c) =>
-      passes(
-        { drops: c.drop_ids, audiences: c.audience ? [c.audience] : [], categories: c.category ? [c.category] : [] },
-        drop.filter,
-      ),
-    )
-    .filter((c) => drop.filter.status === null || c.status === drop.filter.status)
-    .filter((c) => drop.filter.executor === null || c.executor?.id === drop.filter.executor)
-    .filter((c) => !drop.filter.myTurn || myTurnIds.has(c.id))
-    .filter((c) => cardMatchesSeason(c, seasonMode, drops.data, usePlm ? plmDrops.data : undefined))
+  const filtered = cards.data
 
   // В поиске — порядок совпадения всегда: там важнее, что нашлось первым.
   const shown = filtered && found.ids === null && sortOwn ? ownOrder(filtered) : filtered
@@ -225,21 +200,22 @@ export function Showcase() {
   }, [order, queries])
 
   /** Свой порядок целиком — все карточки, не только видимые. */
-  const fullOwn = () => ownOrder(cards.data ?? []).map((c) => c.id)
+  const fullOwn = () => fullOwnOrder(queries)
 
   /** Положить новый порядок: сразу на экран, потом на сервер; не вышло —
    *  вернуть прежний и сказать. */
-  async function saveOrder(next: number[], moved: number[], remember = true) {
-    const prev = fullOwn()
+  async function saveOrder(next: number[], moved: number[], remember = true, previous?: number[]) {
+    let prev: number[]
+    try { prev = previous ?? await fullOwn() } catch (e) {
+      setActionError(`Порядок не пришёл: ${e instanceof Error ? e.message : String(e)} — повторите.`)
+      return
+    }
     if (next.join(',') === prev.join(',')) return
     if (remember) {
       undoStack.current.push({ kind: 'order', before: prev, after: next })
       redoStack.current = []
     }
-    const put = (order: number[]) => {
-      const pos = new Map(order.map((id, i) => [id, i]))
-      queries.setQueryData<Card[]>(['references'], (cs) => cs?.map((c) => ({ ...c, my_position: pos.get(c.id) ?? null })))
-    }
+    const put = (order: number[]) => patchReferencePositions(queries, order)
     put(next)
     setAnnounce(
       moved.length
@@ -248,9 +224,19 @@ export function Showcase() {
     )
     try {
       await setOrder(next)
+      await queries.invalidateQueries({ queryKey: ['references'] })
     } catch (e) {
       put(prev)
       setActionError(`Порядок не сохранился: ${e instanceof Error ? e.message : String(e)} — повторите.`)
+    }
+  }
+
+  async function saveMove(visible: number[], moved: number[], at: number) {
+    try {
+      const full = await fullOwn()
+      await saveOrder(moveTo(full, visible, moved, at), moved, true, full)
+    } catch (e) {
+      setActionError(`Порядок не пришёл: ${e instanceof Error ? e.message : String(e)} — повторите.`)
     }
   }
 
@@ -308,7 +294,7 @@ export function Showcase() {
       setDrag(null)
       justDragged.current = true
       setTimeout(() => (justDragged.current = false), 0)
-      if (commit) void saveOrder(moveTo(fullOwn(), visible, ids, at), ids)
+      if (commit) void saveMove(visible, ids, at)
     }
     const up = () => stop(true)
     const key = (ev: globalThis.KeyboardEvent) => {
@@ -362,8 +348,12 @@ export function Showcase() {
   }
 
   /** Меню «переместить»: в начало, в конец, перед №… — по всему порядку. */
-  function moveMenu(id: number, to: 'start' | 'end' | number) {
-    const full = fullOwn()
+  async function moveMenu(id: number, to: 'start' | 'end' | number) {
+    let full: number[]
+    try { full = await fullOwn() } catch (e) {
+      setActionError(`Порядок не пришёл: ${e instanceof Error ? e.message : String(e)} — повторите.`)
+      return
+    }
     const ids = selected.has(id) ? full.filter((v) => selected.has(v)) : [id]
     const rest = full.filter((v) => !ids.includes(v))
     const at = to === 'start' ? 0 : to === 'end' ? rest.length : rest.indexOf(to)
@@ -372,7 +362,7 @@ export function Showcase() {
       return
     }
     setSortOwn(true)
-    void saveOrder(moveTo(full, full, ids, at), ids)
+    await saveOrder(moveTo(full, full, ids, at), ids, true, full)
   }
 
   // Карточки мемоизированы и держат обработчики прошлой отрисовки; свежие
@@ -447,13 +437,14 @@ export function Showcase() {
             ? sortOwn
               ? 'порядок вручную: зажмите карточку или возьмите за ⠿ и перетащите; Ctrl+Z — вернуть'
               : 'последние сохранённые первыми'
-            : `по запросу «${query.trim()}» — ${shown?.length ?? 0}`
+            : `по запросу «${asked}» — ${cards.total}`
         }
         actions={
           // Вверху — только поиск (владелец 29.09: «вверху справа помойка»):
           // порядок, корзина и клавиши — в одной полосе с отборами.
           <div className="flex w-80 items-center gap-1">
             <TextInput
+              maxLength={200}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="поиск: снежное, танк, мишка…"
@@ -594,7 +585,6 @@ export function Showcase() {
           </button>
         </p>
       )}
-      {found.error && <p className="text-sm text-muted-foreground">{found.error} — поиск повторится, если изменить запрос.</p>}
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}
 
       <ThumbnailProgress root={grid} pending={cards.isPending} />
@@ -664,17 +654,29 @@ export function Showcase() {
             />
           ))}
 
-          {cards.data?.length === 0 && (
-            <p className="self-center text-sm text-muted-foreground">
-              Пока ни одного — «+» начинает первый.
-            </p>
-          )}
-          {found.ids !== null && shown?.length === 0 && (
-            <p className="self-center text-sm text-muted-foreground">
-              Ничего не нашлось — назовите предмет, а не настроение: «танк», а не «грозно».
-            </p>
+          {!cards.isPending && cards.data?.length === 0 && (
+            <div className="col-span-full self-center text-sm text-muted-foreground">
+              Под этот отбор референсов нет. Измените фильтры или создайте новый.
+              <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => {
+                drop.reset(); setQuery('')
+                setSearch(new URLSearchParams({ sort: sortOwn ? 'own' : 'date', mine: '0', drafts: '0' }), { replace: true })
+              }}>сбросить отбор</button>
+            </div>
           )}
         </div>
+
+      {!cards.isPending && !cards.isError && (
+        <div ref={more} className="my-4 flex items-center justify-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+          {cards.isFetchingNextPage && <Spinner />}
+          <span>Загружено {cards.data?.length ?? 0} из {cards.total}</span>
+          {cards.loadMoreError ? <>
+            <span>Следующая порция не пришла.</span>
+            <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => void cards.fetchNextPage()}>повторить дозагрузку</button>
+          </> : cards.hasNextPage && !cards.isFetchingNextPage && (
+            <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => void cards.fetchNextPage()}>показать ещё</button>
+          )}
+        </div>
+      )}
 
       <Modal
         open={trashing !== null}
@@ -770,17 +772,20 @@ export function Showcase() {
         )}
       </Modal>
 
-      {familyId && familyCard && (
+      {familyId && (
         <FamilyPopup
           referenceId={familyId}
-          name={familyCard.name || `№${familyId}`}
+          name={familyCard?.name || `№${familyId}`}
           onClose={() => {
             const next = new URLSearchParams(search)
             next.delete('family')
             setSearch(next, { replace: true })
           }}
           onPick={(colour) => {
-            navigate(`/references/${familyId}?colour=${encodeURIComponent(colour)}`, {
+            const next = new URLSearchParams(search)
+            next.delete('family')
+            next.set('colour', colour)
+            navigate(`/references/${familyId}?${next}`, {
               state: { inApp: true, fromFamily: familyId },
             })
           }}
@@ -925,44 +930,6 @@ function modelsOf(node: TreeNode): TreeNode['models'] {
   return [...node.models, ...node.children.flatMap(modelsOf)]
 }
 
-/**
- * Поиск по витрине (US-0493): свои теги первыми, затем надпись дословно,
- * затем картинки по весам (план 071), — порядок решает сервис. Возвращает
- * номера референсов по порядку; null — не ищем, показывается всё.
- *
- * С задержкой: запрос на каждую букву — это «с», «сн», «сне» в сервис, из
- * которых нужен последний.
- */
-function useFound(query: string): { ids: number[] | null; why: Map<number, string[]>; error: string | null } {
-  const [ids, setIds] = useState<number[] | null>(null)
-  const [why, setWhy] = useState<Map<number, string[]>>(new Map())
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
-    const q = query.trim()
-    if (!q) {
-      setIds(null)
-      setError(null)
-      return
-    }
-    let stale = false
-    const t = setTimeout(() => {
-      findReferences(q)
-        .then((rows) => {
-          if (stale) return
-          setIds(rows.map((r) => r.id))
-          setWhy(new Map(rows.map((r) => [r.id, r.reasons])))
-          setError(null)
-        })
-        .catch((e: Error) => !stale && setError(`Поиск не ответил: ${e.message}`))
-    }, 350)
-    return () => {
-      stale = true
-      clearTimeout(t)
-    }
-  }, [query])
-  return { ids, why, error }
-}
-
 /** Высота от верха витрины до низа окна: три строки делят именно её. */
 function useFreeHeight(): { value: number; measure: (el: HTMLElement | null) => void } {
   const [top, setTop] = useState(160)
@@ -989,28 +956,6 @@ function useFreeHeight(): { value: number; measure: (el: HTMLElement | null) => 
  *  в корзину (одна карточка или пачка) — возвращаются тем же шагом. */
 type ShowcaseStep = { kind: 'order'; before: number[]; after: number[] } | { kind: 'trash'; ids: number[] }
 
-const MINE_KEY = 'reference.showcase.only-mine'
-const DRAFTS_KEY = 'reference.showcase.only-drafts'
-
-/** Включатель, который помнит браузер: удобство смотрящего, не данные. */
-function useRemembered(key: string): [boolean, (v: boolean | ((was: boolean) => boolean)) => void] {
-  const [on, setOn] = useState(() => {
-    try {
-      return localStorage.getItem(key) === '1'
-    } catch {
-      return false
-    }
-  })
-  useEffect(() => {
-    try {
-      localStorage.setItem(key, on ? '1' : '0')
-    } catch {
-      // хранилище запрещено — выбор проживёт до перезагрузки
-    }
-  }, [key, on])
-  return [on, setOn]
-}
-
 /** Отбор-включатель в ряду отборов. */
 function Chip(props: { on: boolean; set: (v: (was: boolean) => boolean) => void; title: string; children: string }) {
   return (
@@ -1034,43 +979,6 @@ function scrollerOf(el: HTMLElement): { scrollBy: (x: number, y: number) => void
     if ((y === 'auto' || y === 'scroll') && p.scrollHeight > p.clientHeight) return p
   }
   return window
-}
-
-/** Карточка проходит сезон-фильтр (US-0888/0889). */
-function cardMatchesSeason(
-  card: Card,
-  mode: SeasonFilter,
-  local: Drop[] | undefined,
-  plm: PlmDrop[] | undefined,
-): boolean {
-  const inSeason = cardInSeason(card, local, plm)
-  if (mode === 'in') return inSeason
-  if (mode === 'out') return !inSeason
-  return inSeason && cardEnding(card, local, plm)
-}
-
-function cardInSeason(card: Card, local: Drop[] | undefined, plm: PlmDrop[] | undefined): boolean {
-  if (plm?.length) {
-    const mine = plm.filter((d) => card.drops.includes(d.code) || card.drops.includes(d.description ?? ''))
-    if (mine.length) return mine.some((d) => inSeasonWeeks(d.intake_week, d.exit_week))
-  }
-  if (local?.length && card.drop_ids.length) {
-    const mine = local.filter((d) => card.drop_ids.includes(d.id))
-    if (mine.length) return mine.some((d) => inSeasonDates(d.release_from, d.release_to))
-  }
-  return true
-}
-
-function cardEnding(card: Card, local: Drop[] | undefined, plm: PlmDrop[] | undefined): boolean {
-  if (plm?.length) {
-    const mine = plm.filter((d) => card.drops.includes(d.code) || card.drops.includes(d.description ?? ''))
-    if (mine.length) return mine.some((d) => endingWeeks(d.intake_week, d.exit_week))
-  }
-  if (local?.length && card.drop_ids.length) {
-    const mine = local.filter((d) => card.drop_ids.includes(d.id))
-    if (mine.length) return mine.some((d) => endingDates(d.release_from, d.release_to))
-  }
-  return false
 }
 
 /** На остросезонном — срок «до ДД.ММ» (US-0888). */

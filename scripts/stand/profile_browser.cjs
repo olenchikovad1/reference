@@ -72,10 +72,10 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   await page.locator('table tbody tr').first().waitFor({ timeout: 30000 });
   console.log(JSON.stringify({ textsMs: Date.now() - textStarted }));
   await page.screenshot({ path: path.join(process.env.PROFILE_OUTPUT, 'texts.png') });
-  const listRequestsBeforeReturn = requested.filter(url => url.endsWith('/references')).length;
+  const listRequestsBeforeReturn = requested.filter(url => /\/references(?:\/page)?$/.test(url)).length;
   await page.getByRole('link', { name: 'Референсы', exact: true }).click();
   await page.locator('[data-card-id]').first().waitFor();
-  if (requested.filter(url => url.endsWith('/references')).length !== listRequestsBeforeReturn) {
+  if (requested.filter(url => /\/references(?:\/page)?$/.test(url)).length !== listRequestsBeforeReturn) {
     throw new Error('Returning to the showcase unnecessarily reloaded the list');
   }
   const lastImage = page.locator('[data-card-id] img').last();
@@ -88,10 +88,15 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   console.log(JSON.stringify({ scrollImageLoaded: true, cachedReturn: true }));
   if (process.env.PROFILE_CHECK_EDITOR === '1') {
     const card = page.locator('[data-card-id]').last();
-    const cardId = await card.getAttribute('data-card-id');
+    let cardId = await card.getAttribute('data-card-id');
+    if (process.env.PROFILE_CHECK_PAGE_BOUNDARY === '1') {
+      const first = await page.evaluate(() => fetch('/reference/api/references/page?limit=60&season=in').then(response => response.json()));
+      if (first.items.length !== 60 || !first.next_cursor) throw new Error('Boundary check needs more than one page');
+      cardId = String(first.items[59].id);
+    }
     // Окно имеет прямой адрес; семейство цветов проверяется отдельным сценарием.
     await page.evaluate(id => {
-      history.pushState({}, '', '/reference/references/' + id);
+      history.pushState({}, '', '/reference/references/' + id + location.search);
       dispatchEvent(new PopStateEvent('popstate'));
     }, cardId);
     const dialog = page.getByRole('dialog', { name: /рабочее окно/ }).first();
@@ -104,11 +109,67 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       throw error;
     }
     await dialog.evaluate(el => el.dataset.performanceMarker = 'kept');
+    if (process.env.PROFILE_CHECK_PAGE_BOUNDARY === '1') {
+      const expected = await page.evaluate(async id => {
+        const order = await fetch('/reference/api/references/order?season=in').then(response => response.json());
+        return order[order.indexOf(Number(id)) + 1];
+      }, cardId);
+      await page.keyboard.press('d');
+      await page.waitForURL(url => url.pathname.endsWith('/references/' + expected));
+      await dialog.getByText('№' + expected, { exact: false }).first().waitFor();
+      console.log(JSON.stringify({ pageBoundaryNavigation: true, from: cardId, to: expected }));
+    }
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'hidden' });
     const retained = await page.locator('[data-performance-marker="kept"]').count();
     if (retained !== 1) throw new Error('Closing the editor discarded its instance');
     console.log(JSON.stringify({ editorDirectLinkOpened: true, editorClosedByKeyboard: true, editorRetainedOnClose: true }));
+  }
+  if (process.env.PROFILE_CHECK_FILTERS === '1') {
+    const sample = await page.evaluate(async () => {
+      const data = await fetch('/reference/api/references/page?limit=60&season=in').then(response => response.json());
+      return data.items.find(card => card.drop_ids.length && card.status);
+    });
+    if (!sample) throw new Error('Filter demonstration needs a reference linked to a drop');
+    const filterUrl = origin + '/reference/references?drop=' + sample.drop_ids[0] + '&status=' + sample.status + '&season=in';
+    await page.goto(filterUrl, { waitUntil: 'domcontentloaded' });
+    await page.locator('[data-card-id]').first().waitFor();
+    const linkedId = await page.locator('[data-card-id]').first().getAttribute('data-card-id');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('[data-card-id="' + linkedId + '"]').waitFor();
+    if (await page.getByRole('combobox', { name: 'статус', exact: true }).inputValue() !== sample.status) throw new Error('Status lost on linked view');
+    if (await page.getByRole('combobox', { name: 'дроп', exact: true }).inputValue() !== String(sample.drop_ids[0])) throw new Error('Drop lost on linked view');
+    await page.evaluate(id => {
+      history.pushState({}, '', '/reference/references/' + id + location.search);
+      dispatchEvent(new PopStateEvent('popstate'));
+    }, linkedId);
+    const editor = page.getByRole('dialog', { name: /рабочее окно/ }).first();
+    await editor.locator('canvas').first().waitFor({ timeout: 15000 });
+    await page.keyboard.press('Escape');
+    await editor.waitFor({ state: 'hidden' });
+    if (new URL(page.url()).searchParams.get('drop') !== String(sample.drop_ids[0])) throw new Error('Drop lost after editor close');
+    await page.goto(origin + '/reference/references?category=__missing__&mine=1&drafts=1', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'сбросить отбор', exact: true }).click();
+    await page.locator('[data-card-id]').first().waitFor();
+    const cleared = new URL(page.url()).searchParams;
+    if (cleared.has('category') || cleared.get('mine') !== '0' || cleared.get('drafts') !== '0') throw new Error('Empty view reset lost parameters');
+    const library = await page.evaluate(() => fetch('/reference/api/assets/library').then(response => response.json()));
+    const item = library.find(item => item.drops.length);
+    if (!item) throw new Error('Print demonstration needs a print linked to a drop');
+    const link = item.drops[0], decision = link.via !== null ? 'approved' : (link.status || 'proposed');
+    await page.goto(origin + '/reference/prints?drop=' + link.id + '&decision=' + decision, { waitUntil: 'domcontentloaded' });
+    await page.locator('[data-tile="' + item.digest + '"]').waitFor();
+    if (await page.getByRole('combobox', { name: 'решение в дропе', exact: true }).inputValue() !== decision) throw new Error('Print decision lost');
+    const query = item.tags.find(tag => tag.strong)?.name;
+    if (query) {
+      await page.getByRole('textbox', { name: 'поиск по картинкам любым словом', exact: true }).fill(query);
+      await page.waitForURL(url => url.searchParams.get('q') === query);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      if (await page.getByRole('textbox', { name: 'поиск по картинкам любым словом', exact: true }).inputValue() !== query) throw new Error('Print search lost on reload');
+    }
+    console.log(JSON.stringify({ filterDrop: sample.drop_ids[0], filterStatus: sample.status, linkedViewReloaded: true,
+      editorFiltersRetained: true, emptyReset: true, printDecision: decision, printDrop: link.id, printQueryRetained: !!query }));
+    await page.screenshot({ path: path.join(process.env.PROFILE_OUTPUT, 'print-filter.png') });
   }
   const result = await Promise.all(requests.map(async item => ({ ...item, bytes: await item.bytes })));
   fs.writeFileSync(path.join(process.env.PROFILE_OUTPUT, 'network.json'), JSON.stringify(result, null, 2));

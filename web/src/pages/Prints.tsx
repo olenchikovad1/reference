@@ -16,7 +16,7 @@ import { TryOn } from '../candidates/TryOn'
 import { Viewer } from '../candidates/Viewer'
 import { Votes } from '../candidates/Votes'
 import type { KeyRow } from '../shared/keys'
-import { DECISION_NAMES, passes, useDropFilter, type DropDecision } from '../shared/filters'
+import { DECISION_NAMES, passes, useDropFilter, useSearchText, type DropDecision } from '../shared/filters'
 import { CODE } from '../app/shell'
 import { useCan } from '../shared/api/platform'
 import {
@@ -109,7 +109,7 @@ export function Prints() {
   useEffect(() => {
     if (retag.data?.finished) void queries.invalidateQueries({ queryKey: ['library'] })
   }, [retag.data?.finished, queries])
-  const [query, setQuery] = useState('')
+  const { query, setQuery } = useSearchText()
   const found = useWeights(query)
   const [busy, setBusy] = useState<string | null>(null)
   const drop = useDropFilter()
