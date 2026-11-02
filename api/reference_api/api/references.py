@@ -2,12 +2,16 @@
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, UploadFile
 from platform_client import Action, requires, requires_function
+from platform_client.rights import RequiredRight
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.db import session
 from reference_api.schemas.library import ReasonIn
 from reference_api.schemas.references import (
     CardOut,
+    PageCardOut,
+    ReferencePageOut,
+    ReferencePageQuery,
     DraftIn,
     DraftOut,
     ExecutorIn,
@@ -186,6 +190,45 @@ async def search(q: str, db: AsyncSession = Depends(session)) -> list[FoundOut]:
     поиск сломан.
     """
     return [FoundOut(id=i, name=n) for i, n in await service.search(db, q)]
+
+
+def _page_grants(request: Request) -> dict[str, bool]:
+    subject = getattr(request.state, "subject", None)
+    return {
+        "can_review": bool(subject and subject.has(RequiredRight("review", "view", "action"))),
+        "can_final": bool(subject and subject.has(RequiredRight("review", "approve-final", "function"))),
+    }
+
+
+@router.get("/page", response_model=ReferencePageOut, dependencies=[requires("references", Action.VIEW)])
+async def reference_page(request: Request, query: ReferencePageQuery = Depends(),
+                         db: AsyncSession = Depends(session)) -> ReferencePageOut:
+    """Не более 120 карточек, по умолчанию 60. Отборы и сортировка глобальны.
+
+    next_cursor передаётся без изменения с теми же параметрами. Пустой результат
+    успешен; неверный курсор возвращает 422/invalid_cursor. Новые записи перед
+    курсором появятся после обновления списка. Полный документ читается отдельно.
+    """
+    filters = service.PageFilters(**query.model_dump(exclude={"cursor", "limit"}))
+    try:
+        result = await service.page(db, filters, _author(request), query.limit, query.cursor, **_page_grants(request))
+    except service.InvalidCursor as refusal:
+        raise HTTPException(422, {"code": "invalid_cursor", "message": str(refusal)}) from None
+    cards = await _cards(db, result.rows, _author(request))
+    return ReferencePageOut(items=[PageCardOut(**card.model_dump(), reasons=list(result.reasons.get(card.id, ())))
+                                   for card in cards], total=result.total, next_cursor=result.next_cursor)
+
+
+@router.get("/order", response_model=list[int], dependencies=[requires("references", Action.VIEW)])
+async def reference_order(request: Request, query: ReferencePageQuery = Depends(),
+                          db: AsyncSession = Depends(session)) -> list[int]:
+    """Только номера в глобальном порядке: навигация и перестановка по действию.
+
+    Применяются те же отборы, что у /page; limit и cursor здесь не используются.
+    Документы и метаданные всех карточек для этого действия не загружаются.
+    """
+    filters = service.PageFilters(**query.model_dump(exclude={"cursor", "limit"}))
+    return await service.ordered_ids(db, filters, _author(request), **_page_grants(request))
 
 
 @router.get("", response_model=list[CardOut])

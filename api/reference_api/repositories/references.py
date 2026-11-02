@@ -5,11 +5,15 @@
 """
 
 from datetime import datetime
+from dataclasses import dataclass
+from typing import Literal
 
-from sqlalchemy import delete, func, select, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import Float, Integer, and_, case, cast, delete, exists, false, func, literal, or_, select, update
+from sqlalchemy.dialects.postgresql import ARRAY, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Load, defer
+from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.selectable import Select
 
 from reference_api.models.references import (
     ReferenceTransfer,
@@ -22,11 +26,146 @@ from reference_api.models.references import (
     ReferenceText,
     ReferenceVersion,
 )
+from reference_api.models.drops import ColourModel, DropItem, GarmentModel
 
 
 #: Живой — не в корзине. Удалённое не узнаётся, не ищется и не стоит на
 #: витрине: иначе «удалил» значило бы «спрятал с одного экрана» (решение 0014).
 ALIVE = Reference.deleted_at.is_(None)
+
+
+@dataclass(frozen=True)
+class PageFilters:
+    q: str = ""
+    drop: int | None = None
+    audience: str | None = None
+    category: str | None = None
+    status: str | None = None
+    executor: str | None = None
+    my_turn: bool = False
+    season: Literal["in", "ending", "out"] | None = None
+    only_mine: bool = False
+    only_drafts: bool = False
+    sort: Literal["date", "own"] = "date"
+
+
+@dataclass(frozen=True)
+class PageContext:
+    viewer: str | None
+    category_ids: tuple[int, ...] | None = None
+    in_drop_ids: tuple[int, ...] = ()
+    ending_drop_ids: tuple[int, ...] = ()
+    turn_statuses: tuple[str, ...] = ()
+    can_review: bool = False
+    search_scores: tuple[tuple[int, float], ...] = ()
+
+
+@dataclass(frozen=True)
+class PageAnchor:
+    saved_at: datetime
+    version_id: int
+    bucket: int = 0
+    position: int = 0
+    score: float = 0
+
+
+@dataclass
+class ReferencePage:
+    rows: list[tuple[Reference, ReferenceVersion]]
+    total: int
+    next_anchor: PageAnchor | None
+
+
+def _page_query(filters: PageFilters, context: PageContext) -> tuple[Select, list[tuple[ColumnElement, bool]]]:
+    newest = (select(ReferenceVersion.reference_id, func.max(ReferenceVersion.number).label("number"))
+              .group_by(ReferenceVersion.reference_id).subquery())
+    pos = ReferencePosition
+    bucket = case((pos.position.is_(None), 0), else_=1)
+    position = func.coalesce(pos.position, 0)
+    score: ColumnElement = literal(0.0)
+    query = (select(Reference, ReferenceVersion)
+             .join(newest, newest.c.reference_id == Reference.id)
+             .join(ReferenceVersion, and_(ReferenceVersion.reference_id == Reference.id,
+                                          ReferenceVersion.number == newest.c.number))
+             .outerjoin(pos, and_(pos.reference_id == Reference.id, pos.author_id == (context.viewer or "")))
+             .where(ALIVE, Reference.status != "rejected", Reference.plm_release_id.is_(None)))
+    if filters.q:
+        # Два массива — два параметра, даже когда поиск нашёл десятки тысяч:
+        # гигантский CASE/IN упёрся бы в лимит параметров PostgreSQL.
+        found = func.unnest(cast([i for i, _ in context.search_scores], ARRAY(Integer)),
+                            cast([s for _, s in context.search_scores], ARRAY(Float)))\
+            .table_valued("reference_id", "score").render_derived()
+        query = query.join(found, found.c.reference_id == Reference.id)
+        score = found.c.score
+    if filters.drop is not None:
+        query = query.where(exists(select(DropItem.drop_id).where(
+            DropItem.colour_model_id == Reference.colour_model_id, DropItem.drop_id == filters.drop)))
+    if context.category_ids is not None:
+        query = query.where(exists(select(ColourModel.id).join(GarmentModel).where(
+            ColourModel.id == Reference.colour_model_id, GarmentModel.category_id.in_(context.category_ids))))
+    if filters.status:
+        query = query.where(Reference.status == filters.status)
+    if filters.executor:
+        query = query.where(Reference.executor_id == filters.executor)
+    if filters.only_mine:
+        query = query.where(Reference.executor_id == context.viewer if context.viewer else false())
+    if filters.only_drafts:
+        query = query.where(exists(select(ReferenceDraft.id).where(
+            ReferenceDraft.reference_id == Reference.id, ReferenceDraft.author_id == context.viewer))
+            if context.viewer else false())
+    if filters.my_turn:
+        query = query.where(or_(Reference.status.in_(context.turn_statuses),
+                                and_(Reference.status == "rework", Reference.executor_id == context.viewer))
+                            if context.can_review and context.viewer else false())
+    if filters.season:
+        has_drop = exists(select(DropItem.drop_id).where(DropItem.colour_model_id == Reference.colour_model_id))
+        within = exists(select(DropItem.drop_id).where(
+            DropItem.colour_model_id == Reference.colour_model_id, DropItem.drop_id.in_(context.in_drop_ids)))
+        ending = exists(select(DropItem.drop_id).where(
+            DropItem.colour_model_id == Reference.colour_model_id, DropItem.drop_id.in_(context.ending_drop_ids)))
+        # У карточек без известного окна сезон неизвестен, а не просрочен.
+        in_season = or_(within, ~has_drop)
+        query = query.where(~in_season if filters.season == "out" else ending if filters.season == "ending" else in_season)
+    own = filters.sort == "own" and not filters.q
+    keys: list[tuple[ColumnElement, bool]] = ([(bucket, False), (position, False)] if own else [])
+    if filters.q:
+        keys.append((score, True))
+    keys.extend([(ReferenceVersion.created_at.expression, True), (ReferenceVersion.id.expression, True)])
+    return query.add_columns(bucket, position, score), keys
+
+
+async def page(db: AsyncSession, filters: PageFilters, context: PageContext,
+               limit: int, after: PageAnchor | None = None) -> ReferencePage:
+    query, keys = _page_query(filters, context)
+    total = int(await db.scalar(select(func.count()).select_from(
+        query.with_only_columns(Reference.id).subquery())) or 0)
+    if after:
+        values: list[object] = ([after.bucket, after.position] if filters.sort == "own" and not filters.q else [])
+        if filters.q:
+            values.append(after.score)
+        values.extend([after.saved_at, after.version_id])
+        terms: list[ColumnElement] = []
+        same: list[ColumnElement] = []
+        for (column, descending), value in zip(keys, values, strict=True):
+            terms.append(and_(*same, column < value if descending else column > value))
+            same.append(column == value)
+        query = query.where(or_(*terms))
+    query = query.options(Load(ReferenceVersion).raiseload("*"), defer(ReferenceVersion.work, raiseload=True))
+    result = list((await db.execute(query.order_by(
+        *(column.desc() if desc else column.asc() for column, desc in keys)).limit(limit + 1))).all())
+    selected = result[:limit]
+    anchor = None
+    if len(result) > limit and selected:
+        _, version, bucket, position, score = selected[-1]
+        anchor = PageAnchor(version.created_at, version.id, int(bucket), int(position), float(score))
+    return ReferencePage([(card, version) for card, version, _, _, _ in selected], total, anchor)
+
+
+async def ordered_ids(db: AsyncSession, filters: PageFilters, context: PageContext) -> list[int]:
+    query, keys = _page_query(filters, context)
+    result = await db.scalars(query.with_only_columns(Reference.id).order_by(
+        *(column.desc() if desc else column.asc() for column, desc in keys)))
+    return list(result)
 
 
 async def create(

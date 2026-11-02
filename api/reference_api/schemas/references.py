@@ -1,6 +1,7 @@
 """Собранный принт: что принимается и что отдаётся."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -385,4 +386,31 @@ class ProposeIn(BaseModel):
 class AgendaProposedOut(BaseModel):
     reference_id: int
     reasons: list[AgendaReasonOut]
+
+
+class ReferencePageQuery(BaseModel):
+    """Отбор применяется ко всему каталогу, затем выбирается ограниченная порция."""
+    q: str = Field(default="", max_length=200)
+    drop: int | None = Field(default=None, gt=0)
+    audience: Literal["boys", "girls", "all"] | None = None
+    category: str | None = Field(default=None, max_length=120)
+    status: Literal["draft", "review", "rework", "approved", "final", "rejected"] | None = None
+    executor: str | None = Field(default=None, max_length=64)
+    my_turn: bool = False
+    season: Literal["in", "ending", "out"] | None = None
+    only_mine: bool = False
+    only_drafts: bool = False
+    sort: Literal["date", "own"] = "date"
+    limit: int = Field(default=60, ge=1, le=120)
+    cursor: str | None = Field(default=None, max_length=2048)
+
+
+class PageCardOut(CardOut):
+    reasons: list[str] = []
+
+
+class ReferencePageOut(BaseModel):
+    items: list[PageCardOut]
+    total: int
+    next_cursor: str | None
 

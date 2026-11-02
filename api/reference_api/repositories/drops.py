@@ -5,15 +5,18 @@
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import raiseload
 
 from reference_api.models.drops import ColourModel, Drop, DropItem, GarmentModel, HierarchyNode
 from reference_api.models.library import LibraryDrop
 from reference_api.models.references import Reference
 
 
-async def drops(db: AsyncSession, active_only: bool = False) -> list[Drop]:
+async def drops(db: AsyncSession, active_only: bool = False, *, summary: bool = False) -> list[Drop]:
     # Погашенные в конце: для работы их не выбирают, а видеть — видят.
     q = select(Drop).order_by(Drop.retired, Drop.release_from, Drop.name)
+    if summary:
+        q = q.options(raiseload("*"))
     if active_only:
         q = q.where(Drop.retired.is_(False))
     return list((await db.execute(q)).scalars())
@@ -47,10 +50,10 @@ async def references_by_colour_model(db: AsyncSession, ids: list[int]) -> dict[i
     return {cm: n for cm, n in rows if cm is not None}
 
 
-async def nodes(db: AsyncSession) -> dict[int, HierarchyNode]:
+async def nodes(db: AsyncSession, *, summary: bool = False) -> dict[int, HierarchyNode]:
     """Вся иерархия разом: узлов десятки, и подниматься от категории к полу
     в памяти дешевле, чем ленивыми запросами по одному."""
-    rows = await db.execute(select(HierarchyNode))
+    rows = await db.execute(select(HierarchyNode).options(*( [raiseload("*")] if summary else [] )))
     return {n.id: n for n in rows.scalars()}
 
 
