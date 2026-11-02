@@ -100,10 +100,10 @@ function ReferenceCardView({
     >
       <div className="relative min-h-0 flex-1">
         {back && (
-          <img src={assetUrl(back, 'thumb')} alt="спина" className="absolute right-0 top-0 h-[64%] w-[64%] object-contain" />
+          <CardImage key={back} digest={back} side="спина" className="absolute right-0 top-0 h-[64%] w-[64%]" />
         )}
         {front && (
-          <img src={assetUrl(front, 'thumb')} alt="перед" className="absolute bottom-0 left-0 h-[64%] w-[64%] object-contain" />
+          <CardImage key={front} digest={front} side="перед" className="absolute bottom-0 left-0 h-[64%] w-[64%]" />
         )}
         {!front && !back && (
           <span className="absolute inset-0 flex items-center justify-center p-2 text-center text-xs text-muted-foreground">
@@ -229,6 +229,29 @@ function ReferenceCardView({
             </button>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+function CardImage({ digest, side, className }: { digest: string; side: string; className: string }) {
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading')
+  return (
+    <div className={className}>
+      <img
+        loading="lazy"
+        decoding="async"
+        src={assetUrl(digest, 'thumb')}
+        alt={side}
+        onLoad={() => setStatus('loaded')}
+        onError={() => setStatus('error')}
+        className="h-full w-full object-contain"
+      />
+      {status === 'loading' && <span aria-label={`Загрузка: ${side}`} className="absolute inset-0 animate-pulse rounded bg-muted" />}
+      {status === 'error' && (
+        <span className="absolute inset-0 flex items-center justify-center bg-background p-2 text-center text-xs text-muted-foreground">
+          Снимок не загрузился. Обновите страницу.
+        </span>
       )}
     </div>
   )
