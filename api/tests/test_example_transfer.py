@@ -76,3 +76,15 @@ def test_unknown_table_cannot_be_imported():
     stream.seek(0)
     with tarfile.open(fileobj=stream) as archive, pytest.raises(ValueError, match="набор таблиц"):
         transfer.read_manifest(archive)
+
+
+def test_voice_remark_asset_is_supported():
+    bundle = manifest()
+    key = "assets/" + "a" * 64 + "/audio"
+    bundle["objects"] = [{"key": key, "member": "objects/" + key}]
+    stream = io.BytesIO()
+    with tarfile.open(fileobj=stream, mode="w") as archive:
+        transfer.add_bytes(archive, "manifest.json", json.dumps(bundle).encode())
+    stream.seek(0)
+    with tarfile.open(fileobj=stream) as archive:
+        assert transfer.read_manifest(archive)["objects"][0]["key"] == key

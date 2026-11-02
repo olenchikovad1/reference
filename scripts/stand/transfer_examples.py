@@ -139,8 +139,8 @@ def read_manifest(archive: tarfile.TarFile) -> dict[str, Any]:
         raise ValueError("Неизвестные зависимости")
     for entry in manifest["objects"]:
         parts = entry["key"].split("/")
-        if len(parts) != 3 or parts[0] != "assets" or len(parts[1]) != 64 or parts[2] not in ("original", "thumb", "preview"):
-            raise ValueError("Недопустимое имя объекта")
+        if len(parts) != 3 or parts[0] != "assets" or len(parts[1]) != 64 or parts[2] not in ("original", "thumb", "preview", "audio"):
+            raise ValueError(f"Недопустимое имя объекта: {entry['key']}")
         if entry["member"] != f"objects/{entry['key']}":
             raise ValueError("Несовпадающее имя файла")
     return manifest
