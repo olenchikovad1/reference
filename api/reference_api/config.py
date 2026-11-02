@@ -7,14 +7,14 @@
 
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Всё, что сервис берёт снаружи. Обязательное отделено от необязательного."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
 
     # Обязательное: без этого сервис смысла не имеет и подниматься не должен.
     database_url: str
@@ -126,7 +126,7 @@ class Settings(BaseSettings):
     people_refresh_seconds: float = 300.0
     #: Удостоверение приложения `pfc_…` — выдаётся платформой один раз при
     #: регистрации. Нет его — описание не публикуется, сервис работает.
-    platform_credential: str | None = None
+    platform_credential: str | None = Field(default=None, repr=False)
     #: Манифест для платформы: файл в корне репозитория, в контейнер подключён
     #: томом — одно описание на всех, второго в коде нет.
     manifest_path: str = "/app/manifest.reference.yaml"
@@ -134,7 +134,7 @@ class Settings(BaseSettings):
     #: машинного входа (US-0883). Пусто — каталог PLM не читается, стенд
     #: живёт на локальных фикстурах.
     plm_base_url: str | None = None
-    plm_machine_key: str | None = None
+    plm_machine_key: str | None = Field(default=None, repr=False)
     #: Адрес фронта plm для ссылки «открыть в PLM» (US-0893). Пусто — только
     #: относительный путь из карточки.
     plm_web_url: str | None = None
@@ -159,6 +159,16 @@ class Settings(BaseSettings):
             raise ValueError(
                 "стенд без платформы (WITHOUT_PLATFORM=true) при боевом ядре "
                 f"{self.platform_core_url}: в бою вход только через платформу")
+        return self
+
+    @model_validator(mode="after")
+    def _no_personal_credentials_on_production(self) -> "Settings":
+        """Ключ человека не становится удостоверением сервиса при выкатке."""
+        if (self.platform_core_url or "").startswith("https://"):
+            personal = [name for name in ("platform_credential", "plm_machine_key")
+                        if (getattr(self, name) or "").strip().startswith("pfb_")]
+            if personal:
+                raise ValueError("личный MCP-ключ запрещён в служебных настройках production: " + ", ".join(personal))
         return self
 
 

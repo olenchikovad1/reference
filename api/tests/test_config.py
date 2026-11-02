@@ -33,3 +33,26 @@ def test_production_without_stand_mode_starts() -> None:
     s = Settings(**BASE, without_platform=False,
                  platform_core_url="https://platform.toribrands.ru/platform/api/core", _env_file=None)
     assert not s.without_platform
+
+
+@pytest.mark.parametrize("field", ["platform_credential", "plm_machine_key"])
+def test_personal_bot_key_is_refused_in_production_service_settings(field: str) -> None:
+    personal = "pfb_test_personal_token_never_deploy_this"
+    with pytest.raises(ValidationError, match="личный MCP") as refused:
+        Settings(**BASE, platform_core_url="https://platform.toribrands.ru/platform/api/core",
+                 **{field: personal}, _env_file=None)
+    assert personal not in str(refused.value)
+
+
+def test_personal_key_can_remain_in_local_environment() -> None:
+    settings = Settings(**BASE, platform_core_url="http://localhost:8100/platform/api/core",
+                        platform_credential="pfb_local_test_only", _env_file=None)
+    assert settings.platform_credential == "pfb_local_test_only"
+
+
+def test_service_credentials_are_not_in_settings_repr() -> None:
+    credential = "pfc_test_application_credential_only"
+    machine = "test_reference_to_plm_service_key"
+    settings = Settings(**BASE, platform_credential=credential, plm_machine_key=machine, _env_file=None)
+    assert credential not in repr(settings)
+    assert machine not in repr(settings)
