@@ -46,10 +46,14 @@ async def tool_names(client, *grants: str) -> set[str]:
 
 async def test_the_list_holds_only_what_the_person_may(client) -> None:
     everything = await tool_names(client, *EVERYTHING)
-    assert {"references", "reference", "drops", "drop_assortment", "drop_board"} <= everything
+    assert {"references", "reference", "drops", "drop_assortment", "drop_board", "prints"} <= everything
     only_references = await tool_names(client, "references:view")
     assert "references" in only_references
     assert "drops" not in only_references and "drop_board" not in only_references, "без права на дропы их нет"
+    assert "prints" not in only_references
+    refused = await rpc(client, "tools/call", {"name": "prints", "arguments": {}}, "references:view")
+    missing = await rpc(client, "tools/call", {"name": "no_such_tool", "arguments": {}}, "references:view")
+    assert refused["error"]["code"] == missing["error"]["code"]
 
 
 async def test_a_tool_without_the_right_answers_like_a_missing_one(client) -> None:
@@ -60,7 +64,8 @@ async def test_a_tool_without_the_right_answers_like_a_missing_one(client) -> No
 
 async def test_references_are_what_the_showcase_shows(client) -> None:
     saved = await client.post("/reference/api/references", headers=bearer(*EVERYTHING), json={
-        "name": "мишка на красном", "sheet_digest": "a" * 64, "image_digests": [], "texts": []})
+        "name": "мишка на красном", "sheet_digest": "a" * 64, "image_digests": [], "texts": [],
+        "work": {"checks": {"source": "browser-geometry", "items": [{"rule": "zipper", "weight": "blocking"}]}}})
     assert saved.status_code == 200, saved.text
     ref = saved.json()["id"]
     found = await rpc(client, "tools/call", {"name": "references", "arguments": {}}, *EVERYTHING)
@@ -70,6 +75,9 @@ async def test_references_are_what_the_showcase_shows(client) -> None:
     opened = await rpc(client, "tools/call", {"name": "reference", "arguments": {"id": ref}}, *EVERYTHING)
     card = json.loads(opened["result"]["content"][0]["text"])
     assert (card["id"], card["status"], card["versions"]) == (ref, "draft", 1)
+    assert [v["number"] for v in card["version_history"]] == [1]
+    assert card["checks"]["source"] == "browser-geometry"
+    assert card["checks"]["items"][0]["rule"] == "zipper"
 
     nobody = await rpc(client, "tools/call", {"name": "reference", "arguments": {"id": ref + 999}}, *EVERYTHING)
     assert nobody["result"]["isError"] and "нет" in nobody["result"]["content"][0]["text"]

@@ -397,12 +397,11 @@ export function useWindowState() {
   // Проверки — по ВСЕМ точным сторонам, а не по открытой: пересечённая молния
   // на переде не исчезает оттого, что смотрят на спину (правка владельца 25.09).
   const checked = useDeferredValue(sized)
-  const findings: SideFinding[] = useMemo(
-    () =>
-      (product?.states ?? [])
+  function inspectComposition(work: Composition): SideFinding[] {
+    return (product?.states ?? [])
         .filter((s) => s.kind !== 'illustrative')
         .flatMap((s) => {
-          const side = onSide(checked, s.code)
+          const side = onSide(work, s.code)
           if (side.elements.length === 0) return []
           const sideField = fieldFor(product?.print_fields ?? null, size ?? 0, s.code, s.zones?.print, calibration)
           const sideFieldCm = fieldSize(product?.print_fields ?? null, size, s.code)
@@ -431,7 +430,10 @@ export function useWindowState() {
                 : undefined,
             ),
           ].map((f) => ({ ...f, side: s.code }))
-        }),
+        })
+  }
+  const findings: SideFinding[] = useMemo(
+    () => inspectComposition(checked),
     [checked, product, size, calibration, torso, hoodDownScale, rules],
   )
   const catalogue = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue, staleTime: 60_000 })
@@ -616,6 +618,9 @@ export function useWindowState() {
     rules,
     checked,
     findings,
+    savedChecks: () => ({ source: 'browser-geometry', available: Boolean(product),
+      product_code: product?.code ?? null, size, provisional: calibration.provisional,
+      items: product ? inspectComposition(sized) : null }),
   }
 }
 export type WindowState = ReturnType<typeof useWindowState>

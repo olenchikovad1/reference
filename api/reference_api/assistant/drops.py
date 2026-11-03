@@ -74,7 +74,7 @@ async def drop_board(call: ToolCall) -> dict[str, Any]:
     drop_id = int(call.arguments.get("drop_id", 0))
     items, via = await library.board(db, drop_id)
     return {
-        "proposed": [{"kind": i.kind, "title": i.title, "status": i.status, "reason": i.reason}
+        "proposed": [{"kind": i.kind, "key": i.key, "title": i.title, "status": i.status, "reason": i.reason}
                      for i in items],
-        "via_references": [{"kind": v.kind, "title": v.title, "references": v.references} for v in via],
+        "via_references": [{"kind": v.kind, "key": v.key, "title": v.title, "references": v.references} for v in via],
     }
