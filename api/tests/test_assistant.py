@@ -155,3 +155,43 @@ async def test_remark_and_agenda(client) -> None:
     assert [r["text"] for r in remarks] == ["поднять на 2 см"]
     proposed = await bot_call(client, "propose_for_discussion", {"id": ref, "reason": "сюжет спорный"}, *REVIEWER)
     assert not proposed["result"]["isError"], proposed
+
+
+async def test_move_updates_drop_and_refusal_preserves_card_and_versions(client) -> None:
+    from reference_api.db import session_factory
+    from reference_api.models.drops import ColourModel, DropItem
+    from reference_api.models.references import Reference, ReferenceVersion
+    from tests.test_reference_pages import seed_places
+
+    async with session_factory() as db:
+        assert db.bind.url.database.endswith("_test")
+        cards = [Reference(name=f"MCP move {i}") for i in range(3)]
+        db.add_all(cards)
+        await db.flush()
+        drops = await seed_places(db, cards)
+        source = await db.get(ColourModel, cards[0].colour_model_id)
+        target = ColourModel(model_id=source.model_id, colour_code="BLACK")
+        db.add(target)
+        await db.flush()
+        db.add(DropItem(drop_id=drops[1].id, colour_model_id=target.id))
+        cards[0].drop_id = drops[0].id
+        work = {"colourCode": "WHITE", "composition": {"layers": []}}
+        db.add(ReferenceVersion(reference_id=cards[0].id, number=1,
+                                sheet_digest="a" * 64, image_digests=[], work=work))
+        ref, drop, absent, target_id = cards[0].id, drops[1].id, drops[2].id, target.id
+        await db.commit()
+
+    moved = await bot_call(client, "move_to_drop", {"id": ref, "drop_id": drop}, *EVERYTHING)
+    assert not moved["result"]["isError"], moved
+    async with session_factory() as db:
+        card = await db.get(Reference, ref)
+        assert (card.drop_id, card.colour_model_id) == (drop, target_id)
+
+    refused = await bot_call(client, "move_to_drop", {"id": ref, "drop_id": absent}, *EVERYTHING)
+    assert refused["result"]["isError"], refused
+    from sqlalchemy import select
+    async with session_factory() as db:
+        card = await db.get(Reference, ref)
+        assert (card.drop_id, card.colour_model_id) == (drop, target_id)
+        versions = (await db.scalars(select(ReferenceVersion).where(ReferenceVersion.reference_id == ref))).all()
+        assert len(versions) == 1 and versions[0].work == work

@@ -1,8 +1,8 @@
 """Локальное stdio-подключение к HTTP MCP Reference без копии личного ключа.
 
 Клиент запускает этот файл с --access-file; файл авторизации перечитывается
-на каждом вызове. Только чтение: изменяющие инструменты не объявляются и
-не вызываются через этот мост. Зависимостей вне стандартной библиотеки нет.
+на каждом вызове. По умолчанию только чтение; --workflow подключает действия
+согласования с серверной проверкой прав. Только стандартная библиотека.
 """
 import argparse
 import json
@@ -14,6 +14,8 @@ import urllib.parse
 import urllib.request
 
 READ_TOOLS = frozenset({"references", "reference", "drops", "drop_assortment", "drop_board", "prints"})
+WORKFLOW_TOOLS = frozenset({"designer_step", "review_decision", "approve_final", "remark",
+                            "propose_for_discussion", "move_to_drop"})
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -22,7 +24,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def answer(message: dict[str, Any], access_file: Path, url: str) -> dict[str, Any] | None:
+def answer(message: dict[str, Any], access_file: Path, url: str, workflow: bool = False) -> dict[str, Any] | None:
     def failure(code: int, text: str) -> dict[str, Any] | None:
         return {"jsonrpc": "2.0", "id": message["id"], "error": {"code": code, "message": text}} if "id" in message else None
 
@@ -30,7 +32,8 @@ def answer(message: dict[str, Any], access_file: Path, url: str) -> dict[str, An
     if method not in {"initialize", "notifications/initialized", "ping", "tools/list", "tools/call"}:
         return failure(-32601, "Метод недоступен")
     params = message.get("params") or {}
-    if method == "tools/call" and (not isinstance(params, dict) or params.get("name") not in READ_TOOLS):
+    allowed_tools = READ_TOOLS | WORKFLOW_TOOLS if workflow else READ_TOOLS
+    if method == "tools/call" and (not isinstance(params, dict) or params.get("name") not in allowed_tools):
         return failure(-32601, "Инструмент недоступен")
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1"}):
@@ -51,7 +54,7 @@ def answer(message: dict[str, Any], access_file: Path, url: str) -> dict[str, An
     if not isinstance(result, dict):
         return failure(-32603, "Некорректный ответ Reference")
     if method == "tools/list" and isinstance(result.get("result"), dict):
-        result["result"]["tools"] = [tool for tool in result["result"].get("tools", []) if tool.get("name") in READ_TOOLS]
+        result["result"]["tools"] = [tool for tool in result["result"].get("tools", []) if tool.get("name") in allowed_tools]
     return result
 
 
@@ -59,6 +62,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--access-file", required=True, type=Path)
     parser.add_argument("--url", default="https://platform.toribrands.ru/reference/api/mcp")
+    parser.add_argument("--workflow", action="store_true", help="подключить действия согласования правами человека")
     args = parser.parse_args()
     sys.stdin.reconfigure(encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")
@@ -67,7 +71,7 @@ def main() -> None:
             message = json.loads(line)
             if not isinstance(message, dict):
                 raise ValueError("packet")
-            result = answer(message, args.access_file, args.url)
+            result = answer(message, args.access_file, args.url, args.workflow)
         except (ValueError, TypeError):
             result = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Некорректный JSON-RPC"}}
         if result is not None:
