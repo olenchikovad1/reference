@@ -195,7 +195,11 @@ async def list_colorways(
     if drop:
         params["drop"] = drop
     data = await _get(base_url, key, "/api/machine/colorways", params=params or None, transport=transport)
-    return [_colorway(row) for row in (data.get("items") or data)]
+    # Пустой items — успешный пустой отбор, а не повод перебирать ключи ответа.
+    items = data.get("items", []) if isinstance(data, dict) else data
+    if not isinstance(items, list) or any(not isinstance(row, dict) for row in items):
+        raise PlmRefused("plm вернул каталог не списком цветомоделей")
+    return [_colorway(row) for row in items]
 
 
 async def list_colors(

@@ -100,3 +100,9 @@ async def test_many_colors_do_not_reload_the_same_garment(monkeypatch) -> None:
     result = await plm.enrich_colorways(None, items)
     assert all(row["can_work"] for row in result)
     assert loads == ["B-HDY-14"], "79 цветов одной модели не должны 79 раз разбирать YAML"
+
+
+async def test_empty_filtered_catalogue_is_not_parsed_as_dictionary_keys() -> None:
+    rows = await plm.list_colorways('http://source', 'test', drop='empty',
+                                    transport=_transport(200, {'items': [], 'total': 0}))
+    assert rows == []
