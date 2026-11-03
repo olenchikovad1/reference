@@ -33,6 +33,8 @@ export function GarmentPanel({ w }: { w: WorkWindowState }) {
   } = w
   const [techShow, setTechShow] = useState(false)
   const plmColorway = w.plm?.colorwayId
+  const garmentColours = w.plm ? w.colourChoices.map(c => ({ code: c.code, name: c.name, group: c.name, rgb: c.rgb, colorwayId: c.plmColorwayId }))
+    : colours.map(c => ({ ...c, colorwayId: undefined }))
   // Изделие загружено: окно раньше уже показало «загружаю» или ошибку.
   if (!product || !state) return null
   return (
@@ -46,12 +48,12 @@ export function GarmentPanel({ w }: { w: WorkWindowState }) {
       {plmColorway ? <PlmPassport colorwayId={plmColorway} /> : null}
       <Section title="Цвет">
         <div style={S.swatches}>
-          {colours.map((c) => (
+          {garmentColours.map((c) => (
             <button
-              key={c.code}
+              key={c.colorwayId ?? c.code}
               title={`${c.name} · ${c.code}`}
               aria-label={`цвет изделия ${c.group}`}
-              onClick={() => setColourCode(c.code)}
+              onClick={() => { setColourCode(c.code); if (w.plm && c.colorwayId) w.setPlm({ ...w.plm, colorwayId: c.colorwayId }) }}
               style={{
                 ...S.swatch,
                 background: toCss(c),

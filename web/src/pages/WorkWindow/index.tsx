@@ -444,7 +444,8 @@ export function WorkWindow() {
               images={images.current}
               imagesVersion={imagesVersion}
               choices={colourChoices}
-              fromDrop={refDropIds.length ? (catalogueDropName(refDropIds[0]) ?? null) : null}
+              sourceNotice={w.colourChoicesNotice}
+              fromDrop={w.plm?.dropCode ?? (refDropIds.length ? (catalogueDropName(refDropIds[0]) ?? null) : null)}
               saving={saving}
               onSave={(picked, canvases) => void saveColours(picked, canvases)}
               onClose={() => setCompareOpen(false)}

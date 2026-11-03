@@ -68,6 +68,35 @@ export interface FamilyColour {
   in_family: boolean
 }
 
+export interface PlmFamilyColour {
+  colorway_id: string
+  article: string
+  colour_code: string
+  pantone_code: string | null
+  name: string
+  rgb: [number, number, number] | null
+  in_family: boolean
+  primary: boolean
+}
+
+export interface PlmFamily {
+  style_id: string
+  style_code: string
+  drop_code: string
+  colours: PlmFamilyColour[]
+}
+
+export async function fetchPlmFamily(referenceId: number): Promise<PlmFamily | null> {
+  const r = await fetch(`${BASE}references/${referenceId}/plm-family`)
+  if (!r.ok) throw await refusal(r, 'Состав семьи PLM не пришёл')
+  return r.json()
+}
+
+export async function setPlmFamilyColour(referenceId: number, colorwayId: string, included: boolean): Promise<void> {
+  const r = await fetch(`${BASE}references/${referenceId}/plm-family/${encodeURIComponent(colorwayId)}/${included ? 'include' : 'exclude'}`, { method: 'POST' })
+  if (!r.ok) throw await refusal(r, 'Цвет семьи не изменён')
+}
+
 export async function fetchFamily(referenceId: number): Promise<FamilyColour[]> {
   const r = await fetch(`${BASE}references/${referenceId}/family`)
   if (!r.ok) throw new Error(`семья не пришла: ${r.status}`)

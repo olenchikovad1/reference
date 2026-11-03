@@ -7,9 +7,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 
 import { fetchPalette, toCss } from '../shared/api/colours'
-import { fetchFamily, openReference, type FamilyColour } from '../shared/api/references'
+import { fetchFamily, fetchPlmFamily, setPlmFamilyColour, openReference, type FamilyColour } from '../shared/api/references'
 import { savedPlmColorway } from '../shared/api/plm'
 import { PlmPassport } from './PlmPassport'
+import { useCan } from '../shared/api/platform'
 
 export function FamilyPopup({
   referenceId,
@@ -20,7 +21,7 @@ export function FamilyPopup({
 }: {
   referenceId: number
   name: string
-  onPick: (colourCode: string) => void
+  onPick: (colourCode: string, colorwayId?: string) => void
   onClose: () => void
   onOpen: () => void
 }) {
@@ -29,6 +30,10 @@ export function FamilyPopup({
     queryFn: () => fetchFamily(referenceId),
   })
   const palette = useQuery({ queryKey: ['palette'], queryFn: fetchPalette })
+  const external = useQuery({ queryKey: ['plm-family', referenceId], queryFn: () => fetchPlmFamily(referenceId), retry: 1 })
+  const canWrite = useCan('reference', 'references', 'write')
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
   const [passportOpen, setPassportOpen] = useState(false)
   const saved = useQuery({ queryKey: ['reference-passport', referenceId], queryFn: () => openReference(referenceId), enabled: passportOpen, retry: 1 })
   const colorway = savedPlmColorway(saved.data?.work)
@@ -48,6 +53,14 @@ export function FamilyPopup({
 
   const byCode = new Map((palette.data?.colors ?? []).map((c) => [c.code, c]))
   const members = (family.data ?? []).filter((c) => c.in_family)
+  async function changeColour(id: string, included: boolean) {
+    setBusy(true); setFailure(null)
+    try {
+      await setPlmFamilyColour(referenceId, id, included)
+      await external.refetch()
+    } catch (error) { setFailure(error instanceof Error ? error.message : 'Цвет не изменён. Повторите.') }
+    finally { setBusy(false) }
+  }
 
   return (
     <div
@@ -72,8 +85,33 @@ export function FamilyPopup({
             ×
           </button>
         </div>
-        {family.isPending && <p className="text-sm text-muted-foreground">Загружаю цвета…</p>}
-        {family.isError && <p className="text-sm text-destructive">Цвета семьи не пришли — закройте и откройте снова.</p>}
+        {external.isPending && <div role="status" className="flex items-center gap-2 text-sm"><Spinner />Получаем цвета семьи</div>}
+        {external.isError && <div role="alert" className="text-sm text-destructive">{external.error.message}{' '}
+          <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => void external.refetch()}>повторить цвета</button></div>}
+        {external.data && <>
+          <p className="mb-2 text-xs text-muted-foreground">{external.data.style_code} · {external.data.drop_code} · одна работа на все включённые цвета</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" onKeyDown={e => {
+            if (!['ArrowLeft', 'ArrowRight'].includes(e.key)) return
+            const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[data-family-colour]:not(:disabled)'))
+            const i = buttons.indexOf(document.activeElement as HTMLButtonElement)
+            if (i < 0 || !buttons.length) return
+            e.preventDefault(); buttons[(i + (e.key === 'ArrowRight' ? 1 : buttons.length - 1)) % buttons.length].focus()
+          }}>
+            {external.data.colours.map(c => <div key={c.colorway_id} className={`rounded border border-line p-2 ${c.in_family ? '' : 'opacity-60'}`}>
+              <button data-family-colour type="button" className="flex w-full flex-col gap-2 text-left text-sm"
+                disabled={!c.in_family} onClick={() => onPick(c.colour_code, c.colorway_id)} title={`Открыть работу в цвете ${c.name}`}>
+                <span className="block h-16 w-full rounded border border-line" style={{ background: c.rgb ? `rgb(${c.rgb.join(',')})` : undefined }} />
+                <span>{c.name}</span><span className="text-xs text-muted-foreground">{c.pantone_code ?? 'код пантона PLM не передал'}{c.primary ? ' · основной' : ''} · {c.article}</span>
+              </button>
+              {!c.primary && canWrite && <button disabled={busy} className={`${buttonClass({ tone: 'neutral', variant: 'outline', small: true })} mt-2`}
+                onClick={() => void changeColour(c.colorway_id, !c.in_family)}>{c.in_family ? 'исключить цвет' : 'вернуть цвет'}</button>}
+            </div>)}
+          </div>
+          {failure && <p role="alert" className="mt-2 text-sm text-destructive">{failure}</p>}
+        </>}
+        {!external.data && family.isPending && <div role="status" className="flex items-center gap-2 text-sm"><Spinner />Получаем сохранённые цвета</div>}
+        {!external.data && family.isError && <p className="text-sm text-destructive">Цвета семьи не пришли — откройте сохранённую работу ниже.</p>}
+        {!external.data && <>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {members.map((c) => {
             const swatch = byCode.get(c.colour_code)
@@ -90,6 +128,7 @@ export function FamilyPopup({
         {family.isSuccess && members.length === 0 && (
           <p className="text-sm text-muted-foreground">В семье пока нет цветов. Сохранённая работа доступна ниже.</p>
         )}
+        </>}
         <button className={`${buttonClass({ tone: 'neutral', variant: 'outline', small: true })} mt-3`} onClick={onOpen}>
           открыть сохранённую работу
         </button>

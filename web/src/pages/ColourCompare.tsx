@@ -4,7 +4,7 @@
 // раньше плодились референсы «по одному на цвет».
 
 import { Checkbox, buttonClass } from '@platform/ui'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
 import type { RenderParams } from '../candidates/renderer'
@@ -22,6 +22,7 @@ export interface ColourChoice {
   rgb: Rgb
   /** Цветомодель этого изделия в этом цвете; нет — цвета нет в ассортименте. */
   colourModelId: number | null
+  plmColorwayId?: string
 }
 
 const noop = () => undefined
@@ -38,6 +39,7 @@ export function ColourCompare({
   imagesVersion,
   choices,
   fromDrop,
+  sourceNotice,
   saving,
   onSave,
   onClose,
@@ -53,12 +55,14 @@ export function ColourCompare({
   choices: ColourChoice[]
   /** Цвета — из ассортимента этого дропа; пусто — вся палитра. */
   fromDrop: string | null
+  sourceNotice?: string | null
   saving: boolean
   onSave: (picked: ColourChoice[], canvases: Record<string, Record<string, HTMLCanvasElement | null>>) => void
   onClose: () => void
 }) {
   const [shown, setShown] = useState<string[]>(() => choices.slice(0, 3).map((c) => c.code))
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  useEffect(() => { setShown(old => old.length ? old : choices.slice(0, 3).map(c => c.code)) }, [choices])
   const canvases = useRef<Record<string, Record<string, HTMLCanvasElement | null>>>({})
   const sides = product.states.filter((s) => s.kind !== 'illustrative')
 
@@ -123,6 +127,7 @@ export function ColourCompare({
           ×
         </button>
       </div>
+      {sourceNotice && <p role="status" className="text-sm text-muted-foreground">{sourceNotice}</p>}
       <div className="flex flex-wrap gap-1" aria-label="какие цвета показать">
         {choices.map((c) => (
           <button
@@ -148,7 +153,7 @@ export function ColourCompare({
             return (
               <section key={c.code} className="pf-card flex flex-col gap-2 border border-line p-2">
                 <Checkbox
-                  label={c.colourModelId ? c.name : `${c.name} · нет в ассортименте`}
+                  label={c.colourModelId || c.plmColorwayId ? c.name : `${c.name} · нет в ассортименте`}
                   checked={picked.has(c.code)}
                   onChange={(on) => setPick(c.code, on)}
                 />

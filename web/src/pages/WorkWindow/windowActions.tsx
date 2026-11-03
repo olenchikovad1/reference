@@ -407,7 +407,8 @@ export function useWindowActions(s: WindowState) {
       return false
     }
     const c = upgrade(w.composition)
-    setPlm(w.plm ?? null)
+    const viewColorway = new URLSearchParams(window.location.search).get('plm_colorway')
+    setPlm(w.plm ? { ...w.plm, colorwayId: viewColorway ?? w.plm.colorwayId } : null)
     for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
     if (w.stateCode) setStateCode(w.stateCode)
     // Взгляд из адреса семьи (?colour=) главнее сохранённого (US-0891).
@@ -476,7 +477,8 @@ export function useWindowActions(s: WindowState) {
       return
     }
     const c = upgrade(d.composition)
-    setPlm(d.plm ?? null)
+    const viewColorway = new URLSearchParams(window.location.search).get('plm_colorway')
+    setPlm(d.plm ? { ...d.plm, colorwayId: viewColorway ?? d.plm.colorwayId } : null)
     const b = base as SavedWork | null
     onServer.current = workKey({ colourCode: d.colourCode ?? colourCode, composition: c })
     for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)

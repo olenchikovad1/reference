@@ -218,6 +218,11 @@ async def create(
     пошёл новый. Порядок тот же, что у картинок: сначала ищем, потом
     сохраняем. Иначе принт находит сам себя и сообщает, что он уже был.
     """
+    selection = plm_selection_of(work)
+    if selection:
+        if colour_model_id is not None:
+            raise ValueError("Выберите цветомодель PLM или локальную цветомодель, не обе одновременно")
+        await _plm_family_source(selection, set())
     await refuse_defects(db, image_digests)
     parent_id = None
     if forked_from is not None:
@@ -282,6 +287,7 @@ async def add_version(
     последней, а не на место старой. Узнавание своих версий не видит — пятая
     версия принта, узнавшая четвёртую, ни о чём не говорит.
     """
+    work = await _plm_family_work_for_version(db, reference_id, work)
     card = await repo.get(db, reference_id)
     if card is None:
         raise NoSuchReference("референса с таким номером нет")
@@ -651,6 +657,112 @@ async def family_colours(db: AsyncSession, reference_id: int) -> list[tuple[int,
     all_cm = await drops_repo.colours_of_model_in_drop(db, card.garment_model_id, card.drop_id)
     excluded = await repo.exclusions(db, reference_id)
     return [(c.id, c.colour_code, c.id not in excluded) for c in all_cm]
+
+
+@dataclass(frozen=True)
+class PlmFamilyColour:
+    colorway_id: str
+    article: str
+    colour_code: str
+    pantone_code: str | None
+    name: str
+    rgb: tuple[int, int, int] | None
+    in_family: bool
+    primary: bool
+
+
+@dataclass(frozen=True)
+class PlmFamily:
+    style_id: str
+    style_code: str
+    drop_code: str
+    colours: list[PlmFamilyColour]
+
+
+def plm_selection_of(work: dict | None) -> dict[str, str] | None:
+    selection = (work or {}).get("plm")
+    if not isinstance(selection, dict):
+        return None
+    if not all(isinstance(selection.get(key), str) and selection[key] for key in ("colorwayId", "dropCode")):
+        return None
+    return {key: str(selection.get(key) or "") for key in ("colorwayId", "dropCode", "productCode")}
+
+
+async def _plm_family_source(selection: dict[str, str], excluded: set[str]) -> PlmFamily:
+    from reference_api.services import plm
+
+    cfg = settings()
+    if not cfg.plm_base_url or not cfg.plm_machine_key:
+        raise plm.PlmUnavailable("Чтение PLM не настроено")
+    try:
+        # Первый показ не ждёт трёх десятисекундных попыток общего клиента.
+        async with asyncio.timeout(5):
+            rows, palette = await asyncio.gather(
+                plm.list_colorways(cfg.plm_base_url, cfg.plm_machine_key, drop=selection["dropCode"]),
+                plm.list_colors(cfg.plm_base_url, cfg.plm_machine_key))
+    except TimeoutError as failure:
+        raise plm.PlmUnavailable("Цвета семьи не пришли из PLM. Повторите запрос.") from failure
+    anchor = next((row for row in rows if row.id == selection["colorwayId"]), None)
+    if anchor is None:
+        raise ValueError("Сохранённой цветомодели нет в этом дропе PLM. Откройте сохранённую работу.")
+    if not anchor.style_id:
+        raise plm.PlmRefused("PLM не передал идентификатор модели семьи")
+    colours = []
+    for row in rows:
+        if row.style_id != anchor.style_id:
+            continue
+        label = row.color or row.base_color or ""
+        pantone = next((c for c in palette if c.code and (label == c.code or label == c.name or label.startswith(c.code + " "))), None)
+        code = pantone.code if pantone and pantone.code else label
+        colours.append(PlmFamilyColour(row.id, row.article, code, pantone.code if pantone else None, label or row.article, row.rgb,
+                                      row.id not in excluded, row.id == anchor.id))
+    return PlmFamily(anchor.style_id, anchor.style_code, selection["dropCode"], colours)
+
+
+async def _plm_family_work_for_version(db: AsyncSession, reference_id: int, work: dict | None) -> dict | None:
+    old = plm_selection_of({"plm": await repo.latest_plm_selection(db, reference_id)})
+    if not old:
+        return work
+    if work is None:
+        raise ValueError("Семья PLM сохраняется вместе с работой, а не одним снимком")
+    work = {**work, "plm": work.get("plm") or old}
+    new = plm_selection_of(work)
+    if not new or any(new[key] != old[key] for key in ("dropCode", "productCode")):
+        raise ValueError("Для другой модели или дропа используйте «Сохранить как»")
+    if new["colorwayId"] != old["colorwayId"]:
+        # Смена взгляда допускает соседний цвет, но не другую модель.
+        await db.rollback()
+        family = await _plm_family_source(old, set())
+        if not any(c.colorway_id == new["colorwayId"] for c in family.colours):
+            raise ValueError("Для другой модели используйте «Сохранить как»")
+    return work
+
+
+async def plm_family(db: AsyncSession, reference_id: int) -> PlmFamily | None:
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    selection = plm_selection_of({"plm": await repo.latest_plm_selection(db, reference_id)})
+    excluded = await repo.plm_exclusions(db, reference_id) if selection else set()
+    # До сетевого чтения освобождаем соединение; ORM-объекты дальше не используются.
+    await db.rollback()
+    return await _plm_family_source(selection, excluded) if selection else None
+
+
+async def set_plm_family_colour(db: AsyncSession, reference_id: int, colorway_id: str, excluded: bool) -> None:
+    family = await plm_family(db, reference_id)
+    colour = next((c for c in family.colours if c.colorway_id == colorway_id), None) if family else None
+    if colour is None:
+        raise ValueError("Этой цветомодели нет в семье PLM")
+    if excluded and colour.primary:
+        raise ValueError("Основной цвет семьи убрать нельзя")
+    card = await repo.get(db, reference_id)
+    if card is None:
+        raise NoSuchReference("референса с таким номером нет")
+    if card.status == "rejected":
+        raise ValueError("Семья забракована; сначала верните её в работу")
+    await repo.set_plm_exclusion(db, reference_id, colorway_id, excluded)
+    await db.commit()
 
 
 async def exclude_colour(db: AsyncSession, reference_id: int, colour_model_id: int) -> None:

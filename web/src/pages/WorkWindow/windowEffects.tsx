@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { toUnit } from '../../shared/api/colours'
 import { frameUrl } from '../../shared/api/products'
 import { EMPTY, nudge, remove, select } from '../../shared/composition'
@@ -6,6 +7,8 @@ import { sayRemark } from '../../shared/api/references'
 import {
   excludeFamilyColour,
   fetchFamily,
+  fetchPlmFamily,
+  setPlmFamilyColour,
   includeFamilyColour,
   tagNames,
   type RefTags,
@@ -348,7 +351,23 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
   // или «отмена» (введённое не пропадает — правило экранов).
   useDismiss(talkOpen && !pendingRemark, closeTalk, [talkRef], '[data-talk-toggle]')
 
+  const plmFamily = useQuery({ queryKey: ['plm-family', current?.id], queryFn: () => fetchPlmFamily(current!.id), enabled: Boolean(current && s.plm), retry: 1 })
+  useEffect(() => {
+    const colour = plmFamily.data?.colours.find(c => c.colorway_id === s.plm?.colorwayId)
+    // Непомеченный пантоном White тоже имеет собственный RGB источника;
+    // неизвестный код палитры не должен оставлять прежний цвет ткани.
+    if (colour?.rgb && colour.colour_code === colourCode) {
+      const [r, g, b] = colour.rgb
+      setParams(p => ({ ...p, base: [r / 255, g / 255, b / 255] }))
+    }
+  }, [plmFamily.data, s.plm?.colorwayId, colourCode])
   const colourChoices: ColourChoice[] = useMemo(() => {
+    if (plmFamily.data) return plmFamily.data.colours.flatMap(c => {
+      const colour = colours.find(known => known.code === c.colour_code)
+      const rgb = c.rgb ?? colour?.rgb
+      return rgb ? [{ code: c.colour_code, name: c.name, rgb, colourModelId: null, plmColorwayId: c.colorway_id }] : []
+    })
+    if (s.plm) return []
     const walk = (nodes: typeof catalogue.data): { id: number; colour_code: string; drop_ids: number[] }[] =>
       (nodes ?? []).flatMap((n) => [
         ...n.models.filter((m) => m.code === PRODUCT).flatMap((m) => m.colour_models),
@@ -362,7 +381,7 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
       if (!c) return []
       return [{ code, name: c.group, rgb: c.rgb, colourModelId: models.find((cm) => cm.colour_code === code)?.id ?? null }]
     })
-  }, [catalogue.data, refDropIds, colours])
+  }, [catalogue.data, refDropIds, colours, plmFamily.data, s.plm])
 
   /** Оставить в семье только выбранные цвета (US-0890): остальные исключить.
    *  Карточка одна — не плодим референс на каждый цвет. */
@@ -374,6 +393,18 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
     }
     setSaving(true)
     try {
+      if (s.plm && !plmFamily.data) throw new Error('Состав PLM не загружен. Вернитесь в семью и повторите чтение цветов.')
+      if (plmFamily.data) {
+        const keep = new Set(picked.map(c => c.plmColorwayId))
+        for (const c of plmFamily.data.colours) {
+          const included = c.primary || keep.has(c.colorway_id)
+          if (included !== c.in_family) await setPlmFamilyColour(current.id, c.colorway_id, included)
+        }
+        await plmFamily.refetch()
+        setCompareOpen(false)
+        setDropHint(`В семье: ${picked.map(c => c.name).join(', ')}.`)
+        return
+      }
       const keep = new Set(picked.map((c) => c.colourModelId).filter((id): id is number => id != null))
       // Основной взгляд семьи убрать нельзя — сервер откажет (решение 0019).
       if (current.colour_model_id != null) keep.add(current.colour_model_id)
@@ -462,6 +493,7 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
     startNew,
     openRemarks,
     colourChoices,
+      colourChoicesNotice: s.plm && !plmFamily.data ? (current ? (plmFamily.isError ? 'Цвета PLM не пришли. Повторите чтение в семье; сохранённая работа доступна.' : 'Получаем цвета PLM…') : 'Сначала сохраните референс — затем выберите состав семьи.') : null,
     saveColours,
     onGarment,
     onAreaDown,
