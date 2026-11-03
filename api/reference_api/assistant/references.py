@@ -4,6 +4,7 @@ from typing import Any
 
 from platform_client import Action
 from platform_client.assistant_tools import ToolCall, ToolRefused, right
+from platform_client.rights import RequiredRight
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api.assistant import tools
@@ -73,8 +74,8 @@ async def references(call: ToolCall) -> list[dict[str, Any]]:
 @tools.tool(
     "reference",
     "Один референс по номеру: статус и путь согласования, версии, исполнитель, "
-    "теги, замечания, повестка и что мне сейчас можно сделать. Проверки геометрии "
-    "(поле, швы, буквы) считаются на экране и здесь не отдаются.",
+    "теги, замечания, повестка и доступные действия. Проверки — отчёт браузера "
+    "из сохранённой версии, не новый серверный расчёт; у старых версий отчёта может не быть.",
     requires=right("references", Action.VIEW),
     parameters={
         "type": "object",
@@ -96,11 +97,29 @@ async def reference(call: ToolCall) -> dict[str, Any]:
     who = await people.members_of(db, people_ids)
     remarks, _messages = await review.remarks(db, card.id)
     tags = await service.tags_of(db, card.id)
+    authors = await people.names_of(db, [version.author_id for version in versions if version.author_id])
+    last_work = versions[-1].work or {}
+    report = last_work.get("checks")
+    if not isinstance(report, dict):
+        report = {"source": "unavailable", "items": None,
+                  "reason": "В этой версии не сохранён отчёт проверок. Это не означает, что нарушений нет."}
+    allowed = []
+    for action in await review.can(db, card, call.subject.id):
+        required = (RequiredRight("review", "approve-final", "function") if action == "approve-final" else
+                    right("references", Action.WRITE) if action in {"submit", "recall"} else
+                    right("review", Action.WRITE))
+        if call.subject.has(required):
+            allowed.append(action)
+    can_review = call.subject.has(right("review", Action.VIEW))
     return {
         "id": card.id,
         "name": card.name,
         "status": card.status,
         "versions": len(versions),
+        "version_history": [{"number": version.number, "saved_at": version.created_at.isoformat(),
+                             "author_id": version.author_id, "author": authors.get(version.author_id or ""),
+                             "auto_reason": version.auto_reason} for version in versions],
+        "checks": report,
         "last_saved_at": versions[-1].created_at.isoformat(),
         "forked_from": {"id": fork.reference_id, "version": fork.number} if fork else None,
         "drops": place.drops if place else [],
@@ -110,11 +129,12 @@ async def reference(call: ToolCall) -> dict[str, Any]:
         "status_path": [
             {"from": e.from_status, "to": e.to_status, "version": e.number,
              "by": who[e.by_id].name if e.by_id in who else None, "comment": e.comment,
-             "at": e.at.isoformat()}
+             "at": e.at.isoformat(), "bot_name": e.bot_name}
             for e in events
         ],
-        "remarks": [{"id": r.id, "status": r.status, "text": r.text} for r in remarks],
+        "remarks": [{"id": r.id, "status": r.status, "text": r.text} for r in remarks] if can_review else [],
+        "remarks_available": can_review,
         "agenda": [i.reason for i in (await review.agenda_of(db, [card.id])).get(card.id, [])],
         "tags": sorted(tags.own),
-        "i_can": await review.can(db, card, call.subject.id),
+        "i_can": allowed,
     }

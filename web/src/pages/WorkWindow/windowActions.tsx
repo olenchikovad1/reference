@@ -224,7 +224,7 @@ export function useWindowActions(s: WindowState) {
       // Работа целиком — все стороны, сантиметры базы, исключения размеров,
       // цвет. Лист и надписи выше — для узнавания; открывается версия
       // вот этим.
-      work: { version: 2, stateCode, colourCode, size, composition, plm },
+      work: { version: 2, stateCode, colourCode, size, composition, plm, checks: s.savedChecks() },
     }
   }
 
