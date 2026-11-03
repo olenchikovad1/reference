@@ -578,6 +578,8 @@ async def move_to_drop(db: AsyncSession, reference_id: int, drop_id: int) -> Non
         raise NoSuchReference("референса с таким номером нет")
     cm = await colour_model_in_drop(db, card.colour_model_id, drop_id)
     card.colour_model_id = cm.id
+    # Семейство хранит дроп явно: смена одной цветомодели оставляла старый дроп.
+    card.drop_id = drop_id
     await db.commit()
 
 
