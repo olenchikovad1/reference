@@ -23,7 +23,7 @@ export async function fetchPalette(): Promise<Palette> {
 }
 
 /** Цвет для шейдера: каналы 0..1. */
-export function toUnit(c: Colour): [number, number, number] {
+export function toUnit(c: { readonly rgb: readonly [number, number, number] }): [number, number, number] {
   return [c.rgb[0] / 255, c.rgb[1] / 255, c.rgb[2] / 255]
 }
 

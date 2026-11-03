@@ -4,6 +4,8 @@ import { type Composition, type PrintElement } from '../../shared/composition'
 import { type Draft } from '../../shared/api/references'
 import { detectAlpha } from '../../shared/dropped'
 import { type Buffered, type DraftBody } from '../../shared/draftWriter'
+import type { PlmSelection } from '../../shared/api/plm'
+export type { PlmSelection } from '../../shared/api/plm'
 
 
 /** Работа, как она лежит в версии и в черновике. */
@@ -13,12 +15,6 @@ export interface SavedWork {
   colourCode?: string
   size?: number | null
   composition?: Composition
-}
-
-export interface PlmSelection {
-  colorwayId: string
-  productCode: string
-  dropCode: string | null
 }
 
 /** URL задаёт новую работу; сохранённую связь берём из документа версии. */
