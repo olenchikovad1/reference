@@ -32,6 +32,11 @@ export function detectAlpha(pixels: Uint8ClampedArray): boolean {
 export async function readDropped(file: File): Promise<DroppedImage> {
   const src = URL.createObjectURL(file)
   const img = await loadImage(src)
+  return { name: file.name, src, ...inspectRasterImage(img) }
+}
+
+/** Одинаковые пропорции/прозрачность у загруженного файла и превью библиотеки. */
+export function inspectRasterImage(img: HTMLImageElement): Pick<DroppedImage, 'width' | 'height' | 'aspect' | 'hasAlpha'> {
   const probe = 160
   const w = Math.max(1, Math.min(probe, img.naturalWidth))
   const h = Math.max(1, Math.round((w * img.naturalHeight) / img.naturalWidth))
@@ -45,8 +50,6 @@ export async function readDropped(file: File): Promise<DroppedImage> {
     hasAlpha = detectAlpha(ctx.getImageData(0, 0, w, h).data)
   }
   return {
-    name: file.name,
-    src,
     width: img.naturalWidth,
     height: img.naturalHeight,
     aspect: img.naturalWidth / img.naturalHeight,

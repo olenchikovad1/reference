@@ -15,6 +15,13 @@ export interface PlmStatus {
 
 export type PlmReadiness = 'none' | 'partial' | 'full'
 
+/** Внешняя привязка сохранённой работы, без копии каталожной строки. */
+export interface PlmSelection {
+  colorwayId: string
+  productCode: string
+  dropCode: string | null
+}
+
 export interface PlmImage {
   key: string
   side?: string | null
