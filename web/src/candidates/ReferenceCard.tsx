@@ -2,7 +2,7 @@
 // вид с миниатюрами сторон, по которому референс узнают глазом, а не строка
 // с номером. Кандидат в платформу только раскладкой (решение 0005).
 
-import { Spinner, buttonClass } from '@platform/ui'
+import { IconButton, Spinner, buttonClass } from '@platform/ui'
 import { memo, type PointerEvent as ReactPointerEvent, useState } from 'react'
 
 import { meaningClass } from './meaning'
@@ -33,6 +33,7 @@ export const ReferenceCard = memo(
     !a.onTrash === !b.onTrash &&
     !a.onErase === !b.onErase &&
     !a.onDiscard === !b.onDiscard &&
+    !a.onReject === !b.onReject &&
     a.note === b.note &&
     a.card.agenda === b.card.agenda,
   // Обработчики не сравниваются: они зовут свежие функции через ref (live).
@@ -54,6 +55,7 @@ function ReferenceCardView({
   selected,
   note,
   onDiscard,
+  onReject,
 }: {
   card: Card
   gridPosition?: { row: number; column: number }
@@ -80,6 +82,7 @@ function ReferenceCardView({
   note?: { text: string; tone?: 'warning' | 'muted' }[]
   /** «Выбросить черновик» — в углу, как «удалить». */
   onDiscard?: () => void
+  onReject?: () => void
 }) {
   const front = card.views.front
   const back = card.views.back
@@ -209,8 +212,8 @@ function ReferenceCardView({
           </form>
         </div>
       )}
-      {(onCopy || onTrash || onErase || onDiscard) && (
-        <div className="absolute left-1 top-1 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+      {(onCopy || onTrash || onErase || onDiscard || onReject) && (
+        <div className="absolute left-1 top-1 flex max-w-[calc(100%-2.5rem)] flex-wrap gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
           {onCopy && (
             <button className={corner} onClick={onCopy} title="Копия последней версии — рядом, с отметкой «от №…»">
               копия
@@ -221,6 +224,8 @@ function ReferenceCardView({
               удалить
             </button>
           )}
+          {onReject && <IconButton icon="ban" className={meaningClass('destroy', true)} onClick={onReject}
+            aria-label={`забраковать №${card.id}`} title="Забраковать референс с причиной; версии сохранятся в разделе «Брак»" />}
           {onDiscard && (
             <button className={meaningClass('withdraw', true)} onClick={onDiscard} title="Выбросить черновик: работа снова как в версии, версия не меняется">
               выбросить

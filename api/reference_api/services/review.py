@@ -15,11 +15,13 @@ import asyncio
 import hashlib
 import logging
 from dataclasses import dataclass
+from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from reference_api import broker
 from reference_api.db import session_factory
+from reference_api.models.references import Reference
 from reference_api.repositories import assets as asset_repo
 from reference_api.repositories import people as people_repo
 from reference_api.repositories import references as cards
@@ -94,8 +96,22 @@ async def can(db: AsyncSession, card, who: str | None) -> list[str]:
     """Что смотрящему доступно сейчас: переходы — по статусу и ролям, и
     «remark» — ставить замечания (редактор и главный, US-0511)."""
     roles = await _roles(db, card, who)
-    out = [s for s, (src, _, need) in STEPS.items() if card.status in src and roles & need]
+    return _actions(card.status, roles)
+
+
+def _actions(status: str, roles: set[str]) -> list[str]:
+    out = [s for s, (src, _, need) in STEPS.items() if status in src and roles & need]
     return out + (["remark"] if roles & {"editor", "chief"} else [])
+
+
+async def can_many(db: AsyncSession, items: Sequence[Reference], who: str | None) -> dict[int, list[str]]:
+    """Одна роль на всю порцию: карточки витрины не делают N запросов людей."""
+    if not items or not who:
+        return {}
+    person = await people_repo.app_person(db, who)
+    role = {person.role} if person else set()
+    return {card.id: _actions(card.status, role | ({"executor"} if card.executor_id == who else set()))
+            for card in items}
 
 
 async def can_say(db: AsyncSession, card, row, who: str | None) -> list[str]:

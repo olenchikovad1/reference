@@ -214,7 +214,7 @@ async def reference_page(request: Request, query: ReferencePageQuery = Depends()
         result = await service.page(db, filters, _author(request), query.limit, query.cursor, **_page_grants(request))
     except service.InvalidCursor as refusal:
         raise HTTPException(422, {"code": "invalid_cursor", "message": str(refusal)}) from None
-    cards = await _cards(db, result.rows, _author(request))
+    cards = await _cards(db, result.rows, _author(request), await _review_actions(db, result.rows, request))
     return ReferencePageOut(items=[PageCardOut(**card.model_dump(), reasons=list(result.reasons.get(card.id, ())))
                                    for card in cards], total=result.total, next_cursor=result.next_cursor)
 
@@ -234,10 +234,19 @@ async def reference_order(request: Request, query: ReferencePageQuery = Depends(
 @router.get("", response_model=list[CardOut])
 async def latest(request: Request, db: AsyncSession = Depends(session)) -> list[CardOut]:
     """Референсы, свежие по последней версии первыми — все, без предела."""
-    return await _cards(db, await service.latest(db), _author(request))
+    rows = await service.latest(db)
+    return await _cards(db, rows, _author(request), await _review_actions(db, rows, request))
 
 
-async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[CardOut]:
+async def _review_actions(db: AsyncSession, rows, request: Request) -> dict[int, list[str]]:
+    subject = getattr(request.state, "subject", None)
+    if not subject or not subject.has(RequiredRight("review", "write", "action")):
+        return {}
+    return await review.can_many(db, [card for card, _ in rows], _author(request))
+
+
+async def _cards(db: AsyncSession, rows, viewer: str | None = None,
+                 actions: dict[int, list[str]] | None = None) -> list[CardOut]:
     drafting = await service.drafters(db, [c.id for c, _ in rows])
     placed = await service.positions(db, viewer, [c.id for c, _ in rows]) if viewer else {}
     names = await people.names_of(
@@ -263,6 +272,7 @@ async def _cards(db: AsyncSession, rows, viewer: str | None = None) -> list[Card
             executor=_executor(executors.get(c.executor_id or "")),
             mine=viewer is not None and c.executor_id == viewer,
             status=c.status,
+            can_reject="reject" in (actions or {}).get(c.id, []),
             agenda=[i.reason for i in agenda.get(c.id, [])],
         ))
     return out
@@ -284,12 +294,13 @@ async def trash_list(db: AsyncSession = Depends(session)) -> list[TrashedOut]:
 
 
 @router.get("/rejected", response_model=list[RejectedOut])
-async def rejected_list(db: AsyncSession = Depends(session)) -> list[RejectedOut]:
+async def rejected_list(request: Request, db: AsyncSession = Depends(session)) -> list[RejectedOut]:
     """Брак: забракованные с причиной — не корзина (US-0885)."""
     from reference_api.repositories import review as review_repo
 
     rows = await service.rejected(db)
-    cards = await _cards(db, rows)
+    actions = await _review_actions(db, rows, request)
+    cards = await _cards(db, rows, _author(request), actions)
     events = await review_repo.last_rejects(db, [c.id for c, _ in rows])
     names = await people.names_of(db, [e.by_id for e in events.values() if e.by_id])
     out: list[RejectedOut] = []
@@ -301,6 +312,7 @@ async def rejected_list(db: AsyncSession = Depends(session)) -> list[RejectedOut
             rejected_by_id=e.by_id if e else None,
             rejected_by_name=names.get(e.by_id or "", "") if e else "",
             reason=(e.comment or "") if e else "",
+            can_revive="revive" in actions.get(c.id, []),
         ))
     return out
 

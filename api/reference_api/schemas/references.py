@@ -160,6 +160,8 @@ class CardOut(Saver):
     mine: bool = False
     #: Статус согласования (US-0510).
     status: str = "draft"
+    #: Доступное сейчас решение: состояние, роль и право согласования.
+    can_reject: bool = False
     #: Цвет изделия (код палитры) и дропы, где цветомодель выходит; пусто —
     #: референс сохранён без цветомодели.
     colour_code: str | None = None
@@ -213,6 +215,7 @@ class RejectedOut(CardOut):
     rejected_by_id: str | None
     rejected_by_name: str
     reason: str
+    can_revive: bool = False
 
 
 class FamilyColourOut(BaseModel):

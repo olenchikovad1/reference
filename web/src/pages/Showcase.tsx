@@ -19,6 +19,7 @@ import { useTileWindow } from '../candidates/useTileWindow'
 import { ThumbnailProgress } from '../candidates/ThumbnailProgress'
 import { meaningClass } from '../candidates/meaning'
 import { FamilyPopup } from '../candidates/FamilyPopup'
+import { ReviewDecisionModal } from '../candidates/ReviewDecisionModal'
 import { ReferenceCard as ShowcaseCard } from '../candidates/ReferenceCard'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { SHOWCASE_KEYS } from '../shared/keys'
@@ -78,6 +79,8 @@ export function Showcase() {
   const canCopy = useCan(CODE, 'references', 'write')
   const canTrash = useCan(CODE, 'references', 'delete')
   const canErase = useCan(CODE, 'references', 'delete-forever')
+  const canReview = useCan(CODE, 'review', 'write')
+  const [rejecting, setRejecting] = useState<Card | null>(null)
   const [trashing, setTrashing] = useState<Card | null>(null)
   const [erasing, setErasing] = useState<Card | null>(null)
   // Выделение (US-0501): Ctrl — добавить или убрать, Shift — от последнего
@@ -649,6 +652,7 @@ export function Showcase() {
               reasons={found.ids === null ? undefined : found.why.get(c.id)}
               onCopy={canCopy ? () => void act(() => copyReference(c.id)) : undefined}
               onTrash={canTrash ? () => setTrashing(c) : undefined}
+              onReject={canReview && c.can_reject ? () => setRejecting(c) : undefined}
               onErase={canErase ? () => setErasing(c) : undefined}
               note={seasonNote(c, drops.data, usePlm ? plmDrops.data : undefined)}
             />
@@ -677,6 +681,11 @@ export function Showcase() {
           )}
         </div>
       )}
+
+      <ReviewDecisionModal card={rejecting} action="reject" onClose={() => setRejecting(null)} onDone={() => {
+        if (rejecting) setSelected(previous => { const next = new Set(previous); next.delete(rejecting.id); return next })
+        setRejecting(null)
+      }} />
 
       <Modal
         open={trashing !== null}

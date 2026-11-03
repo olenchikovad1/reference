@@ -106,6 +106,7 @@ export interface Saver {
 
 /** Референс в списке: имя и номер последней версии. */
 export interface Card extends Saver {
+  can_reject?: boolean
   id: number
   name: string
   number: number
@@ -251,6 +252,7 @@ export interface Trashed extends Card {
 
 /** Референс в браке: кто, когда, почему (US-0885). */
 export interface Rejected extends Card {
+  can_revive?: boolean
   rejected_at: string
   rejected_by_id: string | null
   rejected_by_name: string
