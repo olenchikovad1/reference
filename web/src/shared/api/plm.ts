@@ -1,6 +1,8 @@
 // Каталог hub PLM через BFF Референса (US-0883, US-0886, решение 0018).
 // Браузер plm напрямую не зовёт — ключ машинного входа остаётся на сервисе.
 
+import type { Colour } from './colours'
+
 const BASE = import.meta.env.VITE_API_BASE ?? '/reference/api/'
 
 export interface PlmStatus {
@@ -12,6 +14,12 @@ export interface PlmStatus {
 }
 
 export type PlmReadiness = 'none' | 'partial' | 'full'
+
+export interface PlmImage {
+  key: string
+  side?: string | null
+  name?: string | null
+}
 
 export interface PlmPassport {
   id: string
@@ -30,6 +38,15 @@ export interface PlmPassport {
   suppliers: string[]
   readiness: Record<string, PlmReadiness>
   plm_path: string
+  images?: PlmImage[]
+}
+
+/** Явный перед или подписанный ракурс предпочтительнее служебной плашки. */
+export function selectPlmImage(images: readonly PlmImage[] | undefined): string | null {
+  const usable = (images ?? []).filter(image => image.key && !/GeneratedColoredImage/i.test(image.name ?? ''))
+  return (usable.find(image => image.side === 'front')
+    ?? usable.find(image => /перед|front/i.test(image.name ?? ''))
+    ?? usable[0])?.key ?? null
 }
 
 export interface PlmDrop {
@@ -61,6 +78,14 @@ export interface PlmColorway {
   product_code: string | null
   can_work: boolean
   reason: string | null
+}
+
+/** На фабрику идёт код палитры, а не подпись «18-1222 TPG Cocoa Brown». */
+export function colorwayColourCode(cw: Pick<PlmColorway, 'color' | 'base_color'>, palette: readonly Colour[]): string {
+  const label = cw.color ?? cw.base_color ?? 'WHITE'
+  return palette.find(colour => colour.code === label || colour.name === label)?.code
+    ?? palette.find(colour => label.startsWith(colour.code + ' '))?.code
+    ?? label
 }
 
 async function get<T>(path: string): Promise<T> {

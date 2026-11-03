@@ -14,11 +14,13 @@ export function FamilyPopup({
   name,
   onPick,
   onClose,
+  onOpen,
 }: {
   referenceId: number
   name: string
   onPick: (colourCode: string) => void
   onClose: () => void
+  onOpen: () => void
 }) {
   const family = useQuery({
     queryKey: ['family', referenceId],
@@ -81,8 +83,11 @@ export function FamilyPopup({
           })}
         </div>
         {family.isSuccess && members.length === 0 && (
-          <p className="text-sm text-muted-foreground">В семье нет цветов — верните их из сравнения цветов в окне.</p>
+          <p className="text-sm text-muted-foreground">В семье пока нет цветов. Сохранённая работа доступна ниже.</p>
         )}
+        <button className={`${buttonClass({ tone: 'neutral', variant: 'outline', small: true })} mt-3`} onClick={onOpen}>
+          открыть сохранённую работу
+        </button>
       </div>
     </div>
   )

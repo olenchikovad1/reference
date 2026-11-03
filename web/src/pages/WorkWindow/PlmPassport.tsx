@@ -67,8 +67,3 @@ export function PlmPassport({ colorwayId }: { colorwayId: string }) {
     </Section>
   )
 }
-
-export function plmColorwayFromUrl(): string | null {
-  if (typeof window === 'undefined') return null
-  return new URLSearchParams(window.location.search).get('plm_colorway')
-}

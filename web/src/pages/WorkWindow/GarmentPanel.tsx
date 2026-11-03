@@ -8,7 +8,7 @@ import { Slider, Section } from './controls'
 import { S } from './styles'
 import type { WorkWindowState } from './useWorkWindow'
 import { on, small } from './controls'
-import { PlmPassport, plmColorwayFromUrl } from './PlmPassport'
+import { PlmPassport } from './PlmPassport'
 
 // Панель изделия (план 114, US-0894 / US-0026): цвет и размер на виду;
 // гамма, блики, смещение, FPS — за «для показа».
@@ -32,7 +32,7 @@ export function GarmentPanel({ w }: { w: WorkWindowState }) {
     field,
   } = w
   const [techShow, setTechShow] = useState(false)
-  const plmColorway = plmColorwayFromUrl()
+  const plmColorway = w.plm?.colorwayId
   // Изделие загружено: окно раньше уже показало «загружаю» или ошибку.
   if (!product || !state) return null
   return (

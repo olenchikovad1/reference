@@ -29,7 +29,7 @@ import { checkZones, clipOutline } from '../../shared/zones'
 import { calibrationFor, fieldFor, fieldSize } from '../../shared/fields'
 import { type Clips } from '../../shared/sheet'
 import { useHistoryState } from '../../shared/useHistory'
-import { sameWork } from './work'
+import { sameWork, plmSelection, type PlmSelection } from './work'
 import { type PendingRemark } from './remarks'
 import { type Overlay, PRODUCT, type SideFinding } from './constants'
 
@@ -50,8 +50,8 @@ export function useWindowState() {
   // Из кэша сразу, а не промисом: окно, открытое второй раз, не должно
   // проходить через «Загружаю изделие…» ни на кадр (US-0600).
   // Код изделия из адреса (?product=) или стендовый по умолчанию (US-0886).
-  const productCode =
-    new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('product') ?? PRODUCT
+  const [plm, setPlm] = useState<PlmSelection | null>(() => ref === 'new' ? plmSelection(location.search) : null)
+  const productCode = plm?.productCode ?? (ref === 'new' ? new URLSearchParams(location.search).get('product') : null) ?? PRODUCT
   const [product, setProduct] = useState<Product | null>(
     () => queries.getQueryData<Product>(productQuery(productCode).queryKey) ?? null,
   )
@@ -378,7 +378,7 @@ export function useWindowState() {
     if (!dirty || nowKey === onServer.current) return
     onServer.current = nowKey
     const body: DraftBody = {
-      work: { version: 2, stateCode, colourCode, size, composition: { ...composition, selectedId: null } },
+      work: { version: 2, stateCode, colourCode, size, composition: { ...composition, selectedId: null }, plm },
       base_number: current ? viewing : null,
     }
     writer.change(current?.id ?? null, body)
@@ -472,6 +472,8 @@ export function useWindowState() {
     navigate,
     location,
     queries,
+    plm,
+    setPlm,
     product,
     setProduct,
     error,

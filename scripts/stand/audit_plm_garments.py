@@ -26,6 +26,11 @@ async def audit(limit: int) -> dict[str, Any]:
     colorways = await plm.list_colorways(base, key)
     async with session_factory() as db:
         enriched = await plm.enrich_colorways(db, colorways)
+    working_samples = []
+    for item in [item for item in enriched if item["can_work"]][:2]:
+        passport = await plm.colorway_card(base, key, item["id"])
+        working_samples.append({**item,
+                                "images": passport.get("images") or []})
     releases = await plm.list_releases(base, key, limit=limit)
     white: list[dict[str, Any]] = []
     gate = asyncio.Semaphore(3)
@@ -75,8 +80,8 @@ async def audit(limit: int) -> dict[str, Any]:
                         "passport": {name: passport.get(name) for name in
                                      ("article", "size_range", "sizes", "readiness", "brand", "category")}})
     return {"colorways": len(enriched), "can_work": sum(item["can_work"] for item in enriched),
-            "working_sample": [{name: item[name] for name in ("id", "article", "style_code", "product_code", "image")}
-                               for item in enriched if item["can_work"]][:2],
+            "working_sample": working_samples,
+            "sample_colorways": [item for item in enriched if item["id"] in {sample["id"] for sample in samples}],
             "with_image": sum(bool(item["image"]) for item in enriched), "releases_checked": len(releases),
             "release_limit": limit, "white_variants": len(white),
             "white_with_size_range": sum(bool(item["size_range"]) for item in white), "samples": samples}

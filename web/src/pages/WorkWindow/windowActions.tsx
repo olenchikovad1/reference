@@ -16,7 +16,7 @@ import { viewOrder } from '../../shared/referenceFeed'
 import { onImageLoad, warmImage } from '../../shared/imageCache'
 import { neighbour, workKey } from '../../shared/versions'
 import { describe as describeSheet, render as renderSheet } from '../../shared/sheet'
-import { type SavedWork, newer, shrink, probeImage } from './work'
+import { type SavedWork, newer, shrink, probeImage, plmSelection } from './work'
 import { MIN_ZOOM, PRODUCT, RECOGNITION_PX_PER_CM, SIDE_NAMES, type SideFinding, VIEW_SIZE } from './constants'
 import type { WindowState } from './windowState'
 
@@ -29,6 +29,8 @@ export function useWindowActions(s: WindowState) {
     navigate,
     location,
     queries,
+    plm,
+    setPlm,
     product,
     stateCode,
     setStateCode,
@@ -222,7 +224,7 @@ export function useWindowActions(s: WindowState) {
       // Работа целиком — все стороны, сантиметры базы, исключения размеров,
       // цвет. Лист и надписи выше — для узнавания; открывается версия
       // вот этим.
-      work: { version: 2, stateCode, colourCode, size, composition },
+      work: { version: 2, stateCode, colourCode, size, composition, plm },
     }
   }
 
@@ -397,12 +399,7 @@ export function useWindowActions(s: WindowState) {
 
   /** Показать версию референса как сохранили: стороны, цвет, размер. */
   function showVersion(card: ReferenceFull, number: number, work: unknown): boolean {
-    const w = work as {
-      stateCode?: string
-      colourCode?: string
-      size?: number | null
-      composition?: typeof composition
-    } | null
+    const w = work as SavedWork | null
     if (!w?.composition) {
       // Карточка из тех времён, когда сохранялся только снимок для узнавания.
       // Открыть её нечем — и сказано это прямо, а не пустым изделием.
@@ -410,6 +407,7 @@ export function useWindowActions(s: WindowState) {
       return false
     }
     const c = upgrade(w.composition)
+    setPlm(w.plm ?? null)
     for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
     if (w.stateCode) setStateCode(w.stateCode)
     // Взгляд из адреса семьи (?colour=) главнее сохранённого (US-0891).
@@ -478,6 +476,7 @@ export function useWindowActions(s: WindowState) {
       return
     }
     const c = upgrade(d.composition)
+    setPlm(d.plm ?? null)
     const b = base as SavedWork | null
     onServer.current = workKey({ colourCode: d.colourCode ?? colourCode, composition: c })
     for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
@@ -498,9 +497,14 @@ export function useWindowActions(s: WindowState) {
 
   /** Новая, ни разу не сохранённая работа — с её черновиком. */
   async function restoreNew() {
+    const selected = plmSelection(window.location.search)
+    setPlm(selected)
     const draft = newer(await newDraft().catch(() => null), readBuffer(null))
     const d = draft?.work as SavedWork | null | undefined
     if (!draft || !d?.composition) return
+    // Новый выбор модели не наследует черновик другой цветомодели.
+    if (selected && selected.colorwayId !== d.plm?.colorwayId) return
+    setPlm(selected ?? d.plm ?? null)
     const c = upgrade(d.composition)
     onServer.current = workKey({ colourCode: d.colourCode ?? colourCode, composition: c })
     for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
