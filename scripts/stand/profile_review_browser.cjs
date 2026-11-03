@@ -1,6 +1,7 @@
 /** Локальная демонстрация брака с настоящим API/БД/S3. Production запрещён. */
 const fs = require('node:fs');
 const path = require('node:path');
+const assert = require('node:assert/strict');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 (async () => {
@@ -29,7 +30,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     } } });
     if (!upload.ok()) throw new Error('Local upload failed: ' + upload.status());
     const digest = (await upload.json())[0].digest;
-    const body = { name: 'QA Review ' + who, sheet_digest: digest, image_digests: [digest], texts: [], views: { front: digest, back: digest } };
+    // Окну нужна сохранённая работа, а не старый формат с одним снимком.
+    const work = { version: 2, stateCode: 'front', colourCode: 'WHITE', size: null,
+      composition: { elements: [], selectedId: null } };
+    const body = { name: 'QA Review ' + who, sheet_digest: digest, image_digests: [digest], texts: [],
+      views: { front: digest, back: digest }, work };
     id = (await call('post', '/references', body)).id;
     await call('post', `/references/${id}/versions`, { ...body, name: body.name + ' v2' });
     const before = await call('get', '/references/' + id);
@@ -94,7 +99,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       editor.getByRole('button', { name: 'забраковать', exact: true }).click(),
     ]);
     saved = await call('get', '/references/' + id);
-    if (saved.status !== 'rejected' || saved.versions.length < before.versions.length) throw new Error('Window rejection lost history');
+    if (saved.status !== 'rejected' || saved.versions.length !== before.versions.length) throw new Error('Window rejection changed versions');
+    for (const version of before.versions) {
+      const retained = await call('get', `/references/${id}/versions/${version.number}`);
+      assert.deepStrictEqual(retained.work, work, 'Saved work changed');
+    }
     if (!saved.status_events.some(event => event.comment === reason) || !saved.status_events.some(event => event.comment === 'QA: брак из рабочего окна')) throw new Error('Rejection reasons missing from history');
     await page.screenshot({ path: path.join(process.env.PROFILE_OUTPUT, 'window-rejected.png') });
     console.log(JSON.stringify({ localOnly: true, id, galleryReject: true, reasonRetainedOnFailure: true, chiefRevive: true,
