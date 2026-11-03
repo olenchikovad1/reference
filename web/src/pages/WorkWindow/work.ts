@@ -8,10 +8,25 @@ import { type Buffered, type DraftBody } from '../../shared/draftWriter'
 
 /** Работа, как она лежит в версии и в черновике. */
 export interface SavedWork {
+  plm?: PlmSelection | null
   stateCode?: string
   colourCode?: string
   size?: number | null
   composition?: Composition
+}
+
+export interface PlmSelection {
+  colorwayId: string
+  productCode: string
+  dropCode: string | null
+}
+
+/** URL задаёт новую работу; сохранённую связь берём из документа версии. */
+export function plmSelection(search: string): PlmSelection | null {
+  const query = new URLSearchParams(search)
+  const colorwayId = query.get('plm_colorway')
+  const productCode = query.get('product')
+  return colorwayId && productCode ? { colorwayId, productCode, dropCode: query.get('plm_drop') } : null
 }
 
 /** Какой черновик свежее: браузерная копия (не дошла до сервера) или

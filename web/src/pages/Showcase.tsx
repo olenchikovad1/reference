@@ -20,6 +20,7 @@ import { ThumbnailProgress } from '../candidates/ThumbnailProgress'
 import { meaningClass } from '../candidates/meaning'
 import { FamilyPopup } from '../candidates/FamilyPopup'
 import { ReviewDecisionModal } from '../candidates/ReviewDecisionModal'
+import { PlmModelImage } from '../candidates/PlmModelImage'
 import { ReferenceCard as ShowcaseCard } from '../candidates/ReferenceCard'
 import { HotkeysHint } from '../candidates/HotkeysHint'
 import { SHOWCASE_KEYS } from '../shared/keys'
@@ -44,7 +45,7 @@ import {
   type Status,
 } from '../shared/api/references'
 import { fetchDrops, type Drop } from '../shared/api/drops'
-import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, plmImageUrl, rgbCss, type PlmColorway, type PlmDrop } from '../shared/api/plm'
+import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, colorwayColourCode, rgbCss, type PlmColorway, type PlmDrop } from '../shared/api/plm'
 import {
   profileFromDates,
   profileFromWeeks,
@@ -785,6 +786,12 @@ export function Showcase() {
         <FamilyPopup
           referenceId={familyId}
           name={familyCard?.name || `№${familyId}`}
+            onOpen={() => {
+              const next = new URLSearchParams(search)
+              next.delete('family')
+              next.delete('colour')
+              navigate(`/references/${familyId}?${next}`, { state: { inApp: true, fromFamily: familyId } })
+            }}
           onClose={() => {
             const next = new URLSearchParams(search)
             next.delete('family')
@@ -804,11 +811,13 @@ export function Showcase() {
       <CreateDialog
         open={creating}
         onClose={() => setCreating(false)}
-        onPickLocal={(colourModel, colour) =>
+        onPickLocal={(colourModel, colour) => {
+          setCreating(false)
           navigate(`/references/new?colour_model=${colourModel}&colour=${encodeURIComponent(colour)}`)
-        }
+        }}
         onPickPlm={(cw, dropCode) => {
           if (!cw.can_work || !cw.product_code) return
+          setCreating(false)
           const colour = cw.color ?? cw.base_color ?? 'WHITE'
           navigate(
             `/references/new?product=${encodeURIComponent(cw.product_code)}&plm_colorway=${encodeURIComponent(cw.id)}&colour=${encodeURIComponent(colour)}&plm_drop=${encodeURIComponent(dropCode)}`,
@@ -834,13 +843,16 @@ function CreateDialog({
   const plm = useQuery({ queryKey: ['plm-status'], queryFn: fetchPlmStatus, enabled: open })
   const usePlm = Boolean(plm.data?.configured && plm.data.reachable)
   const tree = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue, enabled: open && !usePlm })
-  const palette = useQuery({ queryKey: ['palette'], queryFn: fetchPalette, enabled: open && !usePlm })
+  const palette = useQuery({ queryKey: ['palette'], queryFn: fetchPalette, enabled: open })
   const [drop, setDrop] = useState('')
+  const [limit, setLimit] = useState(24)
+  useEffect(() => setLimit(24), [drop])
   const plmDrops = useQuery({ queryKey: ['plm-drops'], queryFn: () => fetchPlmDrops(), enabled: open && usePlm })
   const colorways = useQuery({
     queryKey: ['plm-colorways', drop],
     queryFn: () => fetchPlmColorways(drop || undefined),
     enabled: open && usePlm && Boolean(drop),
+    retry: false,
   })
   const models = (tree.data ?? []).flatMap(modelsOf)
   const colourOf = (code: string) => palette.data?.colors.find((c) => c.code === code)
@@ -851,7 +863,9 @@ function CreateDialog({
 
   return (
     <Modal open={open} onClose={onClose} title="Новый референс">
-      {plm.isPending && <p className="text-sm">Проверяю каталог plm…</p>}
+      {plm.isPending && <div role="status" className="flex items-center gap-2 text-sm"><Spinner />Проверяем каталог PLM</div>}
+      {usePlm && palette.isError && <div role="alert" className="mb-2 text-sm text-destructive">Палитра PLM не пришла — выбор цвета временно недоступен.{' '}
+        <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => void palette.refetch()}>повторить</button></div>}
       {plm.data?.configured && !plm.data.reachable && (
         <p className="mb-2 text-sm text-muted-foreground">plm недоступен: {plm.data.message}. Локальный справочник стенда ниже.</p>
       )}
@@ -869,33 +883,32 @@ function CreateDialog({
               onChange={(e) => setDrop(e.target.value)}
             />
           </div>
-          {colorways.isPending && <p className="text-sm">Загружаю цветомодели…</p>}
-          {colorways.isError && <p className="text-sm">{(colorways.error as Error).message}</p>}
+          {colorways.isPending && <div role="status" className="flex items-center gap-2 text-sm"><Spinner />Получаем модели и цвета PLM</div>}
+          {colorways.isError && <div role="alert" className="text-sm">{(colorways.error as Error).message}{' '}
+            <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })} onClick={() => void colorways.refetch()}>повторить</button></div>}
           <div className="flex flex-wrap gap-3">
-            {(colorways.data ?? []).map((cw) => (
+            {(colorways.data ?? []).slice(0, limit).map((cw) => (
               <button
                 key={cw.id}
-                disabled={!cw.can_work}
-                onClick={() => onPickPlm(cw, drop)}
-                className={buttonClass({ tone: 'neutral', variant: 'outline' })}
+                disabled={!cw.can_work || !palette.data}
+                onClick={() => onPickPlm({ ...cw, color: colorwayColourCode(cw, palette.data?.colors ?? []) }, drop)}
+                className={`${buttonClass({ tone: 'neutral', variant: 'outline' })} w-40 flex-col items-stretch`}
                 title={cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
-                style={{ minWidth: 140 }}
               >
-                {plmImageUrl(cw.image) ? (
-                  <img src={plmImageUrl(cw.image)!} alt="" className="mb-1 block h-20 w-full rounded-sm object-cover" />
-                ) : (
+                <PlmModelImage id={cw.id} image={cw.image} label={`${cw.style_code} · ${cw.article}`} />
                   <span
                     className="mb-1 block h-8 w-full rounded-sm border border-line"
                     style={{ background: rgbCss(cw.rgb) }}
                     aria-hidden
                   />
-                )}
-                <span className="block text-left text-sm font-semibold">{cw.color ?? cw.article}</span>
-                <span className="block text-left text-xs text-muted-foreground">{cw.style_code} · {cw.article}</span>
+                <span className="block truncate text-left text-sm font-semibold" title={cw.color ?? cw.article}>{cw.color ?? cw.article}</span>
+                <span className="block truncate text-left text-xs text-muted-foreground" title={`${cw.style_code} · ${cw.article}`}>{cw.style_code} · {cw.article}</span>
                 {!cw.can_work && <span className="mt-1 block text-left text-xs text-muted-foreground">{cw.reason}</span>}
               </button>
             ))}
           </div>
+          {(colorways.data?.length ?? 0) > limit && <button className={buttonClass({ tone: 'neutral', variant: 'outline', small: true })}
+            onClick={() => setLimit(previous => previous + 24)}>ещё модели · показано {limit} из {colorways.data!.length}</button>}
         </>
       ) : (
         <>

@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
 import { meaningClass } from '../candidates/meaning'
+import { PlmModelImage } from '../candidates/PlmModelImage'
 import { useCan } from '../shared/api/platform'
 import { fetchPalette } from '../shared/api/colours'
 import {
@@ -27,7 +28,7 @@ import {
   type TreeNode,
 } from '../shared/api/drops'
 import { DropBoard } from './DropBoard'
-import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, plmImageUrl, rgbCss } from '../shared/api/plm'
+import { fetchPlmColorways, fetchPlmDrops, fetchPlmStatus, colorwayColourCode, rgbCss } from '../shared/api/plm'
 import { PROFILE_LABEL, profileFromDates, profileFromWeeks, untilDateLabel, untilWeekLabel } from '../shared/season'
 
 const dateRu = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
@@ -146,6 +147,7 @@ export function Drops() {
 /** Ассортимент дропа из plm: крупные плашки цвета ткани, без зеркала в Postgres. */
 function PlmAssortment({ dropCode }: { dropCode: string }) {
   const navigate = useNavigate()
+  const palette = useQuery({ queryKey: ['palette'], queryFn: fetchPalette })
   const colorways = useQuery({
     queryKey: ['plm-colorways', dropCode],
     queryFn: () => fetchPlmColorways(dropCode),
@@ -155,15 +157,16 @@ function PlmAssortment({ dropCode }: { dropCode: string }) {
   return (
     <section>
       <h2 style={S.h1}>{dropCode}</h2>
+      {palette.isError && <p role="alert">Палитра PLM не пришла — обновите страницу, чтобы выбрать цвет.</p>}
       <p style={{ ...S.dim, marginBottom: 16 }}>цветомодели plm · плашка — цвет ткани</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
         {(colorways.data ?? []).map((cw) => (
           <button
             key={cw.id}
-            disabled={!cw.can_work}
+            disabled={!cw.can_work || !palette.data}
             onClick={() => {
               if (!cw.can_work || !cw.product_code) return
-              const colour = cw.color ?? cw.base_color ?? 'WHITE'
+              const colour = colorwayColourCode(cw, palette.data?.colors ?? [])
               navigate(
                 `/references/new?product=${encodeURIComponent(cw.product_code)}&plm_colorway=${encodeURIComponent(cw.id)}&colour=${encodeURIComponent(colour)}&plm_drop=${encodeURIComponent(dropCode)}`,
               )
@@ -176,13 +179,7 @@ function PlmAssortment({ dropCode }: { dropCode: string }) {
             }}
             title={cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
           >
-            {plmImageUrl(cw.image) ? (
-              <img
-                src={plmImageUrl(cw.image)!}
-                alt=""
-                style={{ display: 'block', width: '100%', height: 96, objectFit: 'cover', borderRadius: 4, marginBottom: 8 }}
-              />
-            ) : (
+            <PlmModelImage id={cw.id} image={cw.image} label={`${cw.style_code} · ${cw.article}`} />
               <span
                 style={{
                   display: 'block',
@@ -193,7 +190,6 @@ function PlmAssortment({ dropCode }: { dropCode: string }) {
                   marginBottom: 8,
                 }}
               />
-            )}
             <b>{cw.color ?? cw.article}</b>
             <span style={S.dim}>
               {cw.style_code} · {cw.article}

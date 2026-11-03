@@ -271,11 +271,13 @@ async def enrich_colorways(db: AsyncSession, items: list[Colorway]) -> list[dict
     from reference_api.repositories import plm_links as links_repo
     from reference_api.repositories import products as products_repo
 
-    codes = await links_repo.product_codes(db, [c.style_code for c in items if c.style_code])
+    codes = await links_repo.product_codes(db, sorted({c.style_code for c in items if c.style_code}))
+    # Разбираем описание изделия один раз на ответ, а не для каждого цвета.
+    available = {code: products_repo.load_product(code) is not None for code in set(codes.values())}
     out: list[dict[str, Any]] = []
     for c in items:
         product = codes.get(c.style_code) if c.style_code else None
-        can = bool(product and products_repo.load_product(product) is not None)
+        can = bool(product and available.get(product))
         out.append(
             {
                 "id": c.id,

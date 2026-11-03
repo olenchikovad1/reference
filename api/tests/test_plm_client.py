@@ -80,3 +80,23 @@ async def test_image_fetch_asks_machine_thumb_not_original() -> None:
 
     with pytest.raises(plm.PlmRefused):
         await plm.fetch_image("http://plm.example/plm", "secret", "img-1", "original", transport=httpx.MockTransport(handler))
+
+
+async def test_many_colors_do_not_reload_the_same_garment(monkeypatch) -> None:
+    from reference_api.repositories import plm_links, products
+
+    async def linked(db, codes):
+        return {"2027": "B-HDY-14"}
+
+    loads = []
+
+    def garment(code):
+        loads.append(code)
+        return {"code": code}
+
+    monkeypatch.setattr(plm_links, "product_codes", linked)
+    monkeypatch.setattr(products, "load_product", garment)
+    items = [plm._colorway({"id": str(i), "style_code": "2027"}) for i in range(79)]
+    result = await plm.enrich_colorways(None, items)
+    assert all(row["can_work"] for row in result)
+    assert loads == ["B-HDY-14"], "79 цветов одной модели не должны 79 раз разбирать YAML"
