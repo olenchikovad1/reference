@@ -8,7 +8,7 @@ import { Slider, Section } from './controls'
 import { S } from './styles'
 import type { WorkWindowState } from './useWorkWindow'
 import { on, small } from './controls'
-import { PlmPassport } from './PlmPassport'
+import { PlmPassport } from '../../candidates/PlmPassport'
 
 // Панель изделия (план 114, US-0894 / US-0026): цвет и размер на виду;
 // гамма, блики, смещение, FPS — за «для показа».

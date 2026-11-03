@@ -3,11 +3,12 @@
 // Модель открывается карточкой (US-0718): кадры состояний, поля печати,
 // размерная сетка, цветомодели — каждый блок с подписью, откуда он и зачем.
 
-import { DataTable, EmptyState, Modal, PageHeader, type DataColumn } from '@platform/ui'
+import { buttonClass, DataTable, EmptyState, Modal, PageHeader, type DataColumn } from '@platform/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 
 import { DropFilterBar } from '../candidates/DropFilter'
+import { PlmPassportBrowser } from '../candidates/PlmPassport'
 import { fetchCatalogue, type TreeNode } from '../shared/api/drops'
 import { fetchProduct, frameUrl, type Product } from '../shared/api/products'
 import { passes, useDropFilter, type DropFilter } from '../shared/filters'
@@ -34,6 +35,7 @@ export function Products() {
   const tree = useQuery({ queryKey: ['catalogue'], queryFn: fetchCatalogue })
   const drop = useDropFilter()
   const [opened, setOpened] = useState<Model | null>(null)
+  const [passportOpen, setPassportOpen] = useState(false)
   const shown = tree.data ? pruned(tree.data, drop.filter) : []
   return (
     <main className="p-4">
@@ -42,6 +44,7 @@ export function Products() {
         description="Модели по товарной иерархии. Нажмите модель — кадры, поля печати, размеры и цветомодели."
       />
       <DropFilterBar {...drop} />
+      <button className={`${buttonClass({ tone: 'neutral', variant: 'outline', small: true })} my-3`} onClick={() => setPassportOpen(true)}>паспорт модели PLM</button>
       {tree.isPending ? (
         <p className="text-sm text-muted-foreground">Загружаю изделия…</p>
       ) : tree.isError ? (
@@ -58,6 +61,7 @@ export function Products() {
         </ul>
       )}
       {opened && <ProductCard model={opened} onClose={() => setOpened(null)} />}
+      {passportOpen && <Modal open onClose={() => setPassportOpen(false)} title="Паспорт модели PLM" size="wide"><PlmPassportBrowser /></Modal>}
     </main>
   )
 }
