@@ -94,7 +94,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     const canvas = editor.locator('[data-stage] svg').first();
     const bounds = await canvas.boundingBox();
     await canvas.click({ position: { x: bounds.width * 0.45, y: bounds.height * 0.58 } });
-    await editor.getByText('Паспорт plm', { exact: true }).waitFor();
+    await editor.getByText('Паспорт PLM', { exact: true }).waitFor();
     await editor.getByText(working.style_code + ' · ' + working.article, { exact: true }).waitFor();
     await page.screenshot({ path: path.join(process.env.PROFILE_OUTPUT, 'plm-restored.png') });
     refuseCatalogue = true;

@@ -2,12 +2,14 @@
 // плашками; отсюда — в конкретный цвет окна. Одна карточка на витрине, не
 // по карточке на каждый цвет (решение 0019).
 
-import { buttonClass } from '@platform/ui'
+import { buttonClass, Spinner } from '@platform/ui'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { fetchPalette, toCss } from '../shared/api/colours'
-import { fetchFamily, type FamilyColour } from '../shared/api/references'
+import { fetchFamily, openReference, type FamilyColour } from '../shared/api/references'
+import { savedPlmColorway } from '../shared/api/plm'
+import { PlmPassport } from './PlmPassport'
 
 export function FamilyPopup({
   referenceId,
@@ -27,6 +29,9 @@ export function FamilyPopup({
     queryFn: () => fetchFamily(referenceId),
   })
   const palette = useQuery({ queryKey: ['palette'], queryFn: fetchPalette })
+  const [passportOpen, setPassportOpen] = useState(false)
+  const saved = useQuery({ queryKey: ['reference-passport', referenceId], queryFn: () => openReference(referenceId), enabled: passportOpen, retry: 1 })
+  const colorway = savedPlmColorway(saved.data?.work)
   const root = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -88,6 +93,11 @@ export function FamilyPopup({
         <button className={`${buttonClass({ tone: 'neutral', variant: 'outline', small: true })} mt-3`} onClick={onOpen}>
           открыть сохранённую работу
         </button>
+        <button className={`${buttonClass({ tone: 'neutral', variant: 'outline', small: true })} mt-3 ml-2`} onClick={() => setPassportOpen(v => !v)} aria-expanded={passportOpen}>паспорт PLM</button>
+        {passportOpen && (saved.isPending ? <div role="status" className="mt-2 flex items-center gap-2 text-sm"><Spinner />Получаем связь с моделью PLM</div>
+          : saved.isError ? <p role="alert" className="mt-2 text-sm">{saved.error.message}</p>
+          : colorway ? <PlmPassport colorwayId={colorway} />
+          : <p className="mt-2 text-sm text-muted-foreground">В сохранённой версии нет связи с цветомоделью PLM.</p>)}
       </div>
     </div>
   )

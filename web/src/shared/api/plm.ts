@@ -37,6 +37,10 @@ export interface PlmPassport {
   size_range: string | null
   suppliers: string[]
   readiness: Record<string, PlmReadiness>
+  size_charts?: unknown[]
+  patterns?: unknown[]
+  technology?: unknown[]
+  bom?: unknown[]
   plm_path: string
   images?: PlmImage[]
 }
@@ -127,14 +131,22 @@ const READINESS_STATE: Record<PlmReadiness, string> = {
 export function readinessLines(marks: Record<string, PlmReadiness> | undefined): { label: string; state: string }[] {
   return Object.entries(READINESS_LABEL).map(([key, label]) => ({
     label,
-    state: READINESS_STATE[marks?.[key] ?? 'none'],
+    state: marks?.[key] ? (READINESS_STATE[marks[key]] ?? 'не передано') : 'не передано',
   }))
 }
 
 export function plmOpenUrl(webUrl: string | null | undefined, path: string | null | undefined): string | null {
-  if (!path) return null
-  if (!webUrl) return path
+  if (!path?.startsWith('/') || path.startsWith('//') || path.includes('\\')) return null
+  if (!webUrl || !/^https?:\/\//i.test(webUrl)) return null
   return `${webUrl.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+/** В старых версиях связи PLM может не быть: не подбираем модель по имени. */
+export function savedPlmColorway(work: unknown): string | null {
+  if (!work || typeof work !== 'object' || !('plm' in work)) return null
+  const plm = work.plm
+  return plm && typeof plm === 'object' && 'colorwayId' in plm && typeof plm.colorwayId === 'string'
+    ? plm.colorwayId : null
 }
 
 export function rgbCss(rgb: number[] | null | undefined): string | undefined {
