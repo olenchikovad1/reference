@@ -27,6 +27,6 @@ export function toUnit(c: Colour): [number, number, number] {
   return [c.rgb[0] / 255, c.rgb[1] / 255, c.rgb[2] / 255]
 }
 
-export function toCss(c: Colour): string {
+export function toCss(c: { readonly rgb: readonly [number, number, number] }): string {
   return `rgb(${c.rgb[0]}, ${c.rgb[1]}, ${c.rgb[2]})`
 }

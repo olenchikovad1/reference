@@ -226,6 +226,24 @@ class FamilyColourOut(BaseModel):
     in_family: bool
 
 
+class PlmFamilyColourOut(BaseModel):
+    colorway_id: str
+    article: str
+    colour_code: str
+    pantone_code: str | None
+    name: str
+    rgb: tuple[int, int, int] | None
+    in_family: bool
+    primary: bool
+
+
+class PlmFamilyOut(BaseModel):
+    style_id: str
+    style_code: str
+    drop_code: str
+    colours: list[PlmFamilyColourOut]
+
+
 
 
 class VersionMetaOut(Saver):

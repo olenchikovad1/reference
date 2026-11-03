@@ -1,5 +1,8 @@
 """Собранный принт: вход по HTTP."""
 
+from dataclasses import asdict
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, UploadFile
 from platform_client import Action, requires, requires_function
 from platform_client.rights import RequiredRight
@@ -31,6 +34,7 @@ from reference_api.schemas.references import (
     TrashedOut,
     RejectedOut,
     FamilyColourOut,
+    PlmFamilyOut,
     FoundReferenceOut,
     HiddenTagIn,
     TagIn,
@@ -45,7 +49,7 @@ from reference_api.schemas.references import (
     VersionMetaOut,
     VersionOut,
 )
-from reference_api.services import drops, people, review
+from reference_api.services import drops, people, review, plm
 from reference_api.services import references as service
 
 router = APIRouter(prefix="/references", tags=["references"])
@@ -100,6 +104,8 @@ async def create(body: SaveIn, request: Request, db: AsyncSession = Depends(sess
         raise HTTPException(status_code=422, detail=str(refusal)) from None
     except ValueError as refused:
         raise HTTPException(status_code=422, detail=str(refused)) from None
+    except (plm.PlmUnavailable, plm.PlmRefused) as failure:
+        raise _family_failure(failure) from failure
     return _saved(saved)
 
 
@@ -121,6 +127,10 @@ async def add_version(
         raise HTTPException(status_code=422, detail=str(refusal)) from None
     except service.Rejected as refusal:
         raise HTTPException(status_code=409, detail=str(refusal)) from None
+    except ValueError as refused:
+        raise HTTPException(status_code=422, detail=str(refused)) from None
+    except (plm.PlmUnavailable, plm.PlmRefused) as failure:
+        raise _family_failure(failure) from failure
     return _saved(saved)
 
 
@@ -688,6 +698,39 @@ async def recall(reference_id: int, request: Request, db: AsyncSession = Depends
 async def unapprove(reference_id: int, body: CommentIn, request: Request, db: AsyncSession = Depends(session)) -> list[StatusEventOut]:
     """Отменить согласование — редактор или главный, с причиной (план 094)."""
     return await _step(reference_id, "unapprove", request, db, body.comment)
+
+
+def _family_failure(failure: Exception) -> HTTPException:
+    if isinstance(failure, service.NoSuchReference):
+        return HTTPException(status_code=404, detail=str(failure))
+    if isinstance(failure, ValueError):
+        return HTTPException(status_code=422, detail=str(failure))
+    return HTTPException(status_code=503, detail={"code": "plm_unavailable", "message": "Состав семьи PLM недоступен. Повторите запрос или откройте сохранённую работу."})
+
+
+@router.get("/{reference_id}/plm-family", response_model=PlmFamilyOut | None, dependencies=[requires("references", Action.VIEW)])
+async def plm_family(reference_id: int, db: AsyncSession = Depends(session)) -> PlmFamilyOut | None:
+    """Живые цвета модели в дропе PLM. null — у сохранённой работы нет этой связи.
+
+    Состав не копируется. 422 — цветомодель отсутствует в дропе; 503 — повторить
+    чтение PLM. Сохранённая работа при отказе остаётся доступна.
+    """
+    from reference_api.services import plm
+    try:
+        result = await service.plm_family(db, reference_id)
+    except (service.NoSuchReference, ValueError, plm.PlmUnavailable, plm.PlmRefused) as failure:
+        raise _family_failure(failure) from failure
+    return PlmFamilyOut.model_validate(asdict(result)) if result else None
+
+
+@router.post("/{reference_id}/plm-family/{colorway_id}/{operation}", status_code=204, dependencies=[requires("references", Action.WRITE)])
+async def plm_family_colour(reference_id: int, colorway_id: str, operation: Literal["include", "exclude"], db: AsyncSession = Depends(session)) -> None:
+    """Исключить/вернуть внешний цвет. Повтор безопасен; чужой цвет — 422 без записи."""
+    from reference_api.services import plm
+    try:
+        await service.set_plm_family_colour(db, reference_id, colorway_id, operation == "exclude")
+    except (service.NoSuchReference, ValueError, plm.PlmUnavailable, plm.PlmRefused) as failure:
+        raise _family_failure(failure) from failure
 
 
 @router.get("/{reference_id}/family", response_model=list[FamilyColourOut], dependencies=[requires("references", Action.VIEW)])

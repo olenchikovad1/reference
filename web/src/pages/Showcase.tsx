@@ -790,6 +790,7 @@ export function Showcase() {
               const next = new URLSearchParams(search)
               next.delete('family')
               next.delete('colour')
+                next.delete('plm_colorway')
               navigate(`/references/${familyId}?${next}`, { state: { inApp: true, fromFamily: familyId } })
             }}
           onClose={() => {
@@ -797,10 +798,11 @@ export function Showcase() {
             next.delete('family')
             setSearch(next, { replace: true })
           }}
-          onPick={(colour) => {
+          onPick={(colour, colorwayId) => {
             const next = new URLSearchParams(search)
             next.delete('family')
             next.set('colour', colour)
+            if (colorwayId) next.set('plm_colorway', colorwayId)
             navigate(`/references/${familyId}?${next}`, {
               state: { inApp: true, fromFamily: familyId },
             })
@@ -890,10 +892,10 @@ function CreateDialog({
             {(colorways.data ?? []).slice(0, limit).map((cw) => (
               <button
                 key={cw.id}
-                disabled={!cw.can_work || !palette.data}
+                disabled={!drop || !cw.can_work || !palette.data}
                 onClick={() => onPickPlm({ ...cw, color: colorwayColourCode(cw, palette.data?.colors ?? []) }, drop)}
                 className={`${buttonClass({ tone: 'neutral', variant: 'outline' })} w-40 flex-col items-stretch`}
-                title={cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
+                title={!drop ? 'Выберите дроп для семьи' : cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
               >
                 <PlmModelImage id={cw.id} image={cw.image} label={`${cw.style_code} · ${cw.article}`} />
                   <span

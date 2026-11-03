@@ -19,6 +19,7 @@ from reference_api.models.references import (
     ReferenceTransfer,
     Reference,
     ReferenceColourExclusion,
+    ReferencePlmColourExclusion,
     ReferenceDraft,
     ReferencePosition,
     ReferenceHiddenTag,
@@ -32,6 +33,28 @@ from reference_api.models.drops import ColourModel, DropItem, GarmentModel
 #: Живой — не в корзине. Удалённое не узнаётся, не ищется и не стоит на
 #: витрине: иначе «удалил» значило бы «спрятал с одного экрана» (решение 0014).
 ALIVE = Reference.deleted_at.is_(None)
+
+
+async def plm_exclusions(db: AsyncSession, reference_id: int) -> set[str]:
+    return set(await db.scalars(select(ReferencePlmColourExclusion.colorway_id).where(
+        ReferencePlmColourExclusion.reference_id == reference_id)))
+
+
+async def latest_plm_selection(db: AsyncSession, reference_id: int) -> dict | None:
+    # Семье нужны три внешних ключа, а не все тяжёлые документы истории.
+    value = await db.scalar(select(ReferenceVersion.work["plm"]).where(
+        ReferenceVersion.reference_id == reference_id).order_by(ReferenceVersion.number.desc()).limit(1))
+    return value if isinstance(value, dict) else None
+
+
+async def set_plm_exclusion(db: AsyncSession, reference_id: int, colorway_id: str, excluded: bool) -> None:
+    if excluded:
+        await db.execute(insert(ReferencePlmColourExclusion).values(reference_id=reference_id, colorway_id=colorway_id)
+                         .on_conflict_do_nothing())
+    else:
+        await db.execute(delete(ReferencePlmColourExclusion).where(
+            ReferencePlmColourExclusion.reference_id == reference_id,
+            ReferencePlmColourExclusion.colorway_id == colorway_id))
 
 
 @dataclass(frozen=True)

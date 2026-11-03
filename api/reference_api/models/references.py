@@ -190,6 +190,14 @@ class ReferenceColourExclusion(Base):
     )
 
 
+class ReferencePlmColourExclusion(Base):
+    """Собственный выбор цвета семьи; внешний ключ PLM, без копии каталога."""
+
+    __tablename__ = "reference_plm_colour_exclusions"
+    reference_id: Mapped[int] = mapped_column(ForeignKey("reference_cards.id", ondelete="CASCADE"), primary_key=True)
+    colorway_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+
 class ReferenceVersion(Base):
 
     """Сохранённое состояние референса. Неизменяема (И-6): правка — это новая
