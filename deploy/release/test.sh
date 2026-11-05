@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# Быстрые тесты перед выкаткой: фронтенд (vitest) — без базы и без моделей.
-# Тесты сервиса с базой гоняются до слияния, на стенде (CLAUDE.md, «Проверки
-# кода»): в чистом клоне установки базы и моделей нет.
+# Приёмка выпуска по TC-2026-11-05; тестовые БД и модели готовит runner.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-registry="$(grep '^PLATFORM_NPM_REGISTRY=' infra/.env | cut -d= -f2-)"
-. deploy/release/_build-network.sh
-docker build --progress=plain "${build_network[@]}" --target dev -t reference-web-test --build-arg PLATFORM_NPM_REGISTRY="$registry" web >/dev/null
-# Манифест — тем же путём, что на стенде (infra/compose.yaml): тест разделов
-# сверяет меню с ним, а в образ фронтенда он не входит. pwd -W — путь Windows
-# для docker на машине выкатывающего; MSYS_NO_PATHCONV — чтобы Git Bash не
-# переписал путь внутри контейнера.
-root="$(pwd -W 2>/dev/null || pwd)"
-MSYS_NO_PATHCONV=1 docker run --rm -v "$root/manifest.reference.yaml:/manifest.reference.yaml:ro"   reference-web-test npx vitest run
+# TC-ADOPT-012: обязательное + влияние + регрессии + срок ротации. История
+# хранится вне чистого клона; новая рабочая копия не обнуляет last_success.
+candidate="$(git rev-parse --git-path reference-testing-candidate)"
+if [ -f "$candidate" ]; then
+  read -r candidate_commit candidate_tag < "$candidate"
+  if [ "$candidate_commit" != "$(git rev-parse HEAD)" ] || [ -z "$candidate_tag" ]; then
+    echo 'кандидат не принадлежит текущему коммиту — повторите build' >&2
+    exit 1
+  fi
+  python3 scripts/testing/run.py --stage candidate \
+    --image "api=reference-api:$candidate_tag" --image "web=reference-web:$candidate_tag" --image "tunnel=reference-tunnel:$candidate_tag"
+else
+  python3 scripts/testing/run.py --stage change
+fi

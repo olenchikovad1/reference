@@ -19,5 +19,8 @@ docker build -q -t "reference-api:$tag" api >/dev/null
 docker build --progress=plain "${build_network[@]}" --target prod -t "reference-web:$tag" \
   --build-arg PLATFORM_NPM_REGISTRY="$registry" --build-arg VITE_PLATFORM_URL="$platform_url" web >/dev/null
 docker build -q -t "reference-tunnel:$tag" infra/tunnel >/dev/null
+# Installation вызывает unit.test после build, до ship/apply. Передаём туда
+# кандидата через Git metadata: тяжёлая приёмка не входит в лимит сборки.
+printf '%s %s\n' "$(git rev-parse HEAD)" "$tag" > "$(git rev-parse --git-path reference-testing-candidate)"
 echo ""
 echo "тег: $tag"

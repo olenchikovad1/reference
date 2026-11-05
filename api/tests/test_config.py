@@ -39,7 +39,7 @@ def test_production_without_stand_mode_starts() -> None:
 def test_personal_bot_key_is_refused_in_production_service_settings(field: str) -> None:
     personal = "pfb_test_personal_token_never_deploy_this"
     with pytest.raises(ValidationError, match="личный MCP") as refused:
-        Settings(**BASE, platform_core_url="https://platform.toribrands.ru/platform/api/core",
+        Settings(**BASE, without_platform=False, platform_core_url="https://platform.toribrands.ru/platform/api/core",
                  **{field: personal}, _env_file=None)
     assert personal not in str(refused.value)
 

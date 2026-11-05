@@ -1,0 +1,22 @@
+{
+  "contract": "TC-2026-11-05",
+  "version": "1.0.0",
+  "adoption": "TC-ADOPT-012",
+  "profile": "standard",
+  "max_age_seconds": 604800,
+  "budget_seconds": 1200,
+  "rotation_schedule": "daily",
+  "regressions": ["REF-POLICY", "REF-API-release_core", "REF-WEB-shared.plmCanvas"],
+  "source": "https://github.com/Laretto-Team/installation/blob/main/TESTING-CONTRACT.md",
+  "core": ["REF-POLICY", "REF-WEB-shared.draftWriter", "REF-WEB-shared.plmCanvas", "REF-WEB-shared.sides", "REF-API-config", "REF-API-rights", "REF-API-release_core"],
+  "heavy_api": ["anime", "assets_api", "bulk", "example_transfer", "kinds", "models", "prints_api", "references_api", "retag", "search_api", "tags_api", "trash", "voice_model"],
+  "domains": {
+    "web": {"tests": "web/src/**/*.test.*", "areas": ["web/src/**", "web/package.json", "web/tsconfig.json", "web/vite.config.ts", "web/Dockerfile", "web/testing-inputs.cjs", "web/.npmrc", "web/public/**"]},
+    "api": {"tests": "api/tests/test_*.py", "areas": ["api/reference_api/**", "api/alembic/**", "api/alembic.ini", "api/pyproject.toml", "api/Dockerfile", "manifest.reference.yaml", "infra/stand/fixtures/**"]}
+  },
+  "not_applicable": {
+    "sensitive_visual_suite": "Reference has standard profile. PLM/PLATFORM scenario/visual IDs are owned by those projects. Existing Reference browser snapshots are not claimed as automatic visual comparisons.",
+    "platform_build_acceleration": "TC-ADOPT-009 belongs to platform; this project does not change platform builds.",
+    "production_test_writes": "All writing scenarios use disposable isolated PostgreSQL/S3; production verification is read-only."
+  }
+}

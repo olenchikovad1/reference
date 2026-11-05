@@ -1,0 +1,29 @@
+name: Reference testing contract
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: reference-testing-rotation
+  cancel-in-progress: false
+jobs:
+  rotation:
+    runs-on: [self-hosted, installation]
+    timeout-minutes: 60
+    env:
+      PLATFORM_NPM_REGISTRY: http://host.docker.internal:4873
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Execute standard rotation on synthetic isolated data
+        run: python3 scripts/testing/run.py --stage rotation --output "$HOME/.cache/reference-testing/evidence/ci-$GITHUB_RUN_ID"
+      - name: Preserve evidence including first failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-testing-evidence
+          path: ~/.cache/reference-testing/evidence/ci-${{ github.run_id }}
+          retention-days: 30
