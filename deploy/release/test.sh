@@ -11,8 +11,15 @@ if [ -f "$candidate" ]; then
     echo 'кандидат не принадлежит текущему коммиту — повторите build' >&2
     exit 1
   fi
+  api_image="$(docker image inspect "reference-api:$candidate_tag" --format '{{.Id}}')"
+  web_image="$(docker image inspect "reference-web:$candidate_tag" --format '{{.Id}}')"
+  tunnel_image="$(docker image inspect "reference-tunnel:$candidate_tag" --format '{{.Id}}')"
+  # HTTP-сценарий не изображает настоящий SSH. Проверяем поставляемый
+  # транспорт отдельно: точный скрипт из образа и исполняемый OpenSSH.
+  docker run --rm --entrypoint cat "$tunnel_image" /tunnel.sh | cmp - infra/tunnel/tunnel.sh
+  docker run --rm --entrypoint ssh "$tunnel_image" -V
   python3 scripts/testing/run.py --stage candidate \
-    --image "api=reference-api:$candidate_tag" --image "web=reference-web:$candidate_tag" --image "tunnel=reference-tunnel:$candidate_tag"
+    --image "api=$api_image" --image "web=$web_image" --image "tunnel=$tunnel_image"
 else
   python3 scripts/testing/run.py --stage change
 fi
