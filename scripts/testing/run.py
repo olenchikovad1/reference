@@ -137,6 +137,7 @@ def main() -> int:
             evidence.update(changed=changed, inputs=inputs, test_versions=versions, selected_ids=list(chosen),
                             selection_reasons=chosen, budget_seconds=budget,
                             environments=runtime.environments, selector_version='1.0.0',
+                            test_images={'api':runtime.api_image, 'web':runtime.web_image},
                             not_selected=[{'id':group.id, 'reason':'unchanged inputs and not due; outside rotation budget'}
                                           for group in groups if group.id not in chosen])
             evidence['source_files'] = sources

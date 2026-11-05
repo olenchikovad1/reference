@@ -17,6 +17,16 @@ from scripts.testing.policy import Group
 from scripts.testing.policy import fingerprint
 
 
+def image_runtime(image: dict) -> str:
+    """Attestation меняет image ID даже при тех же исполняемых слоях/настройках."""
+    required = ['RootFS', 'Config', 'Architecture', 'Os']
+    if any(image.get(key) is None for key in required) or not image['RootFS'].get('Layers'):
+        raise ValueError('Image runtime inputs are incomplete; reuse forbidden')
+    payload = {key:image[key] for key in required}
+    payload.update(Variant=image.get('Variant'), OsVersion=image.get('OsVersion'))
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
 def free_subnet(config: list[dict]) -> str:
     occupied = [ipaddress.ip_network(part['Subnet'], strict=False) for item in config
                 for part in (item.get('IPAM', {}).get('Config') or []) if part.get('Subnet')]
@@ -111,7 +121,7 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
 'dependency_records':hashlib.sha256(''.join(sorted((d.metadata['Name']+str(d.read_text('RECORD'))) for d in m.distributions())).encode()).hexdigest(),
 'dependencies':sorted((d.metadata['Name'],d.version) for d in m.distributions())}))'''
         self.environments['api'] = json.loads(self.checked(['docker', 'run', '--rm', self.api_image, 'python', '-c', probe]))
-        self.environments['api']['image'] = self.api_image
+        self.environments['api']['runtime'] = image_runtime(json.loads(self.checked(['docker','image','inspect',self.api_image]))[0])
         expected_api = fingerprint(self.root, ['api/reference_api/**','api/alembic/**','api/alembic.ini','api/pyproject.toml'], {'source':'api-code-v1'})
         if self.environments['api']['source'] != expected_api:
             raise RuntimeError('API image source differs from measured checkout')
@@ -143,7 +153,7 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             if code:
                 self.checked(['docker', 'pull', image], 600)
             self.environments['api'][key] = self.checked(['docker', 'image', 'inspect', image, '--format', '{{.Id}}'])
-        descriptor = {'api_image':self.api_image, 'model_data':self.environments['api']['model_data'],
+        descriptor = {'api_runtime':self.environments['api']['runtime'], 'model_data':self.environments['api']['model_data'],
                       'dependencies':self.environments['api']['dependencies'], 'configuration':'word-vectors-v1',
                       'engine':self.checked(['docker','info','--format','{{.ID}}/{{.NCPU}}/{{.KernelVersion}}'])}
         self.derived_descriptor = descriptor

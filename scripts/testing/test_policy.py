@@ -7,10 +7,18 @@ import json
 from unittest.mock import patch
 
 from scripts.testing.policy import Group, accepted, fingerprint, select, reusable, replay_selection
-from scripts.testing.runtime import DockerRuntime, free_subnet
+from scripts.testing.runtime import DockerRuntime, free_subnet, image_runtime
 
 
 class StrategyTests(unittest.TestCase):
+    def test_image_metadata_does_not_repeat_checks_but_runtime_changes_do(self):
+        image = {'Id':'first', 'RootFS':{'Layers':['one']}, 'Config':{'Env':['MODE=test']}, 'Architecture':'amd64', 'Os':'linux'}
+        self.assertEqual(image_runtime(image), image_runtime({**image,'Id':'second','Created':'other'}))
+        self.assertNotEqual(image_runtime(image), image_runtime({**image,'RootFS':{'Layers':['different']}}))
+        self.assertNotEqual(image_runtime(image), image_runtime({**image,'Config':{'Env':['MODE=other']}}))
+        with self.assertRaises(ValueError):
+            image_runtime({'Id':'only-tag-is-known'})
+
     def test_replay_cannot_bypass_unknown_impact_or_new_mandatory_checks(self):
         original = {'selected_ids':['one'], 'inputs':{'one':'same'}, 'seed':42,
                     'selection_reasons':{'one':['core']}}
