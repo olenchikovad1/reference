@@ -15,7 +15,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from scripts.testing.catalog import load
-from scripts.testing.policy import accepted, fingerprint, reusable, select
+from scripts.testing.policy import accepted, fingerprint, reusable, select, replay_selection
 from scripts.testing.runtime import DockerRuntime, command
 
 
@@ -133,9 +133,7 @@ def main() -> int:
                             budget=budget, seed=args.seed, regressions=policy.get('regressions', []) + args.regression)
             if args.replay:
                 original = json.loads(args.replay.read_text(encoding='utf-8'))
-                if original['seed'] != args.seed or any(inputs.get(key) != original['inputs'].get(key) for key in original['selected_ids']):
-                    raise ValueError('Replay inputs/seed differ; refusing to pretend equivalence')
-                chosen = {key: original['selection_reasons'][key] for key in original['selected_ids']}
+                chosen = replay_selection(chosen, original, inputs, args.seed)
             evidence.update(changed=changed, inputs=inputs, test_versions=versions, selected_ids=list(chosen),
                             selection_reasons=chosen, budget_seconds=budget,
                             environments=runtime.environments, selector_version='1.0.0',

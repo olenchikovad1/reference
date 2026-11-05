@@ -6,11 +6,20 @@ import ipaddress
 import json
 from unittest.mock import patch
 
-from scripts.testing.policy import Group, accepted, fingerprint, select, reusable
+from scripts.testing.policy import Group, accepted, fingerprint, select, reusable, replay_selection
 from scripts.testing.runtime import DockerRuntime, free_subnet
 
 
 class StrategyTests(unittest.TestCase):
+    def test_replay_cannot_bypass_unknown_impact_or_new_mandatory_checks(self):
+        original = {'selected_ids':['one'], 'inputs':{'one':'same'}, 'seed':42,
+                    'selection_reasons':{'one':['core']}}
+        self.assertEqual(replay_selection({'one':['core','affected']}, original, {'one':'same'}, 42),
+                         {'one':['core','affected']})
+        for current in [{'one':['unknown_influence']}, {'one':['core'],'new':['due_rotation']}]:
+            with self.assertRaises(ValueError):
+                replay_selection(current, original, {'one':'same'}, 42)
+
     def test_runner_failure_outside_assertions_cannot_become_success(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)

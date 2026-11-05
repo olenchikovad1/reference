@@ -284,6 +284,9 @@ async def test_large_catalogue_reads_only_a_bounded_page(catalogue, size):
     db.add_all([ReferenceVersion(reference_id=c.id, number=1, sheet_digest="c" * 64,
                                 image_digests=[], work={"payload": "x" * 1000}) for c in extra])
     await db.flush()
+    # Массовый seed не фиксируется: autovacuum не видит эти строки и не
+    # обновляет статистику. Планы должны видеть действительный объём фикстуры.
+    await db.execute(text('ANALYZE reference_cards, reference_versions, reference_positions'))
     result = await page(client, limit=60)
     assert len(result["items"]) == 60 and result["total"] == size
     assert result["next_cursor"]
@@ -298,12 +301,14 @@ async def test_real_http_saves_and_restores_large_order(catalogue, size):
     db.add_all([ReferenceVersion(reference_id=c.id, number=1, sheet_digest="d" * 64, image_digests=[], work={})
                 for c in extra])
     await db.flush()
+    await db.execute(text('ANALYZE reference_cards, reference_versions, reference_positions'))
     original = (await client.get("/reference/api/references/order?sort=own")).json()
     assert len(original) == size
     moved = original[1:] + original[:1]
     for order in (moved, original, original):
         response = await client.put("/reference/api/references/order", json={"ids": order})
         assert response.status_code == 204, response.text[:1000]
+        await db.execute(text('ANALYZE reference_positions'))
         assert (await client.get("/reference/api/references/order?sort=own")).json() == order
         first = await page(client, sort="own")
         assert [item["id"] for item in first["items"]] == order[:60]

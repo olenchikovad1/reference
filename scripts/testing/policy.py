@@ -57,6 +57,18 @@ def accepted(results: list[dict], selected: list[str]) -> bool:
                for row in results)
 
 
+def replay_selection(current: dict[str, list[str]], original: dict, inputs: dict, seed: int) -> dict[str, list[str]]:
+    if any('unknown_influence' in reasons for reasons in current.values()):
+        raise ValueError('Replay has unknown current influence; equivalence is not proven')
+    selected = original['selected_ids']
+    mandatory = {key for key, reasons in current.items() if reasons != ['rotation_budget']}
+    if mandatory - set(selected):
+        raise ValueError('Replay omits currently mandatory groups')
+    if original['seed'] != seed or any(inputs.get(key) != original['inputs'].get(key) for key in selected):
+        raise ValueError('Replay inputs/seed differ; refusing to pretend equivalence')
+    return {key:list(dict.fromkeys(original['selection_reasons'][key] + current.get(key, []))) for key in selected}
+
+
 def select(groups: list[Group], changed: list[str], history: dict, inputs: dict, *, now: float,
            max_age: float, budget: float, seed: int, regressions: list[str] | None = None) -> dict[str, list[str]]:
     if not groups or len({group.id for group in groups}) != len(groups):
