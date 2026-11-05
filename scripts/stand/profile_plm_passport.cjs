@@ -11,13 +11,18 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   assert(['localhost', '127.0.0.1'].includes(new URL(web).hostname), 'Local browser only');
   const access = JSON.parse(fs.readFileSync(process.env.PLATFORM_ACCESS_FILE, 'utf8').replace(/^\uFEFF/, ''));
   const origin = new URL(access.url).origin;
+  const direct = process.env.PLM_READ_URL;
+  const localApi = 'http://127.0.0.1:5185/reference/api/';
+  if (direct) assert(['localhost', '127.0.0.1'].includes(new URL(direct).hostname), 'Local read proxy only');
   const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
   const context = await browser.newContext({ viewport: { width: 1360, height: 980 } });
   let page;
   try {
     const source = async suffix => {
       try {
-        const response = await context.request.get(origin + '/reference/api/' + suffix, { headers: access.headers, timeout: 20000 });
+        const endpoint = direct && suffix.startsWith('plm/') && suffix !== 'plm/status'
+          ? direct + '/api/machine/' + suffix.slice(4) : (direct ? localApi : origin + '/reference/api/') + suffix;
+        const response = await context.request.get(endpoint, { headers: direct ? {} : access.headers, timeout: 20000 });
         if (!response.ok()) throw new Error('HTTP ' + response.status());
         return await response.json();
       } catch { throw new Error('Source read failed: ' + suffix.split('?')[0]); }
@@ -37,7 +42,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       assert.equal(route.request().method(), 'GET', 'No mutation in this demonstration');
       const suffix = new URL(route.request().url()).pathname.replace('/reference/api/', '');
       let json;
-      if (suffix === 'plm/status') json = status;
+      if (suffix === 'plm/status') json = { ...status, web_url: status.web_url || origin + '/plm' };
       else if (suffix === 'plm/colorways') json = { items: [model] };
       else if (suffix === 'plm/colorways/' + model.id) {
         reads++;
@@ -86,7 +91,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     await page.screenshot({ path: path.join(process.env.PROFILE_OUTPUT, 'plm-passport-family.png') });
     await page.keyboard.press('Escape'); await family.waitFor({ state: 'hidden' });
     console.log(JSON.stringify({ realPlmReads: true, localSavedReferenceFixture: true, writes: 0,
-      colorway: model.id, productsPassport: true, familyPassport: true, refreshed: true, unavailableMarkVisible: true, retryAfter503: true, keyboard: true, passportReads: reads }));
+      colorway: model.id, localWebUrlFixture: !status.web_url,
+      productsPassport: true, familyPassport: true, refreshed: true, unavailableMarkVisible: true, retryAfter503: true, keyboard: true, passportReads: reads }));
   } catch (error) {
     if (page) await page.screenshot({ path: path.join(process.env.PROFILE_OUTPUT, 'plm-passport-error.png') });
     throw error;
