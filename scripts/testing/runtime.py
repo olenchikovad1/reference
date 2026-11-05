@@ -111,6 +111,7 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
 'dependency_records':hashlib.sha256(''.join(sorted((d.metadata['Name']+str(d.read_text('RECORD'))) for d in m.distributions())).encode()).hexdigest(),
 'dependencies':sorted((d.metadata['Name'],d.version) for d in m.distributions())}))'''
         self.environments['api'] = json.loads(self.checked(['docker', 'run', '--rm', self.api_image, 'python', '-c', probe]))
+        self.environments['api']['image'] = self.api_image
         expected_api = fingerprint(self.root, ['api/reference_api/**','api/alembic/**','api/alembic.ini','api/pyproject.toml'], {'source':'api-code-v1'})
         if self.environments['api']['source'] != expected_api:
             raise RuntimeError('API image source differs from measured checkout')
