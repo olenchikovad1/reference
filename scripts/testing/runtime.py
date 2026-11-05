@@ -1,5 +1,6 @@
 """Только временные тестовые контейнеры. Рабочие env/БД сюда не передаются."""
 import hashlib
+import base64
 import importlib.util
 import ipaddress
 import json
@@ -9,7 +10,6 @@ import platform
 import re
 import subprocess
 import time
-import urllib.request
 import uuid
 import xml.etree.ElementTree as ET
 
@@ -66,7 +66,7 @@ class DockerRuntime:
                                                      'executable':hashlib.sha256(Path(sys.executable).read_bytes()).hexdigest()}}
         self.env = {
             'DATABASE_URL': f'postgresql+asyncpg://tc:synthetic-only@{self.prefix}-db/tc',
-            'S3_ENDPOINT': f'http://{self.prefix}-s3:9000', 'S3_BUCKET': 'tc',
+            'S3_ENDPOINT': f'http://{self.prefix}-s3:9000', 'S3_BUCKET': 'tc-assets',
             'S3_ACCESS_KEY': 'synthetic', 'S3_SECRET_KEY': 'synthetic-test-only',
             'FILES_VOLUME_PATH': '/srv/reference/files', 'FIXTURES_PATH': '/srv/reference/fixtures',
             'EMBEDDING_MODEL_PATH': '/srv/reference/files/models/clip-vit-base-patch32/vision_model_quantized.onnx',
@@ -307,7 +307,7 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
         digests = {key:self.checked(['docker', 'image', 'inspect', value, '--format', '{{.Id}}']) for key, value in self.images.items()}
         # Схема и ведро только в одноразовом приватном контуре.
         self.checked(['docker', 'run', '--rm', *self.api_flags(), self.api_image, 'alembic', 'upgrade', 'head'])
-        create_bucket = 'import boto3,os; boto3.client("s3",endpoint_url=os.environ["S3_ENDPOINT"],aws_access_key_id="synthetic",aws_secret_access_key="synthetic-test-only").create_bucket(Bucket="tc")'
+        create_bucket = 'import boto3,os; boto3.client("s3",endpoint_url=os.environ["S3_ENDPOINT"],aws_access_key_id="synthetic",aws_secret_access_key="synthetic-test-only").create_bucket(Bucket=os.environ["S3_BUCKET"])'
         self.checked(['docker', 'run', '--rm', *self.api_flags(), self.api_image, 'python', '-c', create_bucket])
         api_name = self.prefix + '-api'
         self.created.append(api_name)
@@ -316,22 +316,27 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
                       'uvicorn', 'reference_api.app:app', '--host', '0.0.0.0', '--port', '8031'])
         web_name = self.prefix + '-web'
         self.created.append(web_name)
-        self.checked(['docker', 'run', '-d', '--name', web_name, '--network', self.prefix, '-p', '127.0.0.1::5173',
+        self.checked(['docker', 'run', '-d', '--name', web_name, '--network', self.prefix,
                       '--label', 'reference.testing=' + self.prefix, self.images['web']])
-        port = self.checked(['docker', 'port', web_name, '5173/tcp']).splitlines()[0].rsplit(':', 1)[1]
-        base = 'http://127.0.0.1:' + port
+        base = 'http://' + web_name + ':5173'
 
         def request(path: str, body: dict | None = None) -> tuple[int, bytes]:
-            data = json.dumps(body).encode() if body is not None else None
-            req = urllib.request.Request(base + path, data=data, headers={'Content-Type':'application/json'})
-            with urllib.request.urlopen(req, timeout=10) as response:
-                return response.status, response.read()
+            # У --internal сети нет опубликованного host-порта. Клиент идёт
+            # по настоящему HTTP к nginx внутри того же изолированного контура.
+            client = '''import sys,json,urllib.request,base64
+data=sys.argv[2].encode() if sys.argv[2] else None
+request=urllib.request.Request(sys.argv[1],data=data,headers={'Content-Type':'application/json'})
+with urllib.request.urlopen(request,timeout=10) as response:
+ print(json.dumps({'status':response.status,'body':base64.b64encode(response.read()).decode()}))'''
+            raw = json.loads(self.checked(['docker','exec',api_name,'python','-c',client,
+                                          base + path, json.dumps(body) if body is not None else ''], 20))
+            return raw['status'], base64.b64decode(raw['body'])
 
         for _attempt in range(30):
             try:
                 if request('/reference/api/health/live')[0] == 200:
                     break
-            except (OSError, urllib.error.URLError):
+            except (OSError, RuntimeError):
                 pass
             time.sleep(1)
         else:
