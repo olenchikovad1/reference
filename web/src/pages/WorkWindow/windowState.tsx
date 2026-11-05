@@ -1,3 +1,4 @@
+import { encodeCanvasComposition, isCanvasCode, plmCanvasCode } from '../../shared/plmCanvas'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -51,7 +52,7 @@ export function useWindowState() {
   // проходить через «Загружаю изделие…» ни на кадр (US-0600).
   // Код изделия из адреса (?product=) или стендовый по умолчанию (US-0886).
   const [plm, setPlm] = useState<PlmSelection | null>(() => ref === 'new' ? plmSelection(location.search) : null)
-  const productCode = plm?.productCode ?? (ref === 'new' ? new URLSearchParams(location.search).get('product') : null) ?? PRODUCT
+  const productCode = (plm && isCanvasCode(plm.productCode) ? plmCanvasCode(plm.colorwayId) : plm?.productCode) ?? (ref === 'new' ? new URLSearchParams(location.search).get('product') : null) ?? PRODUCT
   const [product, setProduct] = useState<Product | null>(
     () => queries.getQueryData<Product>(productQuery(productCode).queryKey) ?? null,
   )
@@ -69,7 +70,8 @@ export function useWindowState() {
   const setComposition = history.set
   const commit = history.commit
   const [dropHint, setDropHint] = useState<string | null>(null)
-  const [params, setParams] = useState<RenderParams>(DEFAULT_PARAMS)
+  const [renderParams, setParams] = useState<RenderParams>(DEFAULT_PARAMS)
+  const params: RenderParams = product?.coordinate_space === 'canvas' ? { ...renderParams, effects: false, preserveFrame: true } : renderParams
   const [renderScale, setRenderScale] = useState(2)
   const [fps, setFps] = useState<number | null>(null)
   const [colours, setColours] = useState<Colour[]>(() => queries.getQueryData<{ colors: Colour[] }>(['palette'])?.colors ?? [])
@@ -212,7 +214,6 @@ export function useWindowState() {
   useEffect(() => {
     // Изделие, палитра и набор одни на все карточки: грузятся один раз за
     // вкладку и берутся из кэша при каждом следующем открытии окна.
-    queries.fetchQuery(productQuery(productCode)).then(setProduct).catch((e: Error) => setError(e.message))
     queries
       .fetchQuery({ queryKey: ['palette'], queryFn: fetchPalette, staleTime: Infinity })
       .then((p) => setColours(p.colors))
@@ -238,14 +239,22 @@ export function useWindowState() {
 
   // Изделие с кадров — из ?product= (цветомодель plm), иначе стендовый код.
   useEffect(() => {
-    queries.fetchQuery(productQuery(productCode)).then(setProduct).catch((e: Error) => setError(e.message))
+    let active = true
+    setError(null)
+    setProduct(queries.getQueryData<Product>(productQuery(productCode).queryKey) ?? null)
+    queries.fetchQuery(productQuery(productCode)).then(value => { if (active) setProduct(value) }).catch((e: Error) => { if (active) setError(e.message) })
+    return () => { active = false }
   }, [productCode, queries])
 
   const state = product?.states.find((s) => s.code === stateCode) ?? product?.states[0] ?? null
+  useEffect(() => {
+    if (product && !product.states.some(view => view.code === stateCode) && product.states[0]) setStateCode(product.states[0].code)
+  }, [product, stateCode])
   // Калибровка ВЫБРАННОГО размера: от неё зависят и показ, и проверки, и
   // перетаскивание. Одна на всех — разложенная по местам, она разошлась бы, и
   // принт на экране оказался бы не того размера, что в проверке.
-  const grid = product?.size_grid ?? null
+  // Размерную сетку временно исключили из рабочего сценария по поручению владельца.
+  const grid = useMemo<Product['size_grid']>(() => null, [])
   const grade = gradeOf(grid, size)
   // Опущенный капюшон на выбранном размере: его длина растёт медленнее груди,
   // а кадр показывает любой размер одним рисунком — зона на кадре меняется во
@@ -378,7 +387,9 @@ export function useWindowState() {
     if (!dirty || nowKey === onServer.current) return
     onServer.current = nowKey
     const body: DraftBody = {
-      work: { version: 2, stateCode, colourCode, size, composition: { ...composition, selectedId: null }, plm },
+      work: product?.coordinate_space === 'canvas'
+        ? { version: 3, coordinateSpace: 'canvas', stateCode, colourCode, composition: encodeCanvasComposition(composition), plm }
+        : { version: 2, stateCode, colourCode, size, composition: { ...composition, selectedId: null }, plm },
       base_number: current ? viewing : null,
     }
     writer.change(current?.id ?? null, body)
@@ -398,6 +409,7 @@ export function useWindowState() {
   // на переде не исчезает оттого, что смотрят на спину (правка владельца 25.09).
   const checked = useDeferredValue(sized)
   function inspectComposition(work: Composition): SideFinding[] {
+    if (product?.coordinate_space === 'canvas') return []
     return (product?.states ?? [])
         .filter((s) => s.kind !== 'illustrative')
         .flatMap((s) => {
@@ -618,7 +630,7 @@ export function useWindowState() {
     rules,
     checked,
     findings,
-    savedChecks: () => ({ source: 'browser-geometry', available: Boolean(product),
+    savedChecks: () => ({ source: product?.coordinate_space === 'canvas' ? 'visual-canvas' : 'browser-geometry', available: Boolean(product) && product?.coordinate_space !== 'canvas',
       product_code: product?.code ?? null, size, provisional: calibration.provisional,
       items: product ? inspectComposition(sized) : null }),
   }

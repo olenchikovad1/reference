@@ -161,7 +161,6 @@ function Described({ product }: { product: Product }) {
       cell: (r: FieldRow) => (r.byField[f] ? r.byField[f].join(' × ') : '—'),
     })),
   ]
-  const grid = product.size_grid
   return (
     <>
       <Block
@@ -171,7 +170,7 @@ function Described({ product }: { product: Product }) {
         <div className="flex flex-wrap gap-3">
           {product.states.map((st) => (
             <figure key={st.code} className="w-36">
-              <img src={frameUrl(product.code, st.code)} alt={st.display_name} className="h-36 w-36 rounded bg-muted object-contain" />
+              <img src={frameUrl(product.code, st.code, st.frame)} alt={st.display_name} className="h-36 w-36 rounded bg-muted object-contain" />
               <figcaption className="mt-1 text-xs">
                 <b>{st.display_name}</b>
                 <div className="text-muted-foreground">{st.kind === 'precise' ? 'точный ракурс' : 'иллюстративный'}</div>
@@ -194,22 +193,7 @@ function Described({ product }: { product: Product }) {
         <DataTable rows={fieldRows} columns={fieldColumns} rowKey={(r) => r.size} pagination="off" empty="Полей печати в описании нет — проверки поля не работают." />
         {fields?.provisional && <p className="mt-1 text-xs text-muted-foreground">Числа предварительные.</p>}
       </Block>
-      <Block
-        title="Размерная сетка"
-        about={`Во сколько раз изделие размера больше базового. Работа хранится в базовом размере${grid ? ` (${grid.base})` : ''}, выбранный размер — взгляд на неё: меняются числа и рамка поля.`}
-      >
-        <p className="text-xs">
-          Ряд «{product.size_set.name}»: {product.size_set.sizes.join(', ')}
-        </p>
-        {grid && (
-          <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-            {Object.entries(grid.by_size)
-              .map(([s, k]) => `${s} — ×${k.toFixed(2)}`)
-              .join(' · ')}
-            {grid.provisional && ' (предварительно, по росту)'}
-          </p>
-        )}
-      </Block>
+
     </>
   )
 }

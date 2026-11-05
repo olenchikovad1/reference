@@ -170,7 +170,9 @@ export function WorkWindow() {
   if (error)
     return (
       <WorkFrame label="рабочее окно" bar={closeOnly} open={windowOpen}>
-        <p className="p-6">Изделие не загрузилось: {error}. Закройте окно и откройте референс ещё раз.</p>
+        <div className="p-6" role="alert">Изделие не загрузилось: {error}.{' '}
+          <button className={small()} onClick={() => window.location.reload()}>повторить загрузку</button>
+        </div>
       </WorkFrame>
     )
   if (!product || !state)
@@ -180,6 +182,8 @@ export function WorkWindow() {
       </WorkFrame>
     )
 
+  const visualCanvas = product.coordinate_space === 'canvas'
+  const placementUnit = visualCanvas ? ' % холста' : ' см'
   const cal = product.calibration
   const hiddenCodes = new Set((refTags?.hidden ?? []).map((h) => h.code))
   const autoTags = [
@@ -261,17 +265,20 @@ export function WorkWindow() {
   const placement = selected && (
     <Section title="Размещение">
       <Num
-        label="от горловины вниз"
+        label={visualCanvas ? 'от центра вниз' : 'от горловины вниз'}
+        unit={placementUnit}
         value={selected.placement.dyCm}
         onChange={(v) => commit((c) => placeSized(c, selected.id, { dyCm: v }))}
       />
       <Num
         label="от центра вбок"
+        unit={placementUnit}
         value={selected.placement.dxCm}
         onChange={(v) => commit((c) => placeSized(c, selected.id, { dxCm: v }))}
       />
       <Num
         label="ширина"
+        unit={placementUnit}
         value={selected.placement.widthCm}
         onChange={(v) => commit((c) => placeSized(c, selected.id, { widthCm: Math.max(0.5, v) }))}
       />
@@ -312,8 +319,8 @@ export function WorkWindow() {
         unit=""
         onChange={(v) => commit((c) => place(c, selected.id, { rotation: v }))}
       />
-      <p className="text-xs text-muted-foreground">высота {formatCm(heightCm(selected))} — следует за пропорцией</p>
-      <p className="text-xs text-muted-foreground">стрелки двигают на 1 мм, с Shift — на 1 см</p>
+      <p className="text-xs text-muted-foreground">высота {visualCanvas ? `${heightCm(selected).toFixed(1)} % холста` : formatCm(heightCm(selected))} — следует за пропорцией</p>
+      <p className="text-xs text-muted-foreground">{visualCanvas ? 'стрелки двигают на 0.1% холста, с Shift — на 1%' : 'стрелки двигают на 1 мм, с Shift — на 1 см'}</p>
     </Section>
   )
 
@@ -365,7 +372,7 @@ export function WorkWindow() {
                 )}
                 <GarmentCanvas
                   state={state}
-                  frameSrc={frameUrl(product.code, state.code)}
+                  frameSrc={frameUrl(product.code, state.code, state.frame)}
                   calibration={calibration}
                   composition={sized}
                   side={stateCode}
@@ -565,7 +572,7 @@ export function WorkWindow() {
                 <GarmentCanvas
                   preview
                   state={s}
-                  frameSrc={frameUrl(product.code, s.code)}
+                  frameSrc={frameUrl(product.code, s.code, s.frame)}
                   calibration={calibration}
                   composition={thumbWork}
                   clips={clips}
@@ -601,7 +608,7 @@ export function WorkWindow() {
               garmentPanel
             ) : (
               <p className="text-xs text-muted-foreground">
-                Нажмите на принт или надпись — здесь появятся размер, положение и поворот; на изделие — его цвет, размер
+                Нажмите на принт или надпись — здесь появятся размер, положение и поворот; на изделие — его цвет
                 и показ. Tab — по объектам с клавиатуры.
               </p>
             )}
@@ -612,7 +619,7 @@ export function WorkWindow() {
               <p className="pf-card px-3 py-2 text-xs text-muted-foreground">
                 {state.kind === 'illustrative'
                   ? 'Это иллюстративный ракурс: он показывает, но размещать по нему нельзя — силуэт сокращён, и размер в сантиметрах по нему соврёт.'
-                  : 'Перетащите сюда картинки — можно несколько разом. Нажмите на изделие — его цвет и размер.'}
+                  : 'Перетащите сюда картинки — можно несколько разом. Нажмите на изделие — его цвет.'}
               </p>
             )}
             {dropHint && (
@@ -814,7 +821,7 @@ export function WorkWindow() {
             </Section>
           )}
 
-          <Section title={`Проверки · ${open.length}`}>
+          {!visualCanvas && <Section title={`Проверки · ${open.length}`}>
             {open.length === 0 && composition.elements.length > 0 && (
               <p className="text-xs text-muted-foreground">находок нет</p>
             )}
@@ -850,11 +857,11 @@ export function WorkWindow() {
             {dismissed.size > 0 && (
               <p className="text-xs text-muted-foreground">закрыто «так и задумано»: {dismissed.size}</p>
             )}
-          </Section>
+          </Section>}
 
           <Section title="Выгрузка">
             <div className="flex flex-wrap gap-1">
-              <button
+              {!visualCanvas && <button
                 onClick={() => void downloadSheet()}
                 // Пока проверки не догнали работу, лист не выгружается: иначе
                 // «находок нет» значило бы «ещё не считали».
@@ -872,12 +879,12 @@ export function WorkWindow() {
               >
                 {/* Что будет сохранено — видно на кнопке, а не после (решение 0015). */}
                 {current && dirty ? `печатный лист · сохранит версию ${current.number + 1}` : 'печатный лист'}
-              </button>
+              </button>}
               <button onClick={downloadSnapshot} className={small()} title="Изделие как его увидит человек — со складками, тенью и цветом">
                 картинкой
               </button>
             </div>
-            {composition.elements.length > 0 && (
+            {!visualCanvas && composition.elements.length > 0 && (
               <p className="text-xs text-muted-foreground">
                 {/* Габарит ЭТОЙ стороны на ВЫБРАННОМ размере: лист выгружается
                     по сторонам и по размеру. */}

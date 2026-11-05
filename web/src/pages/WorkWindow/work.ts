@@ -1,4 +1,5 @@
 
+import { decodeCanvasComposition, type CanvasComposition } from '../../shared/plmCanvas'
 import { DEFAULT_PARAMS, type RenderParams } from '../../candidates/renderer'
 import { type Composition, type PrintElement } from '../../shared/composition'
 import { type Draft } from '../../shared/api/references'
@@ -14,7 +15,13 @@ export interface SavedWork {
   stateCode?: string
   colourCode?: string
   size?: number | null
-  composition?: Composition
+  coordinateSpace?: 'canvas'
+  composition?: Composition | CanvasComposition
+}
+
+/** Старые версии читаются как прежде; v3 содержит доли холста, не сантиметры. */
+export function readComposition(work: SavedWork): Composition {
+  return work.coordinateSpace === 'canvas' ? decodeCanvasComposition(work.composition as CanvasComposition) : work.composition as Composition
 }
 
 /** URL задаёт новую работу; сохранённую связь берём из документа версии. */

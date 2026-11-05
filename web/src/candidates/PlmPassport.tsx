@@ -32,11 +32,9 @@ export function PlmPassport({ colorwayId }: { colorwayId: string }) {
                 ['артикул', [p.style_code, p.article].filter(Boolean).join(' · ')],
                 ['бренд', p.brand], ['поставщик', p.suppliers.join(', ')],
                 ['категория', p.category], ['цвет', p.color], ['дроп', p.drop_code],
-                ['размерный ряд', p.size_range],
               ].map(([label, value]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd>{value || 'PLM не передал'}</dd></div>)}
               <div><dt className="text-muted-foreground">номер спецификации</dt><dd>PLM не передал</dd></div>
             </dl>
-            <p className="text-xs text-muted-foreground">Размерный ряд — названия размеров. Физические мерки в сантиметрах этим паспортом не переданы.</p>
             <p className="text-xs font-medium">Готовность модели по PLM</p>
             <ul className="space-y-1 text-xs">{readinessLines(p.readiness).map((row, i) => <li key={row.label}>
               {row.label}: <strong>{row.state}</strong>

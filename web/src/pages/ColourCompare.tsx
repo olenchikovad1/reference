@@ -5,6 +5,9 @@
 
 import { Checkbox, buttonClass } from '@platform/ui'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueries } from '@tanstack/react-query'
+import { plmCanvasCode } from '../shared/plmCanvas'
+import { productQuery } from '../shared/api/products'
 
 import { GarmentCanvas } from '../candidates/GarmentCanvas'
 import type { RenderParams } from '../candidates/renderer'
@@ -64,7 +67,12 @@ export function ColourCompare({
   const [picked, setPicked] = useState<Set<string>>(new Set())
   useEffect(() => { setShown(old => old.length ? old : choices.slice(0, 3).map(c => c.code)) }, [choices])
   const canvases = useRef<Record<string, Record<string, HTMLCanvasElement | null>>>({})
-  const sides = product.states.filter((s) => s.kind !== 'illustrative')
+  const visibleChoices = choices.filter(choice => shown.includes(choice.code))
+  const canvasProducts = useQueries({ queries: visibleChoices.map(choice => ({
+    ...productQuery(choice.plmColorwayId ? plmCanvasCode(choice.plmColorwayId) : product.code),
+    enabled: product.coordinate_space === 'canvas' && Boolean(choice.plmColorwayId),
+    retry: false,
+  })) })
 
   // Средний цвет каждой картинки по непрозрачным точкам — для проверки
   // контраста. Картинка ещё не загрузилась — не проверяется.
@@ -148,8 +156,10 @@ export function ColourCompare({
       <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.max(1, shown.length)}, minmax(0, 1fr))` }}>
         {choices
           .filter((c) => shown.includes(c.code))
-          .map((c) => {
+          .map((c, index) => {
             const findings = lowContrast(composition, c.rgb, c.name, imageRgb)
+            const source = product.coordinate_space === 'canvas' ? canvasProducts[index].data : product
+            const views = source ? source.states.filter(view => view.kind !== 'illustrative') : []
             return (
               <section key={c.code} className="pf-card flex flex-col gap-2 border border-line p-2">
                 <Checkbox
@@ -158,13 +168,14 @@ export function ColourCompare({
                   onChange={(on) => setPick(c.code, on)}
                 />
                 <div className="grid grid-cols-2 gap-1">
-                  {sides.map((s) => (
+                  {!source && <p role="status">{canvasProducts[index].isError ? 'Ракурсы PLM не пришли' : 'Загружаем ракурсы PLM…'}</p>}
+                  {views.map((s) => (
                     <div key={s.code} className="text-center text-[11px] text-muted-foreground">
                       {s.display_name}
                       <GarmentCanvas
                         preview
                         state={s}
-                        frameSrc={frameUrl(product.code, s.code)}
+                        frameSrc={frameUrl(source!.code, s.code, s.frame)}
                         calibration={calibration}
                         composition={onSide(composition, s.code)}
                         side={s.code}

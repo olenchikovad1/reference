@@ -14,7 +14,7 @@ import { anchorOnSurface, seamArc, toSurface, type Panel, type Torso } from './t
 
 export interface FrameState {
   readonly code: string
-  readonly kind: 'precise' | 'illustrative'
+  readonly kind: 'precise' | 'illustrative' | 'canvas'
   readonly anchors: Record<string, [number, number]>
   readonly zones: Record<string, [number, number][]>
   readonly lines: Record<string, [number, number][]>

@@ -1,5 +1,6 @@
 import type { SizeGrid } from '../grading'
 import type { TorsoData } from '../torso'
+import { fetchCanvasProduct, isCanvasCode } from '../plmCanvas'
 
 // Клиент описания изделия.
 //
@@ -21,10 +22,10 @@ export interface State {
   code: string
   display_name: string
   /** precise — по нему размещают и считают; illustrative — только показ. */
-  kind: 'precise' | 'illustrative'
+  kind: 'precise' | 'illustrative' | 'canvas'
   hood: string | null
   zipper: string | null
-  frame: { width: number; height: number; sha256: string }
+  frame: { width: number; height: number; sha256: string; src?: string }
   silhouette: Record<string, number>
   anchors: Record<string, [number, number]>
   zones: Record<string, [number, number][]>
@@ -43,6 +44,7 @@ export interface HoodDown {
 }
 
 export interface Product {
+  coordinate_space?: 'canvas'
   /** Упрощённый объём торса. Нет — показ плоский, как раньше. */
   torso?: TorsoData | null
   /** Размерная сетка. Нет — размер меняет только поле печати. */
@@ -72,6 +74,7 @@ export interface Product {
 }
 
 export async function fetchProduct(code: string): Promise<Product> {
+  if (isCanvasCode(code)) return fetchCanvasProduct(code)
   const r = await fetch(`${BASE}products/${code}`)
   if (!r.ok) throw new Error(`Изделие ${code}: ${r.status}`)
   return (await r.json()) as Product
@@ -84,6 +87,6 @@ export const productQuery = (code: string) => ({
   staleTime: Infinity,
 })
 
-export function frameUrl(code: string, state: string): string {
-  return `${BASE}products/${code}/states/${state}/frame`
+export function frameUrl(code: string, state: string, frame?: State['frame']): string {
+  return frame?.src ?? `${BASE}products/${code}/states/${state}/frame`
 }
