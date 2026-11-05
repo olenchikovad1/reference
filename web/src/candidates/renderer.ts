@@ -35,6 +35,7 @@ uniform float uDisplace;      // сила смещения
 uniform float uShade;         // сила затенения принта
 uniform float uShadeGamma;    // гамма затенения
 uniform float uWhite;         // опорный белый изделия, 0..1
+uniform float uPreserveFrame;
 uniform float uEffects;       // 1 — с эффектами, 0 — плоско
 uniform vec3  uBase;          // цвет изделия
 uniform float uBaseGamma;     // гамма перекраски
@@ -87,7 +88,7 @@ void main() {
   vec3 tinted = uBase * pow(l, uBaseGamma);
   float spec = max(0.0, l - uSpecCut) / max(1e-3, 1.0 - uSpecCut);
   tinted += vec3(spec * spec * uSpecAmount);
-  garment.rgb = clamp(tinted, 0.0, 1.0);
+  if (uPreserveFrame < 0.5) garment.rgb = clamp(tinted, 0.0, 1.0);
 
   // Градиент размытой яркости. Складка — это и есть перепад яркости, поэтому
   // её же градиент и тянет рисунок: физически неверно, на ткани убедительно.
@@ -122,6 +123,8 @@ void main() {
 }`
 
 export interface RenderParams {
+  /** Цветной ракурс PLM сохраняет исходный цвет, без перекраски серой базы. */
+  preserveFrame?: boolean
   /** Цвет изделия, 0..1 по каналу. */
   base: [number, number, number]
   baseGamma: number
@@ -260,6 +263,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
       gl.uniform1f(u('uShadeGamma'), params.shadeGamma)
       gl.uniform1f(u('uWhite'), white)
       gl.uniform1f(u('uEffects'), params.effects ? 1 : 0)
+      gl.uniform1f(u('uPreserveFrame'), params.preserveFrame ? 1 : 0)
       gl.uniform3f(u('uBase'), params.base[0], params.base[1], params.base[2])
       gl.uniform1f(u('uBaseGamma'), params.baseGamma)
       gl.uniform1f(u('uSpecCut'), params.specCut)

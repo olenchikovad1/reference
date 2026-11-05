@@ -1,3 +1,4 @@
+import { plmCanvasCode } from '../shared/plmCanvas'
 // Витрина референсов (US-0491): работы карточками — изделие спереди и сзади,
 // а не список имён. Три строки при любой высоте окна, столбцов — сколько
 // помещается, остальное листается вбок. Первая карточка — «+»: новый референс
@@ -9,7 +10,7 @@
 
 import { EmptyState, IconButton, Modal, PageHeader, Select, Spinner, TextInput, buttonClass } from '@platform/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { CODE } from '../app/shell'
@@ -822,7 +823,7 @@ export function Showcase() {
           setCreating(false)
           const colour = cw.color ?? cw.base_color ?? 'WHITE'
           navigate(
-            `/references/new?product=${encodeURIComponent(cw.product_code)}&plm_colorway=${encodeURIComponent(cw.id)}&colour=${encodeURIComponent(colour)}&plm_drop=${encodeURIComponent(dropCode)}`,
+            `/references/new?product=${encodeURIComponent(plmCanvasCode(cw.id))}&plm_colorway=${encodeURIComponent(cw.id)}&colour=${encodeURIComponent(colour)}&plm_drop=${encodeURIComponent(dropCode)}`,
           )
         }}
       />
@@ -848,6 +849,8 @@ function CreateDialog({
   const palette = useQuery({ queryKey: ['palette'], queryFn: fetchPalette, enabled: open })
   const [drop, setDrop] = useState('')
   const [limit, setLimit] = useState(24)
+  const [imageAvailability, setImageAvailability] = useState<Record<string, boolean>>({})
+  const onImageAvailability = useCallback((id: string, ready: boolean) => { setImageAvailability(previous => previous[id] === ready ? previous : { ...previous, [id]: ready }) }, [])
   useEffect(() => setLimit(24), [drop])
   const plmDrops = useQuery({ queryKey: ['plm-drops'], queryFn: () => fetchPlmDrops(), enabled: open && usePlm })
   const colorways = useQuery({
@@ -892,13 +895,13 @@ function CreateDialog({
             {(colorways.data ?? []).slice(0, limit).map((cw) => (
               <button
                 key={cw.id}
-                disabled={!drop || !cw.can_work || !palette.data}
+                disabled={!drop || !imageAvailability[cw.id] || !palette.data}
                 onClick={() => onPickPlm({ ...cw, color: colorwayColourCode(cw, palette.data?.colors ?? []) }, drop)}
                 className={`${buttonClass({ tone: 'neutral', variant: 'outline' })} w-40 flex-col items-stretch`}
                 style={{ height: 'auto' }}
-                title={!drop ? 'Выберите дроп для семьи' : cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
+                title={!drop ? 'Выберите дроп для семьи' : imageAvailability[cw.id] ? `работа: ${cw.article}` : 'Ожидаем изображение PLM'}
               >
-                <PlmModelImage id={cw.id} image={cw.image} label={`${cw.style_code} · ${cw.article}`} />
+                <PlmModelImage id={cw.id} image={cw.image} label={`${cw.style_code} · ${cw.article}`} onAvailability={onImageAvailability} />
                   <span
                     className="mb-1 block h-8 w-full rounded-sm border border-line"
                     style={{ background: rgbCss(cw.rgb) }}
@@ -906,7 +909,7 @@ function CreateDialog({
                   />
                 <span className="block truncate text-left text-sm font-semibold" title={cw.color ?? cw.article}>{cw.color ?? cw.article}</span>
                 <span className="block truncate text-left text-xs text-muted-foreground" title={`${cw.style_code} · ${cw.article}`}>{cw.style_code} · {cw.article}</span>
-                {!cw.can_work && <span className="mt-1 block whitespace-normal text-left text-xs text-muted-foreground">{cw.reason}</span>}
+
               </button>
             ))}
           </div>

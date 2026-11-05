@@ -1,3 +1,4 @@
+import { encodeCanvasComposition, plmCanvasCode } from '../shared/plmCanvas'
 // Примерка принта на изделиях дропа без сохранения (US-0892): сетка
 // «модель × цвет», принт по умолчанию (от горловины 12 см, 18 см шириной).
 // «Сделать референс» заводит семейство и открывает окно.
@@ -44,7 +45,6 @@ export function TryOn({ digest, name, onClose }: { digest: string; name: string;
   const plmRows = useMemo(() => {
     const groups = new Map<string, PlmColorway[]>()
     for (const c of colorways.data ?? []) {
-      if (!c.can_work || !c.product_code) continue
       const key = c.style_id || c.style_code
       groups.set(key, [...(groups.get(key) ?? []), c])
     }
@@ -64,13 +64,16 @@ export function TryOn({ digest, name, onClose }: { digest: string; name: string;
   const [imageAttempt, setImageAttempt] = useState(0)
   const [frameState, setFrameState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [frameAttempt, setFrameAttempt] = useState(0)
-  const composition = useMemo(() => tryOnComposition(src, name, raster?.aspect ?? 1, raster?.hasAlpha ?? false), [src, name, raster])
+  const composition = useMemo(() => {
+    const work = tryOnComposition(src, name, raster?.aspect ?? 1, raster?.hasAlpha ?? false)
+    return picked?.plm ? { ...work, elements: work.elements.map(el => ({ ...el, placement: { ...el.placement, anchor: 'centre', dyCm: 0 } })) } : work
+  }, [src, name, raster, picked?.plm?.colorwayId])
   const [images, setImages] = useState<ReadonlyMap<string, HTMLImageElement>>(() => new Map())
   const [imagesVersion, setImagesVersion] = useState(0)
   const byCode = new Map((palette.data?.colors ?? []).map((c) => [c.code, c]))
   const colour = picked?.rgb ?? (picked ? byCode.get(picked.colour)?.rgb : null)
-  const front = product.data?.states.find((s) => s.code === 'front' && s.kind === 'precise')
-  const baseSize = product.data?.size_grid?.base ?? product.data?.rendered_size ?? product.data?.rendered_size_assumed ?? null
+  const front = product.data?.states.find((s) => s.code === 'front' && s.kind !== 'illustrative') ?? product.data?.states[0]
+  const canvasMode = product.data?.coordinate_space === 'canvas'
 
   useEffect(() => {
     const img = new Image()
@@ -95,7 +98,7 @@ export function TryOn({ digest, name, onClose }: { digest: string; name: string;
     const img = new Image()
     img.onload = () => setFrameState('ready')
     img.onerror = () => setFrameState('error')
-    img.src = frameUrl(product.data.code, front.code)
+    img.src = frameUrl(product.data.code, front.code, front.frame)
     return () => { img.onload = null; img.onerror = null }
   }, [product.data?.code, front?.code, frameAttempt])
 
@@ -118,11 +121,11 @@ export function TryOn({ digest, name, onClose }: { digest: string; name: string;
     setHint(null)
     try {
       const work = {
-        version: 2,
+        version: canvasMode ? 3 : 2,
+        ...(canvasMode ? { coordinateSpace: 'canvas' } : {}),
         stateCode: front.code,
         colourCode: picked.colour,
-        size: baseSize,
-        composition: { ...composition, elements: composition.elements.map(el => ({ ...el, placement: { ...el.placement, side: front.code } })) },
+        composition: canvasMode ? encodeCanvasComposition({ ...composition, elements: composition.elements.map(el => ({ ...el, placement: { ...el.placement, side: front.code } })) }) : composition,
         plm: picked.plm,
       }
       const saved = await saveReference({
@@ -186,9 +189,8 @@ export function TryOn({ digest, name, onClose }: { digest: string; name: string;
         {!raster && !imageError && <div role="status" className="flex items-center gap-2 text-sm"><Spinner />Получаем превью принта</div>}
         {palette.isError && <p role="alert" className="text-sm text-destructive">Палитра не пришла. <button onClick={() => void palette.refetch()}>повторить палитру</button></p>}
         {product.isError && picked && <p role="alert" className="text-sm text-destructive">{product.error.message} <button onClick={() => void product.refetch()}>повторить изделие</button></p>}
-        {picked && product.isSuccess && !front && <p role="alert" className="text-sm text-destructive">У изделия нет точного ракурса спереди. Выберите другую модель.</p>}
+        {picked && product.isSuccess && !front && <p role="alert" className="text-sm text-destructive">У изделия нет ракурса. Выберите другую модель.</p>}
         {picked && front && frameState === 'error' && <p role="alert" className="text-sm text-destructive">Кадр изделия не загрузился. <button onClick={() => setFrameAttempt(n => n + 1)}>повторить кадр</button></p>}
-        {baseSize && <p className="text-xs text-muted-foreground">Базовый размер {baseSize}; от горловины 12 см, ширина принта 18 см.{product.data?.calibration.provisional ? ' Калибровка предварительная.' : ''}</p>}
         {picked?.plm && !byCode.has(picked.colour) && <p className="text-xs text-muted-foreground">PLM не передал код пантона этого цвета. Оттенок показан по цветомодели.</p>}
         <p className="text-xs text-muted-foreground">Ничего не сохраняется, пока не нажмёте «сделать референс».</p>
         <div className="grid min-h-0 flex-1 gap-3 overflow-auto md:grid-cols-2">
@@ -206,7 +208,7 @@ export function TryOn({ digest, name, onClose }: { digest: string; name: string;
                 return <button key={c.id} type="button" aria-label={`примерить ${c.article} · ${c.color ?? code}`} aria-pressed={picked?.plm?.colorwayId === c.id}
                   disabled={!rgb || !palette.data} className={`h-8 w-8 rounded border ${picked?.plm?.colorwayId === c.id ? 'border-accent ring-2 ring-accent' : 'border-line'}`}
                   style={{ background: rgb ? toCss({ rgb }) : undefined }} title={rgb ? `${c.article} · ${c.color ?? code}` : 'PLM не передал оттенок для примерки'}
-                  onClick={() => setPicked({ productCode: c.product_code!, colour: code, rgb, colourModelId: null, plm: { colorwayId: c.id, productCode: c.product_code!, dropCode: plmDrop } })} />
+                  onClick={() => setPicked({ productCode: plmCanvasCode(c.id), colour: code, rgb, colourModelId: null, plm: { colorwayId: c.id, productCode: plmCanvasCode(c.id), dropCode: plmDrop } })} />
               })}</div>
             </div>)}
             {!isPlm && rows.map((row) => (
@@ -240,7 +242,7 @@ export function TryOn({ digest, name, onClose }: { digest: string; name: string;
               <GarmentCanvas
                 preview
                 state={front}
-                frameSrc={frameUrl(product.data.code, front.code)}
+                frameSrc={frameUrl(product.data.code, front.code, front.frame)}
                 calibration={calibrationFor(
                   { pxPerCm: product.data.calibration.px_per_cm, provisional: product.data.calibration.provisional },
                   1,
@@ -249,7 +251,7 @@ export function TryOn({ digest, name, onClose }: { digest: string; name: string;
                 side={front.code}
                 torso={null}
                 anchorsBySide={{ [front.code]: front.anchors }}
-                params={{ ...DEFAULT_PARAMS, base: toUnit({ rgb: [...colour] }) }}
+                params={{ ...DEFAULT_PARAMS, base: toUnit({ rgb: [...colour] }), ...(canvasMode ? { preserveFrame: true, effects: false } : {}) }}
                 renderScale={0.5}
                 showZones={false}
                 showAnchors={false}

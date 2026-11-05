@@ -422,7 +422,7 @@ export function useWindowEffects(s: WindowState, a: WindowActions) {
     }
   }
 
-  const onGarment = useFrameAlpha(product && state ? frameUrl(product.code, state.code) : null)
+  const onGarment = useFrameAlpha(product && state ? frameUrl(product.code, state.code, state.frame) : null)
 
   function onAreaDown(e: React.PointerEvent<HTMLDivElement>) {
     const t = e.target as Element

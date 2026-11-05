@@ -2,7 +2,6 @@ import { useState } from 'react'
 
 import { type Overlay } from './constants'
 import { toCss } from '../../shared/api/colours'
-import { sizesWithField } from '../../shared/fields'
 import { download, upload } from './work'
 import { Slider, Section } from './controls'
 import { S } from './styles'
@@ -15,9 +14,6 @@ import { PlmPassport } from '../../candidates/PlmPassport'
 export function GarmentPanel({ w }: { w: WorkWindowState }) {
   const {
     product,
-    stateCode,
-    size,
-    setSize,
     overlay,
     setOverlay,
     params,
@@ -29,7 +25,6 @@ export function GarmentPanel({ w }: { w: WorkWindowState }) {
     setColourCode,
     setGarmentPicked,
     state,
-    field,
   } = w
   const [techShow, setTechShow] = useState(false)
   const plmColorway = w.plm?.colorwayId
@@ -66,46 +61,10 @@ export function GarmentPanel({ w }: { w: WorkWindowState }) {
           {colours.find((c) => c.code === colourCode)?.group ?? colourCode} · на фабрику уходит код, а не оттенок с экрана
         </p>
       </Section>
-      <Section title="Размер">
-        <div className="flex flex-wrap gap-1">
-          {product.size_set.sizes.map((s) => {
-            const known = sizesWithField(product.print_fields ?? null, stateCode).includes(s)
-            return (
-              <button
-                key={s}
-                onClick={() => setSize(s)}
-                className={on(s === size)}
-                // Размер без поля показан бледным, а не спрятан: спрятанный
-                // выглядит несуществующим, а технолог просто не дал для него поля.
-                style={{ opacity: known ? 1 : 0.45 }}
-                title={known ? '' : 'поля для этого размера нет — спросить технолога'}
-              >
-                {s}
-              </button>
-            )
-          })}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {size === null
-            ? 'Размер не выбран: поле считается по зоне кадра, а она нарисована для одного размера.'
-            : field
-              ? `Поле ${product.print_fields?.by_size?.[String(size)]?.[stateCode]?.join(' × ')} см` +
-                (product.print_fields?.provisional ? ' · предварительно, от технолога ещё не подтверждено' : '')
-              : 'Для этого размера поля нет — считаем по зоне кадра. Число придёт от технолога.'}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {/* Отрисованный размер и выбранный — разные вещи: кадр один, и
-              растягивать его под размер нельзя. */}
-          Отрисован{' '}
-          {product.rendered_size
-            ? `${product.rendered_size}`
-            : `предположительно ${product.rendered_size_assumed} — в именах кадров размера нет`}
-        </p>
-      </Section>
-      <button className={`${small()} mb-2`} aria-expanded={techShow} onClick={() => setTechShow((v) => !v)}>
+      {product.coordinate_space !== 'canvas' && <button className={`${small()} mb-2`} aria-expanded={techShow} onClick={() => setTechShow((v) => !v)}>
         {techShow ? 'скрыть показ' : 'для показа'}
-      </button>
-      {techShow && (
+      </button>}
+      {techShow && product.coordinate_space !== 'canvas' && (
         <Section title="Показ">
           <div className="flex flex-wrap gap-1">
             <button onClick={() => setParams((p) => ({ ...p, effects: !p.effects }))} className={on(params.effects)}>

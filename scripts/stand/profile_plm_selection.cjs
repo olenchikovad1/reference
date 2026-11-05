@@ -107,7 +107,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     assert(response.ok(), 'Local editor save failed: HTTP ' + response.status() + ' ' + (response.ok() ? '' : (await response.text()).slice(0, 220)));
     id = (await response.json()).id;
     const full = await (await context.request.get(api + '/references/' + id)).json();
-    assert.deepStrictEqual(full.work.plm, { colorwayId: working.id, productCode: working.product_code, dropCode: drop });
+    assert.deepStrictEqual(full.work.plm, { colorwayId: working.id, productCode: 'PLM-CANVAS-' + working.id, dropCode: drop });
     assert.equal(full.work.colourCode, sourcePalette.colors.find(c => c.name === working.color).code);
     // Голая ссылка не содержит PLM-параметров: связь обязана прийти из версии.
     await page.goto(web + '/reference/references/' + id, { waitUntil: 'domcontentloaded' });
@@ -115,10 +115,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     // Рисунок холста уже виден раньше, чем отдельный alpha-hit-test готов.
     await page.evaluate(async code => {
       const frame = new Image();
-      frame.src = `/reference/api/products/${code}/states/front/frame`;
+      const { fetchProduct } = await import('/reference/src/shared/api/products.ts');
+      const product = await fetchProduct(code);
+      frame.src = product.states[0].frame.src;
       await frame.decode();
       await new Promise(requestAnimationFrame);
-    }, working.product_code);
+    }, 'PLM-CANVAS-' + working.id);
     const canvas = editor.locator('[data-stage] svg').first();
     const bounds = await canvas.boundingBox();
     await canvas.click({ position: { x: bounds.width * 0.45, y: bounds.height * 0.58 } });

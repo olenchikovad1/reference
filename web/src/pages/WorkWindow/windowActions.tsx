@@ -1,3 +1,5 @@
+import { encodeCanvasComposition } from '../../shared/plmCanvas'
+import { readComposition } from './work'
 import { useEffect } from 'react'
 import { printUrl, type PrintItem } from '../../shared/api/prints'
 import { EMPTY, add, remove, select, restyle, type ImageElement, type TextElement } from '../../shared/composition'
@@ -142,9 +144,9 @@ export function useWindowActions(s: WindowState) {
           hasAlpha: item.name !== 'fon-ne-vyrezan.png',
           placement: {
             side: stateCode,
-            anchor: 'neck',
+            anchor: product?.coordinate_space === 'canvas' ? 'centre' : 'neck',
             dxCm: 0,
-            dyCm: 12,
+            dyCm: product?.coordinate_space === 'canvas' ? 0 : 12,
             // У эталона размер известен и обязан соблюдаться: сетка в 20 см
             // проверяет калибровку только если ложится двадцатью сантиметрами.
             widthCm: item.width_cm ?? 18,
@@ -212,7 +214,7 @@ export function useWindowActions(s: WindowState) {
     const canvas = renderSheet(visible, images.current, RECOGNITION_PX_PER_CM, clips)
     const sheet = await uploadCanvas(canvas, `${PRODUCT}-${stateCode}-list.png`)
     return {
-      name: `${PRODUCT} · ${SIDE_NAMES[stateCode] ?? stateCode} · ${colourCode}${size ? ' · ' + size : ''}`,
+      name: `${product?.display_name ?? PRODUCT} · ${SIDE_NAMES[stateCode] ?? stateCode} · ${colourCode}${size ? ' · ' + size : ''}`,
       sheet_digest: sheet,
       image_digests: visible.elements
         .filter((el) => el.kind === 'image')
@@ -224,7 +226,9 @@ export function useWindowActions(s: WindowState) {
       // Работа целиком — все стороны, сантиметры базы, исключения размеров,
       // цвет. Лист и надписи выше — для узнавания; открывается версия
       // вот этим.
-      work: { version: 2, stateCode, colourCode, size, composition, plm, checks: s.savedChecks() },
+      work: product?.coordinate_space === 'canvas'
+        ? { version: 3, coordinateSpace: 'canvas', stateCode, colourCode, composition: encodeCanvasComposition(composition), plm, checks: s.savedChecks() }
+        : { version: 2, stateCode, colourCode, size, composition, plm, checks: s.savedChecks() },
     }
   }
 
@@ -406,7 +410,7 @@ export function useWindowActions(s: WindowState) {
       setDropHint(`«${card.name}» сохранена до того, как карточки стали хранить работу: открыть нечего.`)
       return false
     }
-    const c = upgrade(w.composition)
+    const c = upgrade(readComposition(w))
     const viewColorway = new URLSearchParams(window.location.search).get('plm_colorway')
     setPlm(w.plm ? { ...w.plm, colorwayId: viewColorway ?? w.plm.colorwayId } : null)
     for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
@@ -476,7 +480,7 @@ export function useWindowActions(s: WindowState) {
       showVersion(card, card.number, card.work)
       return
     }
-    const c = upgrade(d.composition)
+    const c = upgrade(readComposition(d))
     const viewColorway = new URLSearchParams(window.location.search).get('plm_colorway')
     setPlm(d.plm ? { ...d.plm, colorwayId: viewColorway ?? d.plm.colorwayId } : null)
     const b = base as SavedWork | null
@@ -491,7 +495,7 @@ export function useWindowActions(s: WindowState) {
     setViewing(at)
     setColourModelId(card.colour_model_id)
     setBaseline(
-      b?.composition ? workKey({ colourCode: b.colourCode ?? 'WHITE', composition: upgrade(b.composition) }) : null,
+      b?.composition ? workKey({ colourCode: b.colourCode ?? 'WHITE', composition: upgrade(readComposition(b)) }) : null,
     )
     setRestored(true)
     setDraftHeld(draft)
@@ -507,7 +511,7 @@ export function useWindowActions(s: WindowState) {
     // Новый выбор модели не наследует черновик другой цветомодели.
     if (selected && selected.colorwayId !== d.plm?.colorwayId) return
     setPlm(selected ?? d.plm ?? null)
-    const c = upgrade(d.composition)
+    const c = upgrade(readComposition(d))
     onServer.current = workKey({ colourCode: d.colourCode ?? colourCode, composition: c })
     for (const el of c.elements) if (el.kind === 'image') cacheImage(el.src)
     if (d.stateCode) setStateCode(d.stateCode)
@@ -543,6 +547,7 @@ export function useWindowActions(s: WindowState) {
 
   /** Печатный лист: сборка из сантиметров, мимо шейдера, в печатном разрешении. */
   async function downloadSheet() {
+    if (product?.coordinate_space === 'canvas') return
     if (composition.elements.length === 0) return
     // На фабрику уходит версия, а не черновик: несохранённое сначала станет
     // версией, и её номер будет на листе (US-0599).
@@ -560,7 +565,7 @@ export function useWindowActions(s: WindowState) {
   function downloadSheetOf(side: string, version: { id: number; number: number } | null) {
     const only = onSide(sized, side)
     // Лист выгружают из открытого окна — изделие к этому времени загружено.
-    if (only.elements.length === 0 || !product) return
+    if (only.elements.length === 0 || !product || product.coordinate_space === 'canvas') return
     const cal = product.calibration
     // 120 пикселей на сантиметр — около 300 точек на дюйм, обычное печатное
     // разрешение. Число названо здесь, а не спрятано: оно уйдёт на фабрику.
@@ -663,7 +668,7 @@ export function useWindowActions(s: WindowState) {
       ...style,
       colourCode: 'WHITE',
       textAspect: aspectOf(style),
-      placement: { side: stateCode, anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
+      placement: { side: stateCode, anchor: product?.coordinate_space === 'canvas' ? 'centre' : 'neck', dxCm: 0, dyCm: product?.coordinate_space === 'canvas' ? 0 : 12, widthCm: 18, rotation: 0 },
     }
     commit((c) => add(c, el))
   }
@@ -692,7 +697,7 @@ export function useWindowActions(s: WindowState) {
           src,
           aspect,
           hasAlpha,
-          placement: { side: stateCode, anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
+          placement: { side: stateCode, anchor: product?.coordinate_space === 'canvas' ? 'centre' : 'neck', dxCm: 0, dyCm: product?.coordinate_space === 'canvas' ? 0 : 12, widthCm: 18, rotation: 0 },
         }),
       )
     })
@@ -716,7 +721,7 @@ export function useWindowActions(s: WindowState) {
         ...style,
         colourCode: 'WHITE',
         textAspect: aspectOf(style),
-        placement: { side: stateCode, anchor: 'neck', dxCm: 0, dyCm: 12, widthCm: 18, rotation: 0 },
+        placement: { side: stateCode, anchor: product?.coordinate_space === 'canvas' ? 'centre' : 'neck', dxCm: 0, dyCm: product?.coordinate_space === 'canvas' ? 0 : 12, widthCm: 18, rotation: 0 },
       }),
     )
   }
@@ -835,11 +840,11 @@ export function useWindowActions(s: WindowState) {
             hasAlpha: d.hasAlpha,
             placement: {
               side: stateCode,
-              anchor: 'neck',
+              anchor: product?.coordinate_space === 'canvas' ? 'centre' : 'neck',
               dxCm: 0,
               // Бросили несколько — раскладываем лесенкой, иначе они лягут
               // друг на друга и выбрать нижний будет нечем.
-              dyCm: 12 + i * 2,
+              dyCm: (product?.coordinate_space === 'canvas' ? 0 : 12) + i * 2,
               widthCm,
               rotation: 0,
             },
