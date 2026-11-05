@@ -3,12 +3,36 @@ import tempfile
 import unittest
 from pathlib import Path
 import ipaddress
+import json
+from unittest.mock import patch
 
 from scripts.testing.policy import Group, accepted, fingerprint, select, reusable
-from scripts.testing.runtime import free_subnet
+from scripts.testing.runtime import DockerRuntime, free_subnet
 
 
 class StrategyTests(unittest.TestCase):
+    def test_runner_failure_outside_assertions_cannot_become_success(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            for environment in ['web', 'api']:
+                with self.subTest(environment=environment):
+                    runtime = DockerRuntime(root, root / 'state', root / environment, {})
+                    group = Group('case', [environment + '/tests/test_case.py'], [], True, 1, 'unit', [], environment)
+                    def failed_process(*args, runtime=runtime, environment=environment, **kwargs):
+                        destination = runtime.output / environment
+                        if environment == 'web':
+                            (destination / 'result.json').write_text(json.dumps({'testResults':[
+                                {'name':'/app/tests/test_case.py','status':'passed','assertionResults':[{'status':'passed'}],
+                                 'startTime':0,'endTime':1}]}), encoding='utf-8')
+                        else:
+                            (destination / 'test_case.xml').write_text('<testsuite><testcase classname="tests.test_case" time="0.1"/></testsuite>', encoding='utf-8')
+                            (destination / 'progress.jsonl').write_text(json.dumps({'file':'tests/test_case.py','exit_code':3})+'\n', encoding='utf-8')
+                        return 3, 'runner failed after assertions', 0.1
+                    with patch('scripts.testing.runtime.command', side_effect=failed_process), patch.object(runtime, 'start_services'):
+                        result, _ = runtime.execute([group], environment)
+                    self.assertEqual(result['case']['status'], 'failed')
+                    self.assertFalse(accepted([{'id':'case', **result['case']}], ['case']))
+
     def test_empty_skipped_failed_and_duplicate_results_cannot_accept_release(self):
         self.assertTrue(accepted([{'id':'one','status':'executed','tests':1}], ['one']))
         for rows, ids in [([], []), ([], ['one']), ([{'id':'one','status':'executed','tests':0}], ['one']),

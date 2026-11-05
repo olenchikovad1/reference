@@ -261,16 +261,19 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             for group in groups:
                 file = next((item for item in report.get('testResults', []) if item['name'].replace('\\', '/').endswith(group.tests[0].removeprefix('web/'))), None)
                 count = len(file.get('assertionResults', [])) if file else 0
-                good = count and file['status'] == 'passed' and all(item['status'] == 'passed' for item in file['assertionResults'])
+                good = code == 0 and count and file['status'] == 'passed' and all(item['status'] == 'passed' for item in file['assertionResults'])
                 results[group.id] = {'status': 'executed' if good else 'failed', 'tests': count,
                                      'test_seconds': max(0, file['endTime'] - file['startTime']) / 1000 if file else 0}
         elif runtime == 'api':
+            progress = destination / 'progress.jsonl'
+            completed = {row['file']:row['exit_code'] for row in
+                         (json.loads(line) for line in progress.read_text(encoding='utf-8').splitlines())} if progress.exists() else {}
             for group in groups:
                 report = destination / (Path(group.tests[0]).stem + '.xml')
                 cases = list(ET.parse(report).getroot().iter('testcase')) if report.exists() else []
                 module = 'tests.' + Path(group.tests[0]).stem
                 mine = [case for case in cases if case.get('classname', '').split('.Test')[0] == module]
-                good = bool(mine) and all(not any(case.find(tag) is not None for tag in ['failure', 'error', 'skipped']) for case in mine)
+                good = completed.get(group.tests[0].removeprefix('api/')) == 0 and bool(mine) and all(not any(case.find(tag) is not None for tag in ['failure', 'error', 'skipped']) for case in mine)
                 results[group.id] = {'status': 'executed' if good else 'failed' if mine else 'skipped', 'tests': len(mine),
                                      'test_seconds': sum(float(case.get('time', 0)) for case in mine)}
         for group in groups:
