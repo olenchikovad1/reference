@@ -13,13 +13,18 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   }
   const access = JSON.parse(fs.readFileSync(process.env.PLATFORM_ACCESS_FILE, 'utf8').replace(/^\uFEFF/, ''));
   const source = new URL(access.url).origin;
+  const direct = process.env.PLM_READ_URL;
+  if (direct && !['localhost', '127.0.0.1'].includes(new URL(direct).hostname)) throw new Error('Read proxy must be loopback');
   const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const who = 'qa-plm-source-' + Date.now();
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, extraHTTPHeaders: { 'X-Stand-As': who } });
+  await context.addInitScript(id => localStorage.setItem('reference.stand-as', id), who);
   let page, id;
   const readSource = async suffix => {
     // Удалённый источник только читается; заголовки не передаются локальному API.
     try {
-      const response = await context.request.get(source + '/reference/api/plm/' + suffix, { headers: access.headers, timeout: 20000 });
+      const endpoint = direct ? suffix === 'status' ? api + '/plm/status' : direct + '/api/machine/' + suffix : source + '/reference/api/plm/' + suffix;
+      const response = await context.request.get(endpoint, { headers: direct ? {} : access.headers, timeout: 20000 });
       if (!response.ok()) throw new Error('Source HTTP ' + response.status());
       return response;
     } catch (error) { throw new Error('PLM source read failed: ' + (error.message.startsWith('Source HTTP ') ? error.message : error.name)); }
@@ -27,19 +32,30 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
   try {
     const audited = process.env.PLM_AUDIT_FILE ? JSON.parse(fs.readFileSync(process.env.PLM_AUDIT_FILE, 'utf8').replace(/^\uFEFF/, '')) : null;
     const catalogue = audited ? [...audited.working_sample, ...audited.sample_colorways]
+      : direct ? (await (await context.request.get(api + '/plm/colorways', { timeout: 30000 })).json()).items
       : (await (await readSource('colorways')).json()).items;
-    const working = catalogue.find(c => c.can_work && c.style_code === '2027');
+    let working = catalogue.find(c => c.can_work && c.style_code === '2027');
     const pictured = catalogue.find(c => c.id === '01M3MH7YCT9QSJP0MCWH0CPJB0');
     assert(working && pictured, 'Real demonstration models absent');
-    const passport = await (await readSource('colorways/' + working.id)).json();
     const drops = (await (await readSource('drops')).json()).items;
-    const drop = passport.drop_code || drops[0].code;
+    let drop;
+    const candidates = [...new Set(['AW-AUT-APP-08', ...drops.map(d => d.code)].filter(code => code && !/null/i.test(code)))];
+    for (const candidate of candidates.slice(0, 4)) {
+      const members = (await (await readSource('colorways?drop=' + encodeURIComponent(candidate))).json()).items;
+      const matching = members.map(row => catalogue.find(c => c.id === row.id)).find(c => c?.can_work);
+      if (matching) { working = matching; drop = candidate; break; }
+    }
+    assert(drop, 'No verified drop membership for the selected real model');
+    if (process.argv.includes('--inspect')) {
+      console.log(JSON.stringify({ workingId: working.id, drop, picturedId: pictured.id, verifiedMembership: true }));
+      return;
+    }
     let refuseCatalogue = false;
     const imagePaths = [];
     let sourcePalette;
     await context.route(web + '/reference/api/colours', async route => {
       try {
-        const response = await context.request.get(source + '/reference/api/colours', { headers: access.headers, timeout: 15000 });
+        const response = await context.request.get(direct ? api + '/colours' : source + '/reference/api/colours', { headers: direct ? {} : access.headers, timeout: 15000 });
         sourcePalette = await response.json();
         await route.fulfill({ response });
       } catch { await route.fulfill({ status: 503, json: { detail: 'Палитра PLM не ответила' } }); }
@@ -65,10 +81,22 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     const chooser = page.getByRole('dialog', { name: 'Новый референс', exact: true });
     await chooser.getByLabel('дроп plm', { exact: true }).selectOption(drop);
     const picture = chooser.getByRole('img', { name: pictured.style_code + ' · ' + pictured.article, exact: true });
-    await chooser.getByText('PLM не передал изображение', { exact: true }).first().waitFor();
-    const modelImage = await picture.count() > 0;
+    await picture.waitFor();
+    await picture.evaluate(async image => { if (!image.complete) await image.decode(); });
+    const modelImage = await picture.evaluate(image => image.naturalWidth > 0);
+    assert(modelImage, 'New machine passport must expose a real model image');
+    await chooser.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())));
+    assert(await picture.evaluate(image => {
+      const tile = image.closest('button');
+      const box = tile.getBoundingClientRect();
+      return [...tile.querySelectorAll('img, span[title]')].every(element => {
+        const bounds = element.getBoundingClientRect();
+        return bounds.top >= box.top && bounds.bottom <= box.bottom;
+      });
+    }), 'Model image and captions must fit inside their tile');
     assert(imagePaths.every(p => /\/(thumb|preview)$/.test(p)), 'Image preset boundary');
     await page.screenshot({ path: path.join(process.env.PROFILE_OUTPUT, 'plm-models.png') });
+    if (process.argv.includes('--images-only')) return;
     await chooser.getByRole('button', { name: new RegExp(working.article) }).click();
     const editor = page.getByRole('dialog', { name: /рабочее окно/ }).first();
     await editor.locator('canvas').first().waitFor();
@@ -76,7 +104,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
     const saved = page.waitForResponse(r => r.url() === api.replace(':5185', ':5184') + '/references' && r.request().method() === 'POST');
     await editor.getByRole('button', { name: 'Сохранить', exact: true }).click();
     const response = await saved;
-    assert(response.ok(), 'Local editor save failed');
+    assert(response.ok(), 'Local editor save failed: HTTP ' + response.status() + ' ' + (response.ok() ? '' : (await response.text()).slice(0, 220)));
     id = (await response.json()).id;
     const full = await (await context.request.get(api + '/references/' + id)).json();
     assert.deepStrictEqual(full.work.plm, { colorwayId: working.id, productCode: working.product_code, dropCode: drop });

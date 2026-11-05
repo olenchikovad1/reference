@@ -895,6 +895,7 @@ function CreateDialog({
                 disabled={!drop || !cw.can_work || !palette.data}
                 onClick={() => onPickPlm({ ...cw, color: colorwayColourCode(cw, palette.data?.colors ?? []) }, drop)}
                 className={`${buttonClass({ tone: 'neutral', variant: 'outline' })} w-40 flex-col items-stretch`}
+                style={{ height: 'auto' }}
                 title={!drop ? 'Выберите дроп для семьи' : cw.can_work ? `работа: ${cw.article}` : (cw.reason ?? '')}
               >
                 <PlmModelImage id={cw.id} image={cw.image} label={`${cw.style_code} · ${cw.article}`} />
@@ -905,7 +906,7 @@ function CreateDialog({
                   />
                 <span className="block truncate text-left text-sm font-semibold" title={cw.color ?? cw.article}>{cw.color ?? cw.article}</span>
                 <span className="block truncate text-left text-xs text-muted-foreground" title={`${cw.style_code} · ${cw.article}`}>{cw.style_code} · {cw.article}</span>
-                {!cw.can_work && <span className="mt-1 block text-left text-xs text-muted-foreground">{cw.reason}</span>}
+                {!cw.can_work && <span className="mt-1 block whitespace-normal text-left text-xs text-muted-foreground">{cw.reason}</span>}
               </button>
             ))}
           </div>
