@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   rotation:
-    runs-on: [self-hosted, installation]
+    runs-on: [self-hosted, reference]
     timeout-minutes: 60
     env:
       PLATFORM_NPM_REGISTRY: http://host.docker.internal:4873
