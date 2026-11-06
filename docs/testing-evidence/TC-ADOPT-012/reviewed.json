@@ -1,0 +1,3533 @@
+{
+  "notice": "Reviewed field projection, not original raw bytes. Raw protocols remain local; their SHA256 values bind provenance. No raw logs, environment variables, dependency names, source-file paths or production inventory are included.",
+  "baseline": {
+    "contract": "TC-2026-11-05",
+    "contract_version": "1.0.0",
+    "adoption": "TC-ADOPT-012",
+    "profile": "standard",
+    "commit": "146f68cec38d84612e7a8537759f9a2d3c904a8b",
+    "tree": "2db27fe438c4797ed937b40a057016a6fcbec7ce",
+    "dirty": false,
+    "stage": "candidate",
+    "seed": 20261105,
+    "selected_ids": [
+      "REF-POLICY",
+      "REF-WEB-app.sections",
+      "REF-WEB-shared.api.plm",
+      "REF-WEB-shared.checks",
+      "REF-WEB-shared.collections",
+      "REF-WEB-shared.composition",
+      "REF-WEB-shared.composition.text",
+      "REF-WEB-shared.contrast",
+      "REF-WEB-shared.decisions",
+      "REF-WEB-shared.draftWriter",
+      "REF-WEB-shared.dropped",
+      "REF-WEB-shared.fields",
+      "REF-WEB-shared.filters",
+      "REF-WEB-shared.geometry",
+      "REF-WEB-shared.grading",
+      "REF-WEB-shared.history",
+      "REF-WEB-shared.keys.hint",
+      "REF-WEB-shared.keys",
+      "REF-WEB-shared.keys.window",
+      "REF-WEB-shared.look.broken",
+      "REF-WEB-shared.look.crop",
+      "REF-WEB-shared.look.multi",
+      "REF-WEB-shared.look",
+      "REF-WEB-shared.luminance",
+      "REF-WEB-shared.mask",
+      "REF-WEB-shared.order",
+      "REF-WEB-shared.percent",
+      "REF-WEB-shared.plmCanvas",
+      "REF-WEB-shared.season",
+      "REF-WEB-shared.sheet",
+      "REF-WEB-shared.sides",
+      "REF-WEB-shared.torso",
+      "REF-WEB-shared.tryOn",
+      "REF-WEB-shared.versions.history",
+      "REF-WEB-shared.versions",
+      "REF-WEB-shared.zones.clip",
+      "REF-WEB-shared.zones",
+      "REF-API-agenda",
+      "REF-API-anime",
+      "REF-API-asset_client",
+      "REF-API-assets_api",
+      "REF-API-assistant",
+      "REF-API-bulk",
+      "REF-API-collections",
+      "REF-API-colours_api",
+      "REF-API-config",
+      "REF-API-drafts",
+      "REF-API-drop_board",
+      "REF-API-drop_edit",
+      "REF-API-drop_links",
+      "REF-API-drop_search",
+      "REF-API-drops_api",
+      "REF-API-example_transfer",
+      "REF-API-executor",
+      "REF-API-families",
+      "REF-API-kinds",
+      "REF-API-manifest",
+      "REF-API-models",
+      "REF-API-my_drafts",
+      "REF-API-names_api",
+      "REF-API-people",
+      "REF-API-plm_api",
+      "REF-API-plm_catalog",
+      "REF-API-plm_client",
+      "REF-API-plm_families",
+      "REF-API-prints_api",
+      "REF-API-products_api",
+      "REF-API-reference_list_loading",
+      "REF-API-reference_pages",
+      "REF-API-reference_tags",
+      "REF-API-references_api",
+      "REF-API-release_core",
+      "REF-API-remarks",
+      "REF-API-retag",
+      "REF-API-review",
+      "REF-API-rights",
+      "REF-API-search_api",
+      "REF-API-subject",
+      "REF-API-tags_api",
+      "REF-API-texts_api",
+      "REF-API-trash",
+      "REF-API-voice",
+      "REF-API-voice_model",
+      "REF-API-votes",
+      "REF-API-zashkvar"
+    ],
+    "selection_reasons": {
+      "REF-POLICY": [
+        "core",
+        "regression",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-app.sections": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.api.plm": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.checks": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.collections": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.composition": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.composition.text": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.contrast": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.decisions": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.draftWriter": [
+        "core",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.dropped": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.fields": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.filters": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.geometry": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.grading": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.history": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.keys.hint": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.keys": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.keys.window": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.look.broken": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.look.crop": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.look.multi": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.look": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.luminance": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.mask": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.order": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.percent": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.plmCanvas": [
+        "core",
+        "regression",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.season": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.sheet": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.sides": [
+        "core",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.torso": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.tryOn": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.versions.history": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.versions": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.zones.clip": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.zones": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-agenda": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-anime": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-asset_client": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-assets_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-assistant": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-bulk": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-collections": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-colours_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-config": [
+        "core",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-drafts": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-drop_board": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-drop_edit": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-drop_links": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-drop_search": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-drops_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-example_transfer": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-executor": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-families": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-kinds": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-manifest": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-models": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-my_drafts": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-names_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-people": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-plm_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-plm_catalog": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-plm_client": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-plm_families": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-prints_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-products_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-reference_list_loading": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-reference_pages": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-reference_tags": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-references_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-release_core": [
+        "core",
+        "regression",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-remarks": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-retag": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-review": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-rights": [
+        "core",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-search_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-subject": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-tags_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-texts_api": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-trash": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-voice": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-voice_model": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-votes": [
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-zashkvar": [
+        "affected",
+        "inputs_changed"
+      ]
+    },
+    "inputs": {
+      "REF-POLICY": "4c9226c237ae2079385a9deaaed2734f9fa6e225c41593dcd9cf285667df7d61",
+      "REF-WEB-app.sections": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.api.plm": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.checks": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.collections": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.composition": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.composition.text": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.contrast": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.decisions": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.draftWriter": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.dropped": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.fields": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.filters": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.geometry": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.grading": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.history": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.keys.hint": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.keys": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.keys.window": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.look.broken": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.look.crop": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.look.multi": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.look": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.luminance": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.mask": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.order": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.percent": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.plmCanvas": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.season": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.sheet": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.sides": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.torso": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.tryOn": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.versions.history": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.versions": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.zones.clip": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.zones": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-API-agenda": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-anime": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-asset_client": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-assets_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-assistant": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-bulk": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-collections": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-colours_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-config": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drafts": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drop_board": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drop_edit": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drop_links": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drop_search": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drops_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-example_transfer": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-executor": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-families": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-kinds": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-manifest": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-models": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-my_drafts": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-names_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-people": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-plm_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-plm_catalog": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-plm_client": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-plm_families": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-prints_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-products_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-reference_list_loading": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-reference_pages": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-reference_tags": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-references_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-release_core": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-remarks": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-retag": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-review": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-rights": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-search_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-subject": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-tags_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-texts_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-trash": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-voice": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-voice_model": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-votes": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-zashkvar": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc"
+    },
+    "test_versions": {
+      "REF-POLICY": "460e28497029e745d1dd8d92b93cf4bfb566667ff81058015845dc0b83fd9b8d",
+      "REF-WEB-app.sections": "a235932dd04e03c1afa65f4610e87d5d9728f9c3cfcede3a6f2f952f3d42cc00",
+      "REF-WEB-shared.api.plm": "5cfb85c8fb248ea69648756fb3b44cdc5dbf67ad7bf42d7dccdc061e7dd9b578",
+      "REF-WEB-shared.checks": "3267631fabed3a4527c120dc030c341020aaf1647a26fed5e6a0997e6d7ce790",
+      "REF-WEB-shared.collections": "4e6263187bac68f44a1cf3c8261d2764074b70efca33d53ba8202c8654f4151e",
+      "REF-WEB-shared.composition": "1bbdf1749458519932a84983893653732e4bf06692fe3c45fc761710ff71a776",
+      "REF-WEB-shared.composition.text": "9c47a6132649d7ba9ad5423e436a668f227005faed0242ca71a97cf65abe9270",
+      "REF-WEB-shared.contrast": "5df1615007ca5f77b1cc02a485703d9de85ff10df16a942fda1c52e5d75eb621",
+      "REF-WEB-shared.decisions": "a5af1be0ee4a58786cdc9fc0c9d17437fef3c4ebddbe7f9b9a6a59c27cc31cc2",
+      "REF-WEB-shared.draftWriter": "4ba1bb9502c6c3cf6e1a54ea962d77ca4ac4dac5259501e2cf5c73118ef2505c",
+      "REF-WEB-shared.dropped": "fc8c3a26cfcfaf8b9cd06edd4e614a264110616586b79b8d3b51a8ad8ebb6ee7",
+      "REF-WEB-shared.fields": "f2510f74c37dda9bf2ad17f10c92a9835318b113368742a6c3e7d78bba471010",
+      "REF-WEB-shared.filters": "a8a37f77bb07dfa84b2490fcd17ccab232ff0ad743cce6c09cfca8dd41da271e",
+      "REF-WEB-shared.geometry": "ec3131ba650ed1838e0bfae2e4a7e8d440f3deb3df3c68a74677dc7f1d7b95ec",
+      "REF-WEB-shared.grading": "2ddbbfccaa3ddb0404d585a3291b2827d6bd74d1ffab56e8a0ce500943623fbf",
+      "REF-WEB-shared.history": "c21012eacd9157b3f19750490c8ba989c07eb1448fecee0de024f9862d112026",
+      "REF-WEB-shared.keys.hint": "4a44a97bf85bdb65693ce1b81c5f70b20a98d66136668928c4dc065ce01c2d35",
+      "REF-WEB-shared.keys": "82a89ab7b817d6919cb02487d35f885127f2aa98b2d5db70919fdcaa6a76aad4",
+      "REF-WEB-shared.keys.window": "97112c7e7decf4f261b07424b76bce7490dead2037923fd5a5e0af654380b5af",
+      "REF-WEB-shared.look.broken": "b73e8d9da75b07323245067851949719c91d157dc1d12d73104117c52dcb3027",
+      "REF-WEB-shared.look.crop": "e4bc857caa378291b016b4297a0fb4d1e653b8976ddff94bc9671cf3f9f0e0ea",
+      "REF-WEB-shared.look.multi": "cc347b8ed028234c57806f9e364cf046cfdff9882c62ac47fd27a2c18c4db142",
+      "REF-WEB-shared.look": "5bfa321574bd04c34a9c8dc4fe3732ce0f923563ea44a6e59a0939907bf27730",
+      "REF-WEB-shared.luminance": "e64bd5d9f18ee77455bc588dd8b45fdef103ce3e749f77c5f784f8f595527d73",
+      "REF-WEB-shared.mask": "54c311e602bbfcbef9d5a430a0b93416f1a02b0ab068a248c7d48ec8ce7d7a8a",
+      "REF-WEB-shared.order": "19e1d9020cf797eb4776f1b264b43fbca6db8042dd36f7313ccf9aaaf2c8c22a",
+      "REF-WEB-shared.percent": "b1b979b70ddf50648e5f5a410d8e4a615096a49f4c19ca275cf3f6c1fdac5370",
+      "REF-WEB-shared.plmCanvas": "643b9186ff902ecde9b6c5ba05adf0c814b276c8690f44ccc6a434a80b9be185",
+      "REF-WEB-shared.season": "87584fc71491207d56385ab8004138cbed9b8beb0474e3ba372c7afbcd37f0df",
+      "REF-WEB-shared.sheet": "64f1d84b5fa93a60fd13fd6822f1a1f45b79e75b11baf8a2da5434f790093da1",
+      "REF-WEB-shared.sides": "dceee51b88cae6608222b4b4a7138180eb492071741a4526477b9bc9df1bd0cf",
+      "REF-WEB-shared.torso": "7a2d50f6fc21fd7dc719d93eef7708f6237a1b1cbc99d11f766d4e136b30bc9a",
+      "REF-WEB-shared.tryOn": "f0fb75fc01ab2ad3bb0e5d2fe5bb83c4e0fa3f925c75e00331ee28151abf0a87",
+      "REF-WEB-shared.versions.history": "97c9ff516490387192763ca703f8335ef1ff9bb8dd72aacd60c3092939144830",
+      "REF-WEB-shared.versions": "1f89c6267d8b375b6aaa9a8740dcb9891ddec3dea710590fa9b5177fb39a9fd3",
+      "REF-WEB-shared.zones.clip": "b6d5b420404474b2a2473c021f19f4e0c355ce5eb0e741fd0df13e49bd9b5acb",
+      "REF-WEB-shared.zones": "6fb4554f882344d15bee1c3f0f4b01f7b13645ea180305d59c318826de617b70",
+      "REF-API-agenda": "0c0a93c97c99282f04cc9ed10daf28effd7e8be0b91dfb06bf49448d752c04cc",
+      "REF-API-anime": "fb90fff7d29df7acf8701d58074b0016fdaccaa95c61ebb5353d03eef0143a2b",
+      "REF-API-asset_client": "9034794d50840a889d74f2150a2151b4dd4c6d187d33f4b1e27bbba32a34ad45",
+      "REF-API-assets_api": "72ab038c4870ec36d580c2f822003107184fe9015d072859c8786bcb451774ac",
+      "REF-API-assistant": "442c855281e87678ad37d2cc5146954878f9e27204eb68b872af94088bce8767",
+      "REF-API-bulk": "5b7ce421b516f819ddb8151b7961b92d73fcc88640d667acd9506fe2bf23d1e6",
+      "REF-API-collections": "4af13479f1246d6d2b3f51ef053ffd286c5a992992d056f567798c1920134e1b",
+      "REF-API-colours_api": "49cd59ff1e30444a65459461d973d2b89e28e00d231760de50052a1efca1cd67",
+      "REF-API-config": "181a83aae53b149bbe4586c2aaae4cbdc6b0daf753d58310974538f22259b117",
+      "REF-API-drafts": "7ae652b0bfe3b7097568f3a60ce8ae65c7373a10740b68b14c9098555d5f31d1",
+      "REF-API-drop_board": "317e83a33b7f822fef3a88fd549c06056d62223737dab1bea122fd5fca6c7cc8",
+      "REF-API-drop_edit": "1fd014d22eba1291caad0d4cae1f96da3cc3ffc135ce66bc4fbc782183570592",
+      "REF-API-drop_links": "d7f098e439d20146d17d94957964721ecf5e279ee35140a76245274c23ae13d2",
+      "REF-API-drop_search": "dfbc1abec73651e67aaf92e74207fd88cfb16adcf1d2edbc844952bd613a6833",
+      "REF-API-drops_api": "5c2bff8e2da8059084eb7e45daf178763cf8755dedfd414ff6037a4472259a80",
+      "REF-API-example_transfer": "9b5a5d5d3d189649eb7e535fad1efdc84ce49a4b4987ac861706df0abc8033f7",
+      "REF-API-executor": "bad61bcddac1cb68bd35f994d6fe3662ba4cd1be1f98afd1086a42342bd176b4",
+      "REF-API-families": "3f76762266b89e29e5827cf499879b116c1b63ccd1618950f3df6e3db4338bf7",
+      "REF-API-kinds": "822d1981bc1a41faabe0cbb0bfbf39d75e79606c358c468ff4658eb3b698dc0d",
+      "REF-API-manifest": "bc1e4c9a7341d576b771c8a3e011d4b49da4472a7aef0e8caa54d80a0da042b3",
+      "REF-API-models": "0d08f8b8c6a696e1872348ef9516344aa6f444e21a8f326f14e772273758335b",
+      "REF-API-my_drafts": "ce3e70d91dc7f2a466494177cdd9582792971f363941562691168ca82fe811c6",
+      "REF-API-names_api": "ee0c83a0f0a6b3ce69d92fd4d75d2692dc98dace011272fe9d01bbee9d05c08f",
+      "REF-API-people": "5e22e014471c124a59869e3fab8f3132d0f830aafdc1a3eb306814ec32026a86",
+      "REF-API-plm_api": "4f2619d1f104f65ca9642ed68bbd0741d3c917b6e1127954e174b4feaa9e43d8",
+      "REF-API-plm_catalog": "f846f2b6d92447282a21b76775a1624d4caafb01e9d14d44e411e62959653fd5",
+      "REF-API-plm_client": "f75e7e1b298011a3081d98b1db1c616d35bb6e9c98f3b9f49b742d041fba61de",
+      "REF-API-plm_families": "03120f196af1ace2bd2832e84155bb5e8a2e3bdf950fdcee1a803ef2e90a57a9",
+      "REF-API-prints_api": "e91942676c28da2fd552f90f634e57a962e49463d5e4011e17469e946d4f3574",
+      "REF-API-products_api": "1ad1e5af00d7b6dcbeebc12a20bff996b512b76fc85194db52b910e5c5dea0d6",
+      "REF-API-reference_list_loading": "b1cd100490d049cfa346f91b881949a7eb0aa3436188a955b3d7a851d83fdfe3",
+      "REF-API-reference_pages": "fbf37f1633e8d5a0032c3a7e7acdf12c635d42530c0ae3a9a0e13878ee824b57",
+      "REF-API-reference_tags": "1bd29c4b0f577bd737a300b50c19d51c97405bc25112652d0ff1b7def82b3ea0",
+      "REF-API-references_api": "6a080313639fb044b5f5755a928061d31f03671d928a8ce0feb48efcbc50b132",
+      "REF-API-release_core": "b661a82f19a707fd3215365fd49f62e072012f80a0c744bbb61c091e1303529c",
+      "REF-API-remarks": "16a6a1dae256a2d122d939357471face75283286d21e5abf8370df2d2c077634",
+      "REF-API-retag": "47228f089af29d9b4e7342cb9109dde9cddd30626f295058376a2d6707d2dc1e",
+      "REF-API-review": "38b3db58986828a9619edb1e326b5ce4e98f3e18b7eae20c0693b27f1b2da9ae",
+      "REF-API-rights": "8eaa54d55daa786462573d5e183d2bbab44bba015775c03ef4c07c29beabc872",
+      "REF-API-search_api": "ab31a9ebe0998016a7a420eebe641b96c917f70c1a23116bd7605c1ac9f337b3",
+      "REF-API-subject": "a84f5d5e42adf4d853d653054c09213dcda115afa932b4c8c620f405d099af4f",
+      "REF-API-tags_api": "90665bbfa9acfaa4c95a04fe0ccbff8575810844f6dd27051e658e7f8313d365",
+      "REF-API-texts_api": "554fd2b195dcfc3b46b6cffc2b39b75f4bf19a4cbd7efd2f4f7424a43ba8ff77",
+      "REF-API-trash": "103dff5691afa99048345b346492cbb0373fdd5d82d14f5ba4df0e48efee61ce",
+      "REF-API-voice": "29ece1bd8a34e28e304d436c3689432523c682c8d0b82c0b6687d39123dc2297",
+      "REF-API-voice_model": "d20c1a9ca22b16c22e5b56c154c4e6526b14e638abed22503448407418c74031",
+      "REF-API-votes": "aa2f10797a4098ad5498d2cf5ad7a344b2172e3499b753f10a8d4ec79f78f670",
+      "REF-API-zashkvar": "408e0d6b0c3a743bb8704dd4066e45b804b3bc6ed1407e746979ad50c5c1f672"
+    },
+    "rotation": {
+      "REF-POLICY": {
+        "last_success": 1793887540.2051392,
+        "version": "460e28497029e745d1dd8d92b93cf4bfb566667ff81058015845dc0b83fd9b8d",
+        "due": false
+      },
+      "REF-WEB-app.sections": {
+        "last_success": 1793887544.6806712,
+        "version": "a235932dd04e03c1afa65f4610e87d5d9728f9c3cfcede3a6f2f952f3d42cc00",
+        "due": false
+      },
+      "REF-WEB-shared.api.plm": {
+        "last_success": 1793887544.6843479,
+        "version": "5cfb85c8fb248ea69648756fb3b44cdc5dbf67ad7bf42d7dccdc061e7dd9b578",
+        "due": false
+      },
+      "REF-WEB-shared.checks": {
+        "last_success": 1793887544.6872222,
+        "version": "3267631fabed3a4527c120dc030c341020aaf1647a26fed5e6a0997e6d7ce790",
+        "due": false
+      },
+      "REF-WEB-shared.collections": {
+        "last_success": 1793887544.689886,
+        "version": "4e6263187bac68f44a1cf3c8261d2764074b70efca33d53ba8202c8654f4151e",
+        "due": false
+      },
+      "REF-WEB-shared.composition": {
+        "last_success": 1793887544.6926243,
+        "version": "1bbdf1749458519932a84983893653732e4bf06692fe3c45fc761710ff71a776",
+        "due": false
+      },
+      "REF-WEB-shared.composition.text": {
+        "last_success": 1793887544.6952348,
+        "version": "9c47a6132649d7ba9ad5423e436a668f227005faed0242ca71a97cf65abe9270",
+        "due": false
+      },
+      "REF-WEB-shared.contrast": {
+        "last_success": 1793887544.6975799,
+        "version": "5df1615007ca5f77b1cc02a485703d9de85ff10df16a942fda1c52e5d75eb621",
+        "due": false
+      },
+      "REF-WEB-shared.decisions": {
+        "last_success": 1793887544.700191,
+        "version": "a5af1be0ee4a58786cdc9fc0c9d17437fef3c4ebddbe7f9b9a6a59c27cc31cc2",
+        "due": false
+      },
+      "REF-WEB-shared.draftWriter": {
+        "last_success": 1793887544.7026606,
+        "version": "4ba1bb9502c6c3cf6e1a54ea962d77ca4ac4dac5259501e2cf5c73118ef2505c",
+        "due": false
+      },
+      "REF-WEB-shared.dropped": {
+        "last_success": 1793887544.7055283,
+        "version": "fc8c3a26cfcfaf8b9cd06edd4e614a264110616586b79b8d3b51a8ad8ebb6ee7",
+        "due": false
+      },
+      "REF-WEB-shared.fields": {
+        "last_success": 1793887544.7082083,
+        "version": "f2510f74c37dda9bf2ad17f10c92a9835318b113368742a6c3e7d78bba471010",
+        "due": false
+      },
+      "REF-WEB-shared.filters": {
+        "last_success": 1793887544.7117305,
+        "version": "a8a37f77bb07dfa84b2490fcd17ccab232ff0ad743cce6c09cfca8dd41da271e",
+        "due": false
+      },
+      "REF-WEB-shared.geometry": {
+        "last_success": 1793887544.7145846,
+        "version": "ec3131ba650ed1838e0bfae2e4a7e8d440f3deb3df3c68a74677dc7f1d7b95ec",
+        "due": false
+      },
+      "REF-WEB-shared.grading": {
+        "last_success": 1793887544.7172897,
+        "version": "2ddbbfccaa3ddb0404d585a3291b2827d6bd74d1ffab56e8a0ce500943623fbf",
+        "due": false
+      },
+      "REF-WEB-shared.history": {
+        "last_success": 1793887544.7196374,
+        "version": "c21012eacd9157b3f19750490c8ba989c07eb1448fecee0de024f9862d112026",
+        "due": false
+      },
+      "REF-WEB-shared.keys.hint": {
+        "last_success": 1793887544.7221613,
+        "version": "4a44a97bf85bdb65693ce1b81c5f70b20a98d66136668928c4dc065ce01c2d35",
+        "due": false
+      },
+      "REF-WEB-shared.keys": {
+        "last_success": 1793887544.7242181,
+        "version": "82a89ab7b817d6919cb02487d35f885127f2aa98b2d5db70919fdcaa6a76aad4",
+        "due": false
+      },
+      "REF-WEB-shared.keys.window": {
+        "last_success": 1793887544.725792,
+        "version": "97112c7e7decf4f261b07424b76bce7490dead2037923fd5a5e0af654380b5af",
+        "due": false
+      },
+      "REF-WEB-shared.look.broken": {
+        "last_success": 1793887544.727425,
+        "version": "b73e8d9da75b07323245067851949719c91d157dc1d12d73104117c52dcb3027",
+        "due": false
+      },
+      "REF-WEB-shared.look.crop": {
+        "last_success": 1793887544.7294562,
+        "version": "e4bc857caa378291b016b4297a0fb4d1e653b8976ddff94bc9671cf3f9f0e0ea",
+        "due": false
+      },
+      "REF-WEB-shared.look.multi": {
+        "last_success": 1793887544.7313821,
+        "version": "cc347b8ed028234c57806f9e364cf046cfdff9882c62ac47fd27a2c18c4db142",
+        "due": false
+      },
+      "REF-WEB-shared.look": {
+        "last_success": 1793887544.7332592,
+        "version": "5bfa321574bd04c34a9c8dc4fe3732ce0f923563ea44a6e59a0939907bf27730",
+        "due": false
+      },
+      "REF-WEB-shared.luminance": {
+        "last_success": 1793887544.735467,
+        "version": "e64bd5d9f18ee77455bc588dd8b45fdef103ce3e749f77c5f784f8f595527d73",
+        "due": false
+      },
+      "REF-WEB-shared.mask": {
+        "last_success": 1793887544.7374508,
+        "version": "54c311e602bbfcbef9d5a430a0b93416f1a02b0ab068a248c7d48ec8ce7d7a8a",
+        "due": false
+      },
+      "REF-WEB-shared.order": {
+        "last_success": 1793887544.7394783,
+        "version": "19e1d9020cf797eb4776f1b264b43fbca6db8042dd36f7313ccf9aaaf2c8c22a",
+        "due": false
+      },
+      "REF-WEB-shared.percent": {
+        "last_success": 1793887544.741363,
+        "version": "b1b979b70ddf50648e5f5a410d8e4a615096a49f4c19ca275cf3f6c1fdac5370",
+        "due": false
+      },
+      "REF-WEB-shared.plmCanvas": {
+        "last_success": 1793887544.742971,
+        "version": "643b9186ff902ecde9b6c5ba05adf0c814b276c8690f44ccc6a434a80b9be185",
+        "due": false
+      },
+      "REF-WEB-shared.season": {
+        "last_success": 1793887544.7449503,
+        "version": "87584fc71491207d56385ab8004138cbed9b8beb0474e3ba372c7afbcd37f0df",
+        "due": false
+      },
+      "REF-WEB-shared.sheet": {
+        "last_success": 1793887544.7466137,
+        "version": "64f1d84b5fa93a60fd13fd6822f1a1f45b79e75b11baf8a2da5434f790093da1",
+        "due": false
+      },
+      "REF-WEB-shared.sides": {
+        "last_success": 1793887544.7482066,
+        "version": "dceee51b88cae6608222b4b4a7138180eb492071741a4526477b9bc9df1bd0cf",
+        "due": false
+      },
+      "REF-WEB-shared.torso": {
+        "last_success": 1793887544.7497413,
+        "version": "7a2d50f6fc21fd7dc719d93eef7708f6237a1b1cbc99d11f766d4e136b30bc9a",
+        "due": false
+      },
+      "REF-WEB-shared.tryOn": {
+        "last_success": 1793887544.7514904,
+        "version": "f0fb75fc01ab2ad3bb0e5d2fe5bb83c4e0fa3f925c75e00331ee28151abf0a87",
+        "due": false
+      },
+      "REF-WEB-shared.versions.history": {
+        "last_success": 1793887544.7532325,
+        "version": "97c9ff516490387192763ca703f8335ef1ff9bb8dd72aacd60c3092939144830",
+        "due": false
+      },
+      "REF-WEB-shared.versions": {
+        "last_success": 1793887544.7547534,
+        "version": "1f89c6267d8b375b6aaa9a8740dcb9891ddec3dea710590fa9b5177fb39a9fd3",
+        "due": false
+      },
+      "REF-WEB-shared.zones.clip": {
+        "last_success": 1793887544.7563207,
+        "version": "b6d5b420404474b2a2473c021f19f4e0c355ce5eb0e741fd0df13e49bd9b5acb",
+        "due": false
+      },
+      "REF-WEB-shared.zones": {
+        "last_success": 1793887544.7577577,
+        "version": "6fb4554f882344d15bee1c3f0f4b01f7b13645ea180305d59c318826de617b70",
+        "due": false
+      },
+      "REF-API-agenda": {
+        "last_success": 1793888587.0564435,
+        "version": "0c0a93c97c99282f04cc9ed10daf28effd7e8be0b91dfb06bf49448d752c04cc",
+        "due": false
+      },
+      "REF-API-anime": {
+        "last_success": 1793888587.0586338,
+        "version": "fb90fff7d29df7acf8701d58074b0016fdaccaa95c61ebb5353d03eef0143a2b",
+        "due": false
+      },
+      "REF-API-asset_client": {
+        "last_success": 1793888587.0607843,
+        "version": "9034794d50840a889d74f2150a2151b4dd4c6d187d33f4b1e27bbba32a34ad45",
+        "due": false
+      },
+      "REF-API-assets_api": {
+        "last_success": 1793888587.0626953,
+        "version": "72ab038c4870ec36d580c2f822003107184fe9015d072859c8786bcb451774ac",
+        "due": false
+      },
+      "REF-API-assistant": {
+        "last_success": 1793888587.0650787,
+        "version": "442c855281e87678ad37d2cc5146954878f9e27204eb68b872af94088bce8767",
+        "due": false
+      },
+      "REF-API-bulk": {
+        "last_success": 1793888587.0672548,
+        "version": "5b7ce421b516f819ddb8151b7961b92d73fcc88640d667acd9506fe2bf23d1e6",
+        "due": false
+      },
+      "REF-API-collections": {
+        "last_success": 1793888587.0692623,
+        "version": "4af13479f1246d6d2b3f51ef053ffd286c5a992992d056f567798c1920134e1b",
+        "due": false
+      },
+      "REF-API-colours_api": {
+        "last_success": 1793888587.071536,
+        "version": "49cd59ff1e30444a65459461d973d2b89e28e00d231760de50052a1efca1cd67",
+        "due": false
+      },
+      "REF-API-config": {
+        "last_success": 1793888587.073521,
+        "version": "181a83aae53b149bbe4586c2aaae4cbdc6b0daf753d58310974538f22259b117",
+        "due": false
+      },
+      "REF-API-drafts": {
+        "last_success": 1793888587.0754778,
+        "version": "7ae652b0bfe3b7097568f3a60ce8ae65c7373a10740b68b14c9098555d5f31d1",
+        "due": false
+      },
+      "REF-API-drop_board": {
+        "last_success": 1793888587.0781875,
+        "version": "317e83a33b7f822fef3a88fd549c06056d62223737dab1bea122fd5fca6c7cc8",
+        "due": false
+      },
+      "REF-API-drop_edit": {
+        "last_success": 1793888587.0801528,
+        "version": "1fd014d22eba1291caad0d4cae1f96da3cc3ffc135ce66bc4fbc782183570592",
+        "due": false
+      },
+      "REF-API-drop_links": {
+        "last_success": 1793888587.0823584,
+        "version": "d7f098e439d20146d17d94957964721ecf5e279ee35140a76245274c23ae13d2",
+        "due": false
+      },
+      "REF-API-drop_search": {
+        "last_success": 1793888587.084503,
+        "version": "dfbc1abec73651e67aaf92e74207fd88cfb16adcf1d2edbc844952bd613a6833",
+        "due": false
+      },
+      "REF-API-drops_api": {
+        "last_success": 1793888587.0862606,
+        "version": "5c2bff8e2da8059084eb7e45daf178763cf8755dedfd414ff6037a4472259a80",
+        "due": false
+      },
+      "REF-API-example_transfer": {
+        "last_success": 1793888587.0877767,
+        "version": "9b5a5d5d3d189649eb7e535fad1efdc84ce49a4b4987ac861706df0abc8033f7",
+        "due": false
+      },
+      "REF-API-executor": {
+        "last_success": 1793888587.089475,
+        "version": "bad61bcddac1cb68bd35f994d6fe3662ba4cd1be1f98afd1086a42342bd176b4",
+        "due": false
+      },
+      "REF-API-families": {
+        "last_success": 1793888587.0914972,
+        "version": "3f76762266b89e29e5827cf499879b116c1b63ccd1618950f3df6e3db4338bf7",
+        "due": false
+      },
+      "REF-API-kinds": {
+        "last_success": 1793888587.093447,
+        "version": "822d1981bc1a41faabe0cbb0bfbf39d75e79606c358c468ff4658eb3b698dc0d",
+        "due": false
+      },
+      "REF-API-manifest": {
+        "last_success": 1793888587.095412,
+        "version": "bc1e4c9a7341d576b771c8a3e011d4b49da4472a7aef0e8caa54d80a0da042b3",
+        "due": false
+      },
+      "REF-API-models": {
+        "last_success": 1793888587.0980513,
+        "version": "0d08f8b8c6a696e1872348ef9516344aa6f444e21a8f326f14e772273758335b",
+        "due": false
+      },
+      "REF-API-my_drafts": {
+        "last_success": 1793888587.100229,
+        "version": "ce3e70d91dc7f2a466494177cdd9582792971f363941562691168ca82fe811c6",
+        "due": false
+      },
+      "REF-API-names_api": {
+        "last_success": 1793888587.1020608,
+        "version": "ee0c83a0f0a6b3ce69d92fd4d75d2692dc98dace011272fe9d01bbee9d05c08f",
+        "due": false
+      },
+      "REF-API-people": {
+        "last_success": 1793888587.1039174,
+        "version": "5e22e014471c124a59869e3fab8f3132d0f830aafdc1a3eb306814ec32026a86",
+        "due": false
+      },
+      "REF-API-plm_api": {
+        "last_success": 1793888587.1061747,
+        "version": "4f2619d1f104f65ca9642ed68bbd0741d3c917b6e1127954e174b4feaa9e43d8",
+        "due": false
+      },
+      "REF-API-plm_catalog": {
+        "last_success": 1793888587.1081917,
+        "version": "f846f2b6d92447282a21b76775a1624d4caafb01e9d14d44e411e62959653fd5",
+        "due": false
+      },
+      "REF-API-plm_client": {
+        "last_success": 1793888587.1103733,
+        "version": "f75e7e1b298011a3081d98b1db1c616d35bb6e9c98f3b9f49b742d041fba61de",
+        "due": false
+      },
+      "REF-API-plm_families": {
+        "last_success": 1793888587.1120868,
+        "version": "03120f196af1ace2bd2832e84155bb5e8a2e3bdf950fdcee1a803ef2e90a57a9",
+        "due": false
+      },
+      "REF-API-prints_api": {
+        "last_success": 1793888587.1136906,
+        "version": "e91942676c28da2fd552f90f634e57a962e49463d5e4011e17469e946d4f3574",
+        "due": false
+      },
+      "REF-API-products_api": {
+        "last_success": 1793888587.1150901,
+        "version": "1ad1e5af00d7b6dcbeebc12a20bff996b512b76fc85194db52b910e5c5dea0d6",
+        "due": false
+      },
+      "REF-API-reference_list_loading": {
+        "last_success": 1793888587.1164906,
+        "version": "b1cd100490d049cfa346f91b881949a7eb0aa3436188a955b3d7a851d83fdfe3",
+        "due": false
+      },
+      "REF-API-reference_pages": {
+        "last_success": 1793888587.1178567,
+        "version": "fbf37f1633e8d5a0032c3a7e7acdf12c635d42530c0ae3a9a0e13878ee824b57",
+        "due": false
+      },
+      "REF-API-reference_tags": {
+        "last_success": 1793888587.1192832,
+        "version": "1bd29c4b0f577bd737a300b50c19d51c97405bc25112652d0ff1b7def82b3ea0",
+        "due": false
+      },
+      "REF-API-references_api": {
+        "last_success": 1793888587.120607,
+        "version": "6a080313639fb044b5f5755a928061d31f03671d928a8ce0feb48efcbc50b132",
+        "due": false
+      },
+      "REF-API-release_core": {
+        "last_success": 1793888587.1218953,
+        "version": "b661a82f19a707fd3215365fd49f62e072012f80a0c744bbb61c091e1303529c",
+        "due": false
+      },
+      "REF-API-remarks": {
+        "last_success": 1793888587.1232798,
+        "version": "16a6a1dae256a2d122d939357471face75283286d21e5abf8370df2d2c077634",
+        "due": false
+      },
+      "REF-API-retag": {
+        "last_success": 1793888587.1248477,
+        "version": "47228f089af29d9b4e7342cb9109dde9cddd30626f295058376a2d6707d2dc1e",
+        "due": false
+      },
+      "REF-API-review": {
+        "last_success": 1793888587.1262972,
+        "version": "38b3db58986828a9619edb1e326b5ce4e98f3e18b7eae20c0693b27f1b2da9ae",
+        "due": false
+      },
+      "REF-API-rights": {
+        "last_success": 1793888587.1283784,
+        "version": "8eaa54d55daa786462573d5e183d2bbab44bba015775c03ef4c07c29beabc872",
+        "due": false
+      },
+      "REF-API-search_api": {
+        "last_success": 1793888587.1298363,
+        "version": "ab31a9ebe0998016a7a420eebe641b96c917f70c1a23116bd7605c1ac9f337b3",
+        "due": false
+      },
+      "REF-API-subject": {
+        "last_success": 1793888587.1313145,
+        "version": "a84f5d5e42adf4d853d653054c09213dcda115afa932b4c8c620f405d099af4f",
+        "due": false
+      },
+      "REF-API-tags_api": {
+        "last_success": 1793888587.1329503,
+        "version": "90665bbfa9acfaa4c95a04fe0ccbff8575810844f6dd27051e658e7f8313d365",
+        "due": false
+      },
+      "REF-API-texts_api": {
+        "last_success": 1793888587.1349103,
+        "version": "554fd2b195dcfc3b46b6cffc2b39b75f4bf19a4cbd7efd2f4f7424a43ba8ff77",
+        "due": false
+      },
+      "REF-API-trash": {
+        "last_success": 1793888587.1370707,
+        "version": "103dff5691afa99048345b346492cbb0373fdd5d82d14f5ba4df0e48efee61ce",
+        "due": false
+      },
+      "REF-API-voice": {
+        "last_success": 1793888587.1390502,
+        "version": "29ece1bd8a34e28e304d436c3689432523c682c8d0b82c0b6687d39123dc2297",
+        "due": false
+      },
+      "REF-API-voice_model": {
+        "last_success": 1793888587.1413908,
+        "version": "d20c1a9ca22b16c22e5b56c154c4e6526b14e638abed22503448407418c74031",
+        "due": false
+      },
+      "REF-API-votes": {
+        "last_success": 1793888587.143914,
+        "version": "aa2f10797a4098ad5498d2cf5ad7a344b2172e3499b753f10a8d4ec79f78f670",
+        "due": false
+      },
+      "REF-API-zashkvar": {
+        "last_success": 1793888587.1461225,
+        "version": "408e0d6b0c3a743bb8704dd4066e45b804b3bc6ed1407e746979ad50c5c1f672",
+        "due": false
+      }
+    },
+    "accepted": true,
+    "wall_seconds": 1093.0303018999984,
+    "preparation_seconds": 15.88868159998674,
+    "execution_seconds": 1061.6425637998618,
+    "budget_seconds": 1200,
+    "budget_exceeded": false,
+    "results": [
+      {
+        "id": "REF-POLICY",
+        "status": "executed",
+        "tests": 11,
+        "test_seconds": 0.4122346000513062,
+        "batch_seconds": 0.4122346000513062,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-app.sections",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 0.012573974609375,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.api.plm",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 0.0147294921875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.checks",
+        "status": "executed",
+        "tests": 11,
+        "test_seconds": 0.014302734375,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.collections",
+        "status": "executed",
+        "tests": 12,
+        "test_seconds": 0.012798095703125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.composition",
+        "status": "executed",
+        "tests": 8,
+        "test_seconds": 0.020449951171875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.composition.text",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 0.0116455078125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.contrast",
+        "status": "executed",
+        "tests": 3,
+        "test_seconds": 0.01281005859375,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.decisions",
+        "status": "executed",
+        "tests": 8,
+        "test_seconds": 0.013521484375,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.draftWriter",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 0.03803271484375,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.dropped",
+        "status": "executed",
+        "tests": 3,
+        "test_seconds": 0.0075654296875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.fields",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 0.019570068359375,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.filters",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 0.017047607421875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.geometry",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 0.02844580078125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.grading",
+        "status": "executed",
+        "tests": 15,
+        "test_seconds": 0.016782958984375,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.history",
+        "status": "executed",
+        "tests": 11,
+        "test_seconds": 0.00949462890625,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.keys.hint",
+        "status": "executed",
+        "tests": 25,
+        "test_seconds": 0.012689453125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.keys",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 0.01238525390625,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.keys.window",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 0.008732177734375,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.look.broken",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 0.0093642578125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.look.crop",
+        "status": "executed",
+        "tests": 3,
+        "test_seconds": 0.00679296875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.look.multi",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 0.01420654296875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.look",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 0.00852294921875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.luminance",
+        "status": "executed",
+        "tests": 8,
+        "test_seconds": 0.011543701171875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.mask",
+        "status": "executed",
+        "tests": 8,
+        "test_seconds": 0.01871337890625,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.order",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 0.022491455078125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.percent",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 0.006383544921875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.plmCanvas",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 0.03339501953125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.season",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 0.01033447265625,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.sheet",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 0.015024658203125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.sides",
+        "status": "executed",
+        "tests": 10,
+        "test_seconds": 0.05002783203125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.torso",
+        "status": "executed",
+        "tests": 11,
+        "test_seconds": 0.077401611328125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.tryOn",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 0.003696044921875,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.versions.history",
+        "status": "executed",
+        "tests": 3,
+        "test_seconds": 0.00534130859375,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.versions",
+        "status": "executed",
+        "tests": 8,
+        "test_seconds": 0.015714111328125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.zones.clip",
+        "status": "executed",
+        "tests": 8,
+        "test_seconds": 0.051067626953125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-WEB-shared.zones",
+        "status": "executed",
+        "tests": 17,
+        "test_seconds": 0.102505126953125,
+        "batch_seconds": 4.4677906999131665,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-agenda",
+        "status": "executed",
+        "tests": 2,
+        "test_seconds": 13.679,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-anime",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 27.919,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-asset_client",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 0.063,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-assets_api",
+        "status": "executed",
+        "tests": 12,
+        "test_seconds": 20.470000000000002,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-assistant",
+        "status": "executed",
+        "tests": 8,
+        "test_seconds": 14.71,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-bulk",
+        "status": "executed",
+        "tests": 2,
+        "test_seconds": 11.856,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-collections",
+        "status": "executed",
+        "tests": 24,
+        "test_seconds": 16.851,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-colours_api",
+        "status": "executed",
+        "tests": 7,
+        "test_seconds": 0.174,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-config",
+        "status": "executed",
+        "tests": 7,
+        "test_seconds": 0.019,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-drafts",
+        "status": "executed",
+        "tests": 11,
+        "test_seconds": 17.875,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-drop_board",
+        "status": "executed",
+        "tests": 3,
+        "test_seconds": 42.836,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-drop_edit",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 11.991000000000001,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-drop_links",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 44.985,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-drop_search",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 12.239999999999998,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-drops_api",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 12.775,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-example_transfer",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 0.148,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-executor",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 16.028,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-families",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 11.313,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-kinds",
+        "status": "executed",
+        "tests": 7,
+        "test_seconds": 21.498,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-manifest",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 0.1,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-models",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 49.375,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-my_drafts",
+        "status": "executed",
+        "tests": 3,
+        "test_seconds": 12.138,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-names_api",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 15.934,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-people",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 12.266,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-plm_api",
+        "status": "executed",
+        "tests": 2,
+        "test_seconds": 11.787,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-plm_catalog",
+        "status": "executed",
+        "tests": 2,
+        "test_seconds": 0.186,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-plm_client",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 0.027,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-plm_families",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 11.176,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-prints_api",
+        "status": "executed",
+        "tests": 5,
+        "test_seconds": 0.737,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-products_api",
+        "status": "executed",
+        "tests": 10,
+        "test_seconds": 0.41900000000000004,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-reference_list_loading",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 0.086,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-reference_pages",
+        "status": "executed",
+        "tests": 13,
+        "test_seconds": 23.509999999999998,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-reference_tags",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 51.551,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-references_api",
+        "status": "executed",
+        "tests": 15,
+        "test_seconds": 19.159,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-release_core",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 11.93,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-remarks",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 15.238,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-retag",
+        "status": "executed",
+        "tests": 3,
+        "test_seconds": 23.387999999999998,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-review",
+        "status": "executed",
+        "tests": 8,
+        "test_seconds": 22.777,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-rights",
+        "status": "executed",
+        "tests": 8,
+        "test_seconds": 13.411999999999999,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-search_api",
+        "status": "executed",
+        "tests": 7,
+        "test_seconds": 49.367,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-subject",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 12.554,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-tags_api",
+        "status": "executed",
+        "tests": 7,
+        "test_seconds": 70.615,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-texts_api",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 13.043000000000001,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-trash",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 18.435000000000002,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-voice",
+        "status": "executed",
+        "tests": 4,
+        "test_seconds": 13.796,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-voice_model",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 5.807,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-votes",
+        "status": "executed",
+        "tests": 2,
+        "test_seconds": 11.514000000000001,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      },
+      {
+        "id": "REF-API-zashkvar",
+        "status": "executed",
+        "tests": 3,
+        "test_seconds": 46.013999999999996,
+        "batch_seconds": 1038.9767875999678,
+        "exit_code": 0
+      }
+    ],
+    "environment_fingerprints": {
+      "host": "a323ea251cac06a4c6f2318b709fa3f05c5d35048bb2784706c922e97db91db6",
+      "web": "cdb29b4ff2310d0e3fca4c444bebcce68eac1ce21fab9e06f5c3a9a9eca752e3",
+      "api": "73b4e76f7f7f8cba7ebdaa2ef3f1f6bb61e28eed2e0c57be57593ece6f8312cb"
+    },
+    "candidate": {
+      "accepted": true,
+      "image_digests": {
+        "api": "sha256:304a7e1dafb8a9d50941189db5556b99fca78f3fe053ccd40766655e9a421fb9",
+        "web": "sha256:018c6545c5e86534a6dd105d056ebd6eea27d45902c429281947729c9f20da07",
+        "tunnel": "sha256:89085587e8dad113a017ffe1efd076f06eb7f98aff298d2e8478e9beaf725541"
+      },
+      "duration_seconds": 17.785750899929553,
+      "outcomes": [
+        "compiled_frontend",
+        "same_resolved_frontend_dependencies",
+        "web_to_tunnel_address_8031_to_api",
+        "manifest_at_root",
+        "save_and_reopen_work_v3_real_postgres",
+        "synthetic_data_only"
+      ],
+      "boundary": "Isolated HTTP contract, not a real cross-host SSH connection. Platform access is covered by separate server-side rights tests; no authenticated platform browser session is claimed."
+    },
+    "reuse_origin": null
+  },
+  "replay": {
+    "contract": "TC-2026-11-05",
+    "contract_version": "1.0.0",
+    "adoption": "TC-ADOPT-012",
+    "profile": "standard",
+    "commit": "146f68cec38d84612e7a8537759f9a2d3c904a8b",
+    "tree": "2db27fe438c4797ed937b40a057016a6fcbec7ce",
+    "dirty": false,
+    "stage": "candidate",
+    "seed": 20261105,
+    "selected_ids": [
+      "REF-POLICY",
+      "REF-WEB-app.sections",
+      "REF-WEB-shared.api.plm",
+      "REF-WEB-shared.checks",
+      "REF-WEB-shared.collections",
+      "REF-WEB-shared.composition",
+      "REF-WEB-shared.composition.text",
+      "REF-WEB-shared.contrast",
+      "REF-WEB-shared.decisions",
+      "REF-WEB-shared.draftWriter",
+      "REF-WEB-shared.dropped",
+      "REF-WEB-shared.fields",
+      "REF-WEB-shared.filters",
+      "REF-WEB-shared.geometry",
+      "REF-WEB-shared.grading",
+      "REF-WEB-shared.history",
+      "REF-WEB-shared.keys.hint",
+      "REF-WEB-shared.keys",
+      "REF-WEB-shared.keys.window",
+      "REF-WEB-shared.look.broken",
+      "REF-WEB-shared.look.crop",
+      "REF-WEB-shared.look.multi",
+      "REF-WEB-shared.look",
+      "REF-WEB-shared.luminance",
+      "REF-WEB-shared.mask",
+      "REF-WEB-shared.order",
+      "REF-WEB-shared.percent",
+      "REF-WEB-shared.plmCanvas",
+      "REF-WEB-shared.season",
+      "REF-WEB-shared.sheet",
+      "REF-WEB-shared.sides",
+      "REF-WEB-shared.torso",
+      "REF-WEB-shared.tryOn",
+      "REF-WEB-shared.versions.history",
+      "REF-WEB-shared.versions",
+      "REF-WEB-shared.zones.clip",
+      "REF-WEB-shared.zones",
+      "REF-API-agenda",
+      "REF-API-anime",
+      "REF-API-asset_client",
+      "REF-API-assets_api",
+      "REF-API-assistant",
+      "REF-API-bulk",
+      "REF-API-collections",
+      "REF-API-colours_api",
+      "REF-API-config",
+      "REF-API-drafts",
+      "REF-API-drop_board",
+      "REF-API-drop_edit",
+      "REF-API-drop_links",
+      "REF-API-drop_search",
+      "REF-API-drops_api",
+      "REF-API-example_transfer",
+      "REF-API-executor",
+      "REF-API-families",
+      "REF-API-kinds",
+      "REF-API-manifest",
+      "REF-API-models",
+      "REF-API-my_drafts",
+      "REF-API-names_api",
+      "REF-API-people",
+      "REF-API-plm_api",
+      "REF-API-plm_catalog",
+      "REF-API-plm_client",
+      "REF-API-plm_families",
+      "REF-API-prints_api",
+      "REF-API-products_api",
+      "REF-API-reference_list_loading",
+      "REF-API-reference_pages",
+      "REF-API-reference_tags",
+      "REF-API-references_api",
+      "REF-API-release_core",
+      "REF-API-remarks",
+      "REF-API-retag",
+      "REF-API-review",
+      "REF-API-rights",
+      "REF-API-search_api",
+      "REF-API-subject",
+      "REF-API-tags_api",
+      "REF-API-texts_api",
+      "REF-API-trash",
+      "REF-API-voice",
+      "REF-API-voice_model",
+      "REF-API-votes",
+      "REF-API-zashkvar"
+    ],
+    "selection_reasons": {
+      "REF-POLICY": [
+        "core",
+        "regression",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-app.sections": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.api.plm": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.checks": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.collections": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.composition": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.composition.text": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.contrast": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.decisions": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.draftWriter": [
+        "core",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.dropped": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.fields": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.filters": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.geometry": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.grading": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.history": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.keys.hint": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.keys": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.keys.window": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.look.broken": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.look.crop": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.look.multi": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.look": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.luminance": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.mask": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.order": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.percent": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.plmCanvas": [
+        "core",
+        "regression",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.season": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.sheet": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.sides": [
+        "core",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-WEB-shared.torso": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.tryOn": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.versions.history": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.versions": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.zones.clip": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-WEB-shared.zones": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-agenda": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-anime": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-asset_client": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-assets_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-assistant": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-bulk": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-collections": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-colours_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-config": [
+        "core",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-drafts": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-drop_board": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-drop_edit": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-drop_links": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-drop_search": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-drops_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-example_transfer": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-executor": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-families": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-kinds": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-manifest": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-models": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-my_drafts": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-names_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-people": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-plm_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-plm_catalog": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-plm_client": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-plm_families": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-prints_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-products_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-reference_list_loading": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-reference_pages": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-reference_tags": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-references_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-release_core": [
+        "core",
+        "regression",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-remarks": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-retag": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-review": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-rights": [
+        "core",
+        "affected",
+        "inputs_changed"
+      ],
+      "REF-API-search_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-subject": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-tags_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-texts_api": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-trash": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-voice": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-voice_model": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-votes": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ],
+      "REF-API-zashkvar": [
+        "affected",
+        "inputs_changed",
+        "rotation_budget"
+      ]
+    },
+    "inputs": {
+      "REF-POLICY": "4c9226c237ae2079385a9deaaed2734f9fa6e225c41593dcd9cf285667df7d61",
+      "REF-WEB-app.sections": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.api.plm": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.checks": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.collections": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.composition": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.composition.text": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.contrast": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.decisions": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.draftWriter": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.dropped": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.fields": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.filters": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.geometry": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.grading": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.history": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.keys.hint": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.keys": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.keys.window": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.look.broken": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.look.crop": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.look.multi": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.look": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.luminance": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.mask": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.order": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.percent": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.plmCanvas": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.season": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.sheet": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.sides": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.torso": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.tryOn": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.versions.history": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.versions": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.zones.clip": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-WEB-shared.zones": "fe57f4accba270202c7828dc571eab4baefa5866ce86a5f3efe8b70a67478690",
+      "REF-API-agenda": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-anime": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-asset_client": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-assets_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-assistant": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-bulk": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-collections": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-colours_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-config": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drafts": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drop_board": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drop_edit": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drop_links": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drop_search": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-drops_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-example_transfer": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-executor": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-families": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-kinds": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-manifest": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-models": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-my_drafts": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-names_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-people": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-plm_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-plm_catalog": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-plm_client": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-plm_families": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-prints_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-products_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-reference_list_loading": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-reference_pages": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-reference_tags": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-references_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-release_core": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-remarks": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-retag": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-review": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-rights": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-search_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-subject": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-tags_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-texts_api": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-trash": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-voice": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-voice_model": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-votes": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc",
+      "REF-API-zashkvar": "42e544a2210419c1e192756077f5d2ddeecdaa79b66fa2b62e40b90f5475accc"
+    },
+    "test_versions": {
+      "REF-POLICY": "460e28497029e745d1dd8d92b93cf4bfb566667ff81058015845dc0b83fd9b8d",
+      "REF-WEB-app.sections": "a235932dd04e03c1afa65f4610e87d5d9728f9c3cfcede3a6f2f952f3d42cc00",
+      "REF-WEB-shared.api.plm": "5cfb85c8fb248ea69648756fb3b44cdc5dbf67ad7bf42d7dccdc061e7dd9b578",
+      "REF-WEB-shared.checks": "3267631fabed3a4527c120dc030c341020aaf1647a26fed5e6a0997e6d7ce790",
+      "REF-WEB-shared.collections": "4e6263187bac68f44a1cf3c8261d2764074b70efca33d53ba8202c8654f4151e",
+      "REF-WEB-shared.composition": "1bbdf1749458519932a84983893653732e4bf06692fe3c45fc761710ff71a776",
+      "REF-WEB-shared.composition.text": "9c47a6132649d7ba9ad5423e436a668f227005faed0242ca71a97cf65abe9270",
+      "REF-WEB-shared.contrast": "5df1615007ca5f77b1cc02a485703d9de85ff10df16a942fda1c52e5d75eb621",
+      "REF-WEB-shared.decisions": "a5af1be0ee4a58786cdc9fc0c9d17437fef3c4ebddbe7f9b9a6a59c27cc31cc2",
+      "REF-WEB-shared.draftWriter": "4ba1bb9502c6c3cf6e1a54ea962d77ca4ac4dac5259501e2cf5c73118ef2505c",
+      "REF-WEB-shared.dropped": "fc8c3a26cfcfaf8b9cd06edd4e614a264110616586b79b8d3b51a8ad8ebb6ee7",
+      "REF-WEB-shared.fields": "f2510f74c37dda9bf2ad17f10c92a9835318b113368742a6c3e7d78bba471010",
+      "REF-WEB-shared.filters": "a8a37f77bb07dfa84b2490fcd17ccab232ff0ad743cce6c09cfca8dd41da271e",
+      "REF-WEB-shared.geometry": "ec3131ba650ed1838e0bfae2e4a7e8d440f3deb3df3c68a74677dc7f1d7b95ec",
+      "REF-WEB-shared.grading": "2ddbbfccaa3ddb0404d585a3291b2827d6bd74d1ffab56e8a0ce500943623fbf",
+      "REF-WEB-shared.history": "c21012eacd9157b3f19750490c8ba989c07eb1448fecee0de024f9862d112026",
+      "REF-WEB-shared.keys.hint": "4a44a97bf85bdb65693ce1b81c5f70b20a98d66136668928c4dc065ce01c2d35",
+      "REF-WEB-shared.keys": "82a89ab7b817d6919cb02487d35f885127f2aa98b2d5db70919fdcaa6a76aad4",
+      "REF-WEB-shared.keys.window": "97112c7e7decf4f261b07424b76bce7490dead2037923fd5a5e0af654380b5af",
+      "REF-WEB-shared.look.broken": "b73e8d9da75b07323245067851949719c91d157dc1d12d73104117c52dcb3027",
+      "REF-WEB-shared.look.crop": "e4bc857caa378291b016b4297a0fb4d1e653b8976ddff94bc9671cf3f9f0e0ea",
+      "REF-WEB-shared.look.multi": "cc347b8ed028234c57806f9e364cf046cfdff9882c62ac47fd27a2c18c4db142",
+      "REF-WEB-shared.look": "5bfa321574bd04c34a9c8dc4fe3732ce0f923563ea44a6e59a0939907bf27730",
+      "REF-WEB-shared.luminance": "e64bd5d9f18ee77455bc588dd8b45fdef103ce3e749f77c5f784f8f595527d73",
+      "REF-WEB-shared.mask": "54c311e602bbfcbef9d5a430a0b93416f1a02b0ab068a248c7d48ec8ce7d7a8a",
+      "REF-WEB-shared.order": "19e1d9020cf797eb4776f1b264b43fbca6db8042dd36f7313ccf9aaaf2c8c22a",
+      "REF-WEB-shared.percent": "b1b979b70ddf50648e5f5a410d8e4a615096a49f4c19ca275cf3f6c1fdac5370",
+      "REF-WEB-shared.plmCanvas": "643b9186ff902ecde9b6c5ba05adf0c814b276c8690f44ccc6a434a80b9be185",
+      "REF-WEB-shared.season": "87584fc71491207d56385ab8004138cbed9b8beb0474e3ba372c7afbcd37f0df",
+      "REF-WEB-shared.sheet": "64f1d84b5fa93a60fd13fd6822f1a1f45b79e75b11baf8a2da5434f790093da1",
+      "REF-WEB-shared.sides": "dceee51b88cae6608222b4b4a7138180eb492071741a4526477b9bc9df1bd0cf",
+      "REF-WEB-shared.torso": "7a2d50f6fc21fd7dc719d93eef7708f6237a1b1cbc99d11f766d4e136b30bc9a",
+      "REF-WEB-shared.tryOn": "f0fb75fc01ab2ad3bb0e5d2fe5bb83c4e0fa3f925c75e00331ee28151abf0a87",
+      "REF-WEB-shared.versions.history": "97c9ff516490387192763ca703f8335ef1ff9bb8dd72aacd60c3092939144830",
+      "REF-WEB-shared.versions": "1f89c6267d8b375b6aaa9a8740dcb9891ddec3dea710590fa9b5177fb39a9fd3",
+      "REF-WEB-shared.zones.clip": "b6d5b420404474b2a2473c021f19f4e0c355ce5eb0e741fd0df13e49bd9b5acb",
+      "REF-WEB-shared.zones": "6fb4554f882344d15bee1c3f0f4b01f7b13645ea180305d59c318826de617b70",
+      "REF-API-agenda": "0c0a93c97c99282f04cc9ed10daf28effd7e8be0b91dfb06bf49448d752c04cc",
+      "REF-API-anime": "fb90fff7d29df7acf8701d58074b0016fdaccaa95c61ebb5353d03eef0143a2b",
+      "REF-API-asset_client": "9034794d50840a889d74f2150a2151b4dd4c6d187d33f4b1e27bbba32a34ad45",
+      "REF-API-assets_api": "72ab038c4870ec36d580c2f822003107184fe9015d072859c8786bcb451774ac",
+      "REF-API-assistant": "442c855281e87678ad37d2cc5146954878f9e27204eb68b872af94088bce8767",
+      "REF-API-bulk": "5b7ce421b516f819ddb8151b7961b92d73fcc88640d667acd9506fe2bf23d1e6",
+      "REF-API-collections": "4af13479f1246d6d2b3f51ef053ffd286c5a992992d056f567798c1920134e1b",
+      "REF-API-colours_api": "49cd59ff1e30444a65459461d973d2b89e28e00d231760de50052a1efca1cd67",
+      "REF-API-config": "181a83aae53b149bbe4586c2aaae4cbdc6b0daf753d58310974538f22259b117",
+      "REF-API-drafts": "7ae652b0bfe3b7097568f3a60ce8ae65c7373a10740b68b14c9098555d5f31d1",
+      "REF-API-drop_board": "317e83a33b7f822fef3a88fd549c06056d62223737dab1bea122fd5fca6c7cc8",
+      "REF-API-drop_edit": "1fd014d22eba1291caad0d4cae1f96da3cc3ffc135ce66bc4fbc782183570592",
+      "REF-API-drop_links": "d7f098e439d20146d17d94957964721ecf5e279ee35140a76245274c23ae13d2",
+      "REF-API-drop_search": "dfbc1abec73651e67aaf92e74207fd88cfb16adcf1d2edbc844952bd613a6833",
+      "REF-API-drops_api": "5c2bff8e2da8059084eb7e45daf178763cf8755dedfd414ff6037a4472259a80",
+      "REF-API-example_transfer": "9b5a5d5d3d189649eb7e535fad1efdc84ce49a4b4987ac861706df0abc8033f7",
+      "REF-API-executor": "bad61bcddac1cb68bd35f994d6fe3662ba4cd1be1f98afd1086a42342bd176b4",
+      "REF-API-families": "3f76762266b89e29e5827cf499879b116c1b63ccd1618950f3df6e3db4338bf7",
+      "REF-API-kinds": "822d1981bc1a41faabe0cbb0bfbf39d75e79606c358c468ff4658eb3b698dc0d",
+      "REF-API-manifest": "bc1e4c9a7341d576b771c8a3e011d4b49da4472a7aef0e8caa54d80a0da042b3",
+      "REF-API-models": "0d08f8b8c6a696e1872348ef9516344aa6f444e21a8f326f14e772273758335b",
+      "REF-API-my_drafts": "ce3e70d91dc7f2a466494177cdd9582792971f363941562691168ca82fe811c6",
+      "REF-API-names_api": "ee0c83a0f0a6b3ce69d92fd4d75d2692dc98dace011272fe9d01bbee9d05c08f",
+      "REF-API-people": "5e22e014471c124a59869e3fab8f3132d0f830aafdc1a3eb306814ec32026a86",
+      "REF-API-plm_api": "4f2619d1f104f65ca9642ed68bbd0741d3c917b6e1127954e174b4feaa9e43d8",
+      "REF-API-plm_catalog": "f846f2b6d92447282a21b76775a1624d4caafb01e9d14d44e411e62959653fd5",
+      "REF-API-plm_client": "f75e7e1b298011a3081d98b1db1c616d35bb6e9c98f3b9f49b742d041fba61de",
+      "REF-API-plm_families": "03120f196af1ace2bd2832e84155bb5e8a2e3bdf950fdcee1a803ef2e90a57a9",
+      "REF-API-prints_api": "e91942676c28da2fd552f90f634e57a962e49463d5e4011e17469e946d4f3574",
+      "REF-API-products_api": "1ad1e5af00d7b6dcbeebc12a20bff996b512b76fc85194db52b910e5c5dea0d6",
+      "REF-API-reference_list_loading": "b1cd100490d049cfa346f91b881949a7eb0aa3436188a955b3d7a851d83fdfe3",
+      "REF-API-reference_pages": "fbf37f1633e8d5a0032c3a7e7acdf12c635d42530c0ae3a9a0e13878ee824b57",
+      "REF-API-reference_tags": "1bd29c4b0f577bd737a300b50c19d51c97405bc25112652d0ff1b7def82b3ea0",
+      "REF-API-references_api": "6a080313639fb044b5f5755a928061d31f03671d928a8ce0feb48efcbc50b132",
+      "REF-API-release_core": "b661a82f19a707fd3215365fd49f62e072012f80a0c744bbb61c091e1303529c",
+      "REF-API-remarks": "16a6a1dae256a2d122d939357471face75283286d21e5abf8370df2d2c077634",
+      "REF-API-retag": "47228f089af29d9b4e7342cb9109dde9cddd30626f295058376a2d6707d2dc1e",
+      "REF-API-review": "38b3db58986828a9619edb1e326b5ce4e98f3e18b7eae20c0693b27f1b2da9ae",
+      "REF-API-rights": "8eaa54d55daa786462573d5e183d2bbab44bba015775c03ef4c07c29beabc872",
+      "REF-API-search_api": "ab31a9ebe0998016a7a420eebe641b96c917f70c1a23116bd7605c1ac9f337b3",
+      "REF-API-subject": "a84f5d5e42adf4d853d653054c09213dcda115afa932b4c8c620f405d099af4f",
+      "REF-API-tags_api": "90665bbfa9acfaa4c95a04fe0ccbff8575810844f6dd27051e658e7f8313d365",
+      "REF-API-texts_api": "554fd2b195dcfc3b46b6cffc2b39b75f4bf19a4cbd7efd2f4f7424a43ba8ff77",
+      "REF-API-trash": "103dff5691afa99048345b346492cbb0373fdd5d82d14f5ba4df0e48efee61ce",
+      "REF-API-voice": "29ece1bd8a34e28e304d436c3689432523c682c8d0b82c0b6687d39123dc2297",
+      "REF-API-voice_model": "d20c1a9ca22b16c22e5b56c154c4e6526b14e638abed22503448407418c74031",
+      "REF-API-votes": "aa2f10797a4098ad5498d2cf5ad7a344b2172e3499b753f10a8d4ec79f78f670",
+      "REF-API-zashkvar": "408e0d6b0c3a743bb8704dd4066e45b804b3bc6ed1407e746979ad50c5c1f672"
+    },
+    "rotation": {
+      "REF-POLICY": {
+        "last_success": 1793887540.2051392,
+        "version": "460e28497029e745d1dd8d92b93cf4bfb566667ff81058015845dc0b83fd9b8d",
+        "due": false
+      },
+      "REF-WEB-app.sections": {
+        "last_success": 1793887544.6806712,
+        "version": "a235932dd04e03c1afa65f4610e87d5d9728f9c3cfcede3a6f2f952f3d42cc00",
+        "due": false
+      },
+      "REF-WEB-shared.api.plm": {
+        "last_success": 1793887544.6843479,
+        "version": "5cfb85c8fb248ea69648756fb3b44cdc5dbf67ad7bf42d7dccdc061e7dd9b578",
+        "due": false
+      },
+      "REF-WEB-shared.checks": {
+        "last_success": 1793887544.6872222,
+        "version": "3267631fabed3a4527c120dc030c341020aaf1647a26fed5e6a0997e6d7ce790",
+        "due": false
+      },
+      "REF-WEB-shared.collections": {
+        "last_success": 1793887544.689886,
+        "version": "4e6263187bac68f44a1cf3c8261d2764074b70efca33d53ba8202c8654f4151e",
+        "due": false
+      },
+      "REF-WEB-shared.composition": {
+        "last_success": 1793887544.6926243,
+        "version": "1bbdf1749458519932a84983893653732e4bf06692fe3c45fc761710ff71a776",
+        "due": false
+      },
+      "REF-WEB-shared.composition.text": {
+        "last_success": 1793887544.6952348,
+        "version": "9c47a6132649d7ba9ad5423e436a668f227005faed0242ca71a97cf65abe9270",
+        "due": false
+      },
+      "REF-WEB-shared.contrast": {
+        "last_success": 1793887544.6975799,
+        "version": "5df1615007ca5f77b1cc02a485703d9de85ff10df16a942fda1c52e5d75eb621",
+        "due": false
+      },
+      "REF-WEB-shared.decisions": {
+        "last_success": 1793887544.700191,
+        "version": "a5af1be0ee4a58786cdc9fc0c9d17437fef3c4ebddbe7f9b9a6a59c27cc31cc2",
+        "due": false
+      },
+      "REF-WEB-shared.draftWriter": {
+        "last_success": 1793887544.7026606,
+        "version": "4ba1bb9502c6c3cf6e1a54ea962d77ca4ac4dac5259501e2cf5c73118ef2505c",
+        "due": false
+      },
+      "REF-WEB-shared.dropped": {
+        "last_success": 1793887544.7055283,
+        "version": "fc8c3a26cfcfaf8b9cd06edd4e614a264110616586b79b8d3b51a8ad8ebb6ee7",
+        "due": false
+      },
+      "REF-WEB-shared.fields": {
+        "last_success": 1793887544.7082083,
+        "version": "f2510f74c37dda9bf2ad17f10c92a9835318b113368742a6c3e7d78bba471010",
+        "due": false
+      },
+      "REF-WEB-shared.filters": {
+        "last_success": 1793887544.7117305,
+        "version": "a8a37f77bb07dfa84b2490fcd17ccab232ff0ad743cce6c09cfca8dd41da271e",
+        "due": false
+      },
+      "REF-WEB-shared.geometry": {
+        "last_success": 1793887544.7145846,
+        "version": "ec3131ba650ed1838e0bfae2e4a7e8d440f3deb3df3c68a74677dc7f1d7b95ec",
+        "due": false
+      },
+      "REF-WEB-shared.grading": {
+        "last_success": 1793887544.7172897,
+        "version": "2ddbbfccaa3ddb0404d585a3291b2827d6bd74d1ffab56e8a0ce500943623fbf",
+        "due": false
+      },
+      "REF-WEB-shared.history": {
+        "last_success": 1793887544.7196374,
+        "version": "c21012eacd9157b3f19750490c8ba989c07eb1448fecee0de024f9862d112026",
+        "due": false
+      },
+      "REF-WEB-shared.keys.hint": {
+        "last_success": 1793887544.7221613,
+        "version": "4a44a97bf85bdb65693ce1b81c5f70b20a98d66136668928c4dc065ce01c2d35",
+        "due": false
+      },
+      "REF-WEB-shared.keys": {
+        "last_success": 1793887544.7242181,
+        "version": "82a89ab7b817d6919cb02487d35f885127f2aa98b2d5db70919fdcaa6a76aad4",
+        "due": false
+      },
+      "REF-WEB-shared.keys.window": {
+        "last_success": 1793887544.725792,
+        "version": "97112c7e7decf4f261b07424b76bce7490dead2037923fd5a5e0af654380b5af",
+        "due": false
+      },
+      "REF-WEB-shared.look.broken": {
+        "last_success": 1793887544.727425,
+        "version": "b73e8d9da75b07323245067851949719c91d157dc1d12d73104117c52dcb3027",
+        "due": false
+      },
+      "REF-WEB-shared.look.crop": {
+        "last_success": 1793887544.7294562,
+        "version": "e4bc857caa378291b016b4297a0fb4d1e653b8976ddff94bc9671cf3f9f0e0ea",
+        "due": false
+      },
+      "REF-WEB-shared.look.multi": {
+        "last_success": 1793887544.7313821,
+        "version": "cc347b8ed028234c57806f9e364cf046cfdff9882c62ac47fd27a2c18c4db142",
+        "due": false
+      },
+      "REF-WEB-shared.look": {
+        "last_success": 1793887544.7332592,
+        "version": "5bfa321574bd04c34a9c8dc4fe3732ce0f923563ea44a6e59a0939907bf27730",
+        "due": false
+      },
+      "REF-WEB-shared.luminance": {
+        "last_success": 1793887544.735467,
+        "version": "e64bd5d9f18ee77455bc588dd8b45fdef103ce3e749f77c5f784f8f595527d73",
+        "due": false
+      },
+      "REF-WEB-shared.mask": {
+        "last_success": 1793887544.7374508,
+        "version": "54c311e602bbfcbef9d5a430a0b93416f1a02b0ab068a248c7d48ec8ce7d7a8a",
+        "due": false
+      },
+      "REF-WEB-shared.order": {
+        "last_success": 1793887544.7394783,
+        "version": "19e1d9020cf797eb4776f1b264b43fbca6db8042dd36f7313ccf9aaaf2c8c22a",
+        "due": false
+      },
+      "REF-WEB-shared.percent": {
+        "last_success": 1793887544.741363,
+        "version": "b1b979b70ddf50648e5f5a410d8e4a615096a49f4c19ca275cf3f6c1fdac5370",
+        "due": false
+      },
+      "REF-WEB-shared.plmCanvas": {
+        "last_success": 1793887544.742971,
+        "version": "643b9186ff902ecde9b6c5ba05adf0c814b276c8690f44ccc6a434a80b9be185",
+        "due": false
+      },
+      "REF-WEB-shared.season": {
+        "last_success": 1793887544.7449503,
+        "version": "87584fc71491207d56385ab8004138cbed9b8beb0474e3ba372c7afbcd37f0df",
+        "due": false
+      },
+      "REF-WEB-shared.sheet": {
+        "last_success": 1793887544.7466137,
+        "version": "64f1d84b5fa93a60fd13fd6822f1a1f45b79e75b11baf8a2da5434f790093da1",
+        "due": false
+      },
+      "REF-WEB-shared.sides": {
+        "last_success": 1793887544.7482066,
+        "version": "dceee51b88cae6608222b4b4a7138180eb492071741a4526477b9bc9df1bd0cf",
+        "due": false
+      },
+      "REF-WEB-shared.torso": {
+        "last_success": 1793887544.7497413,
+        "version": "7a2d50f6fc21fd7dc719d93eef7708f6237a1b1cbc99d11f766d4e136b30bc9a",
+        "due": false
+      },
+      "REF-WEB-shared.tryOn": {
+        "last_success": 1793887544.7514904,
+        "version": "f0fb75fc01ab2ad3bb0e5d2fe5bb83c4e0fa3f925c75e00331ee28151abf0a87",
+        "due": false
+      },
+      "REF-WEB-shared.versions.history": {
+        "last_success": 1793887544.7532325,
+        "version": "97c9ff516490387192763ca703f8335ef1ff9bb8dd72aacd60c3092939144830",
+        "due": false
+      },
+      "REF-WEB-shared.versions": {
+        "last_success": 1793887544.7547534,
+        "version": "1f89c6267d8b375b6aaa9a8740dcb9891ddec3dea710590fa9b5177fb39a9fd3",
+        "due": false
+      },
+      "REF-WEB-shared.zones.clip": {
+        "last_success": 1793887544.7563207,
+        "version": "b6d5b420404474b2a2473c021f19f4e0c355ce5eb0e741fd0df13e49bd9b5acb",
+        "due": false
+      },
+      "REF-WEB-shared.zones": {
+        "last_success": 1793887544.7577577,
+        "version": "6fb4554f882344d15bee1c3f0f4b01f7b13645ea180305d59c318826de617b70",
+        "due": false
+      },
+      "REF-API-agenda": {
+        "last_success": 1793888587.0564435,
+        "version": "0c0a93c97c99282f04cc9ed10daf28effd7e8be0b91dfb06bf49448d752c04cc",
+        "due": false
+      },
+      "REF-API-anime": {
+        "last_success": 1793888587.0586338,
+        "version": "fb90fff7d29df7acf8701d58074b0016fdaccaa95c61ebb5353d03eef0143a2b",
+        "due": false
+      },
+      "REF-API-asset_client": {
+        "last_success": 1793888587.0607843,
+        "version": "9034794d50840a889d74f2150a2151b4dd4c6d187d33f4b1e27bbba32a34ad45",
+        "due": false
+      },
+      "REF-API-assets_api": {
+        "last_success": 1793888587.0626953,
+        "version": "72ab038c4870ec36d580c2f822003107184fe9015d072859c8786bcb451774ac",
+        "due": false
+      },
+      "REF-API-assistant": {
+        "last_success": 1793888587.0650787,
+        "version": "442c855281e87678ad37d2cc5146954878f9e27204eb68b872af94088bce8767",
+        "due": false
+      },
+      "REF-API-bulk": {
+        "last_success": 1793888587.0672548,
+        "version": "5b7ce421b516f819ddb8151b7961b92d73fcc88640d667acd9506fe2bf23d1e6",
+        "due": false
+      },
+      "REF-API-collections": {
+        "last_success": 1793888587.0692623,
+        "version": "4af13479f1246d6d2b3f51ef053ffd286c5a992992d056f567798c1920134e1b",
+        "due": false
+      },
+      "REF-API-colours_api": {
+        "last_success": 1793888587.071536,
+        "version": "49cd59ff1e30444a65459461d973d2b89e28e00d231760de50052a1efca1cd67",
+        "due": false
+      },
+      "REF-API-config": {
+        "last_success": 1793888587.073521,
+        "version": "181a83aae53b149bbe4586c2aaae4cbdc6b0daf753d58310974538f22259b117",
+        "due": false
+      },
+      "REF-API-drafts": {
+        "last_success": 1793888587.0754778,
+        "version": "7ae652b0bfe3b7097568f3a60ce8ae65c7373a10740b68b14c9098555d5f31d1",
+        "due": false
+      },
+      "REF-API-drop_board": {
+        "last_success": 1793888587.0781875,
+        "version": "317e83a33b7f822fef3a88fd549c06056d62223737dab1bea122fd5fca6c7cc8",
+        "due": false
+      },
+      "REF-API-drop_edit": {
+        "last_success": 1793888587.0801528,
+        "version": "1fd014d22eba1291caad0d4cae1f96da3cc3ffc135ce66bc4fbc782183570592",
+        "due": false
+      },
+      "REF-API-drop_links": {
+        "last_success": 1793888587.0823584,
+        "version": "d7f098e439d20146d17d94957964721ecf5e279ee35140a76245274c23ae13d2",
+        "due": false
+      },
+      "REF-API-drop_search": {
+        "last_success": 1793888587.084503,
+        "version": "dfbc1abec73651e67aaf92e74207fd88cfb16adcf1d2edbc844952bd613a6833",
+        "due": false
+      },
+      "REF-API-drops_api": {
+        "last_success": 1793888587.0862606,
+        "version": "5c2bff8e2da8059084eb7e45daf178763cf8755dedfd414ff6037a4472259a80",
+        "due": false
+      },
+      "REF-API-example_transfer": {
+        "last_success": 1793888587.0877767,
+        "version": "9b5a5d5d3d189649eb7e535fad1efdc84ce49a4b4987ac861706df0abc8033f7",
+        "due": false
+      },
+      "REF-API-executor": {
+        "last_success": 1793888587.089475,
+        "version": "bad61bcddac1cb68bd35f994d6fe3662ba4cd1be1f98afd1086a42342bd176b4",
+        "due": false
+      },
+      "REF-API-families": {
+        "last_success": 1793888587.0914972,
+        "version": "3f76762266b89e29e5827cf499879b116c1b63ccd1618950f3df6e3db4338bf7",
+        "due": false
+      },
+      "REF-API-kinds": {
+        "last_success": 1793888587.093447,
+        "version": "822d1981bc1a41faabe0cbb0bfbf39d75e79606c358c468ff4658eb3b698dc0d",
+        "due": false
+      },
+      "REF-API-manifest": {
+        "last_success": 1793888587.095412,
+        "version": "bc1e4c9a7341d576b771c8a3e011d4b49da4472a7aef0e8caa54d80a0da042b3",
+        "due": false
+      },
+      "REF-API-models": {
+        "last_success": 1793888587.0980513,
+        "version": "0d08f8b8c6a696e1872348ef9516344aa6f444e21a8f326f14e772273758335b",
+        "due": false
+      },
+      "REF-API-my_drafts": {
+        "last_success": 1793888587.100229,
+        "version": "ce3e70d91dc7f2a466494177cdd9582792971f363941562691168ca82fe811c6",
+        "due": false
+      },
+      "REF-API-names_api": {
+        "last_success": 1793888587.1020608,
+        "version": "ee0c83a0f0a6b3ce69d92fd4d75d2692dc98dace011272fe9d01bbee9d05c08f",
+        "due": false
+      },
+      "REF-API-people": {
+        "last_success": 1793888587.1039174,
+        "version": "5e22e014471c124a59869e3fab8f3132d0f830aafdc1a3eb306814ec32026a86",
+        "due": false
+      },
+      "REF-API-plm_api": {
+        "last_success": 1793888587.1061747,
+        "version": "4f2619d1f104f65ca9642ed68bbd0741d3c917b6e1127954e174b4feaa9e43d8",
+        "due": false
+      },
+      "REF-API-plm_catalog": {
+        "last_success": 1793888587.1081917,
+        "version": "f846f2b6d92447282a21b76775a1624d4caafb01e9d14d44e411e62959653fd5",
+        "due": false
+      },
+      "REF-API-plm_client": {
+        "last_success": 1793888587.1103733,
+        "version": "f75e7e1b298011a3081d98b1db1c616d35bb6e9c98f3b9f49b742d041fba61de",
+        "due": false
+      },
+      "REF-API-plm_families": {
+        "last_success": 1793888587.1120868,
+        "version": "03120f196af1ace2bd2832e84155bb5e8a2e3bdf950fdcee1a803ef2e90a57a9",
+        "due": false
+      },
+      "REF-API-prints_api": {
+        "last_success": 1793888587.1136906,
+        "version": "e91942676c28da2fd552f90f634e57a962e49463d5e4011e17469e946d4f3574",
+        "due": false
+      },
+      "REF-API-products_api": {
+        "last_success": 1793888587.1150901,
+        "version": "1ad1e5af00d7b6dcbeebc12a20bff996b512b76fc85194db52b910e5c5dea0d6",
+        "due": false
+      },
+      "REF-API-reference_list_loading": {
+        "last_success": 1793888587.1164906,
+        "version": "b1cd100490d049cfa346f91b881949a7eb0aa3436188a955b3d7a851d83fdfe3",
+        "due": false
+      },
+      "REF-API-reference_pages": {
+        "last_success": 1793888587.1178567,
+        "version": "fbf37f1633e8d5a0032c3a7e7acdf12c635d42530c0ae3a9a0e13878ee824b57",
+        "due": false
+      },
+      "REF-API-reference_tags": {
+        "last_success": 1793888587.1192832,
+        "version": "1bd29c4b0f577bd737a300b50c19d51c97405bc25112652d0ff1b7def82b3ea0",
+        "due": false
+      },
+      "REF-API-references_api": {
+        "last_success": 1793888587.120607,
+        "version": "6a080313639fb044b5f5755a928061d31f03671d928a8ce0feb48efcbc50b132",
+        "due": false
+      },
+      "REF-API-release_core": {
+        "last_success": 1793888587.1218953,
+        "version": "b661a82f19a707fd3215365fd49f62e072012f80a0c744bbb61c091e1303529c",
+        "due": false
+      },
+      "REF-API-remarks": {
+        "last_success": 1793888587.1232798,
+        "version": "16a6a1dae256a2d122d939357471face75283286d21e5abf8370df2d2c077634",
+        "due": false
+      },
+      "REF-API-retag": {
+        "last_success": 1793888587.1248477,
+        "version": "47228f089af29d9b4e7342cb9109dde9cddd30626f295058376a2d6707d2dc1e",
+        "due": false
+      },
+      "REF-API-review": {
+        "last_success": 1793888587.1262972,
+        "version": "38b3db58986828a9619edb1e326b5ce4e98f3e18b7eae20c0693b27f1b2da9ae",
+        "due": false
+      },
+      "REF-API-rights": {
+        "last_success": 1793888587.1283784,
+        "version": "8eaa54d55daa786462573d5e183d2bbab44bba015775c03ef4c07c29beabc872",
+        "due": false
+      },
+      "REF-API-search_api": {
+        "last_success": 1793888587.1298363,
+        "version": "ab31a9ebe0998016a7a420eebe641b96c917f70c1a23116bd7605c1ac9f337b3",
+        "due": false
+      },
+      "REF-API-subject": {
+        "last_success": 1793888587.1313145,
+        "version": "a84f5d5e42adf4d853d653054c09213dcda115afa932b4c8c620f405d099af4f",
+        "due": false
+      },
+      "REF-API-tags_api": {
+        "last_success": 1793888587.1329503,
+        "version": "90665bbfa9acfaa4c95a04fe0ccbff8575810844f6dd27051e658e7f8313d365",
+        "due": false
+      },
+      "REF-API-texts_api": {
+        "last_success": 1793888587.1349103,
+        "version": "554fd2b195dcfc3b46b6cffc2b39b75f4bf19a4cbd7efd2f4f7424a43ba8ff77",
+        "due": false
+      },
+      "REF-API-trash": {
+        "last_success": 1793888587.1370707,
+        "version": "103dff5691afa99048345b346492cbb0373fdd5d82d14f5ba4df0e48efee61ce",
+        "due": false
+      },
+      "REF-API-voice": {
+        "last_success": 1793888587.1390502,
+        "version": "29ece1bd8a34e28e304d436c3689432523c682c8d0b82c0b6687d39123dc2297",
+        "due": false
+      },
+      "REF-API-voice_model": {
+        "last_success": 1793888587.1413908,
+        "version": "d20c1a9ca22b16c22e5b56c154c4e6526b14e638abed22503448407418c74031",
+        "due": false
+      },
+      "REF-API-votes": {
+        "last_success": 1793888587.143914,
+        "version": "aa2f10797a4098ad5498d2cf5ad7a344b2172e3499b753f10a8d4ec79f78f670",
+        "due": false
+      },
+      "REF-API-zashkvar": {
+        "last_success": 1793888587.1461225,
+        "version": "408e0d6b0c3a743bb8704dd4066e45b804b3bc6ed1407e746979ad50c5c1f672",
+        "due": false
+      }
+    },
+    "accepted": true,
+    "wall_seconds": 60.80904520000331,
+    "preparation_seconds": 22.3980022999458,
+    "execution_seconds": 18.418473599944264,
+    "budget_seconds": 1200,
+    "budget_exceeded": false,
+    "results": [
+      {
+        "id": "REF-POLICY",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887540.2051392
+      },
+      {
+        "id": "REF-WEB-app.sections",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.6806712
+      },
+      {
+        "id": "REF-WEB-shared.api.plm",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.6843479
+      },
+      {
+        "id": "REF-WEB-shared.checks",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.6872222
+      },
+      {
+        "id": "REF-WEB-shared.collections",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.689886
+      },
+      {
+        "id": "REF-WEB-shared.composition",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.6926243
+      },
+      {
+        "id": "REF-WEB-shared.composition.text",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.6952348
+      },
+      {
+        "id": "REF-WEB-shared.contrast",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.6975799
+      },
+      {
+        "id": "REF-WEB-shared.decisions",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.700191
+      },
+      {
+        "id": "REF-WEB-shared.draftWriter",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7026606
+      },
+      {
+        "id": "REF-WEB-shared.dropped",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7055283
+      },
+      {
+        "id": "REF-WEB-shared.fields",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7082083
+      },
+      {
+        "id": "REF-WEB-shared.filters",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7117305
+      },
+      {
+        "id": "REF-WEB-shared.geometry",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7145846
+      },
+      {
+        "id": "REF-WEB-shared.grading",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7172897
+      },
+      {
+        "id": "REF-WEB-shared.history",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7196374
+      },
+      {
+        "id": "REF-WEB-shared.keys.hint",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7221613
+      },
+      {
+        "id": "REF-WEB-shared.keys",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7242181
+      },
+      {
+        "id": "REF-WEB-shared.keys.window",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.725792
+      },
+      {
+        "id": "REF-WEB-shared.look.broken",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.727425
+      },
+      {
+        "id": "REF-WEB-shared.look.crop",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7294562
+      },
+      {
+        "id": "REF-WEB-shared.look.multi",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7313821
+      },
+      {
+        "id": "REF-WEB-shared.look",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7332592
+      },
+      {
+        "id": "REF-WEB-shared.luminance",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.735467
+      },
+      {
+        "id": "REF-WEB-shared.mask",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7374508
+      },
+      {
+        "id": "REF-WEB-shared.order",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7394783
+      },
+      {
+        "id": "REF-WEB-shared.percent",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.741363
+      },
+      {
+        "id": "REF-WEB-shared.plmCanvas",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.742971
+      },
+      {
+        "id": "REF-WEB-shared.season",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7449503
+      },
+      {
+        "id": "REF-WEB-shared.sheet",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7466137
+      },
+      {
+        "id": "REF-WEB-shared.sides",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7482066
+      },
+      {
+        "id": "REF-WEB-shared.torso",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7497413
+      },
+      {
+        "id": "REF-WEB-shared.tryOn",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7514904
+      },
+      {
+        "id": "REF-WEB-shared.versions.history",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7532325
+      },
+      {
+        "id": "REF-WEB-shared.versions",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7547534
+      },
+      {
+        "id": "REF-WEB-shared.zones.clip",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7563207
+      },
+      {
+        "id": "REF-WEB-shared.zones",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793887544.7577577
+      },
+      {
+        "id": "REF-API-agenda",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0564435
+      },
+      {
+        "id": "REF-API-anime",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0586338
+      },
+      {
+        "id": "REF-API-asset_client",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0607843
+      },
+      {
+        "id": "REF-API-assets_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0626953
+      },
+      {
+        "id": "REF-API-assistant",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0650787
+      },
+      {
+        "id": "REF-API-bulk",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0672548
+      },
+      {
+        "id": "REF-API-collections",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0692623
+      },
+      {
+        "id": "REF-API-colours_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.071536
+      },
+      {
+        "id": "REF-API-config",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.073521
+      },
+      {
+        "id": "REF-API-drafts",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0754778
+      },
+      {
+        "id": "REF-API-drop_board",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0781875
+      },
+      {
+        "id": "REF-API-drop_edit",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0801528
+      },
+      {
+        "id": "REF-API-drop_links",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0823584
+      },
+      {
+        "id": "REF-API-drop_search",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.084503
+      },
+      {
+        "id": "REF-API-drops_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0862606
+      },
+      {
+        "id": "REF-API-example_transfer",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0877767
+      },
+      {
+        "id": "REF-API-executor",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.089475
+      },
+      {
+        "id": "REF-API-families",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0914972
+      },
+      {
+        "id": "REF-API-kinds",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.093447
+      },
+      {
+        "id": "REF-API-manifest",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.095412
+      },
+      {
+        "id": "REF-API-models",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.0980513
+      },
+      {
+        "id": "REF-API-my_drafts",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.100229
+      },
+      {
+        "id": "REF-API-names_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1020608
+      },
+      {
+        "id": "REF-API-people",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1039174
+      },
+      {
+        "id": "REF-API-plm_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1061747
+      },
+      {
+        "id": "REF-API-plm_catalog",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1081917
+      },
+      {
+        "id": "REF-API-plm_client",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1103733
+      },
+      {
+        "id": "REF-API-plm_families",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1120868
+      },
+      {
+        "id": "REF-API-prints_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1136906
+      },
+      {
+        "id": "REF-API-products_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1150901
+      },
+      {
+        "id": "REF-API-reference_list_loading",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1164906
+      },
+      {
+        "id": "REF-API-reference_pages",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1178567
+      },
+      {
+        "id": "REF-API-reference_tags",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1192832
+      },
+      {
+        "id": "REF-API-references_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.120607
+      },
+      {
+        "id": "REF-API-release_core",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1218953
+      },
+      {
+        "id": "REF-API-remarks",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1232798
+      },
+      {
+        "id": "REF-API-retag",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1248477
+      },
+      {
+        "id": "REF-API-review",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1262972
+      },
+      {
+        "id": "REF-API-rights",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1283784
+      },
+      {
+        "id": "REF-API-search_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1298363
+      },
+      {
+        "id": "REF-API-subject",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1313145
+      },
+      {
+        "id": "REF-API-tags_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1329503
+      },
+      {
+        "id": "REF-API-texts_api",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1349103
+      },
+      {
+        "id": "REF-API-trash",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1370707
+      },
+      {
+        "id": "REF-API-voice",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1390502
+      },
+      {
+        "id": "REF-API-voice_model",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1413908
+      },
+      {
+        "id": "REF-API-votes",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.143914
+      },
+      {
+        "id": "REF-API-zashkvar",
+        "status": "reused",
+        "duration_seconds": 0,
+        "last_success": 1793888587.1461225
+      }
+    ],
+    "environment_fingerprints": {
+      "host": "a323ea251cac06a4c6f2318b709fa3f05c5d35048bb2784706c922e97db91db6",
+      "web": "cdb29b4ff2310d0e3fca4c444bebcce68eac1ce21fab9e06f5c3a9a9eca752e3",
+      "api": "73b4e76f7f7f8cba7ebdaa2ef3f1f6bb61e28eed2e0c57be57593ece6f8312cb"
+    },
+    "candidate": {
+      "accepted": true,
+      "image_digests": {
+        "api": "sha256:bbaa562c5a86337e284a817cf7f50f562068acf26a364924271e3e02347728c7",
+        "web": "sha256:018c6545c5e86534a6dd105d056ebd6eea27d45902c429281947729c9f20da07",
+        "tunnel": "sha256:89085587e8dad113a017ffe1efd076f06eb7f98aff298d2e8478e9beaf725541"
+      },
+      "duration_seconds": 18.418473599944264,
+      "outcomes": [
+        "compiled_frontend",
+        "same_resolved_frontend_dependencies",
+        "web_to_tunnel_address_8031_to_api",
+        "manifest_at_root",
+        "save_and_reopen_work_v3_real_postgres",
+        "synthetic_data_only"
+      ],
+      "boundary": "Isolated HTTP contract, not a real cross-host SSH connection. Platform access is covered by separate server-side rights tests; no authenticated platform browser session is claimed."
+    },
+    "reuse_origin": "accepted.json observations"
+  },
+  "raw_protocol_sha256": {
+    "baseline": "5c587cb8c9c8cc846d2b9aefb7dc42dde8f532707d14291b70126e632ea502de",
+    "replay": "7827650d3c59d06e6e18a0e517e35d7108400705d457fbbbdaaf7cfb1fcfcccf",
+    "control": "d49890cc927122173d9f8a79702db349d5e884b7629574168b680a5462e5ef7c",
+    "scale": "b910fcb807e70aaf9bc9cacc06a7fc070dff231d0c6d1101e93d1791f106998c",
+    "same_runtime_images": "380aac6a6867f236405dc497396bca03c611aad15636687d87191ffc36b4f2ee",
+    "first_candidate_refusal": "88ec4cc4bb879ba7532206334b4aa24227334a739328f116bdb269431b4de67a"
+  },
+  "control": {
+    "positive": true,
+    "unchanged_reused_without_execution": true,
+    "calls_after_reuse": 1,
+    "calls_total": 2,
+    "changed_input_invalidated": true,
+    "controlled_failure_refused": true,
+    "modeled_rotation": [
+      {
+        "time": 100,
+        "ids": [
+          "3"
+        ],
+        "seed": 42
+      },
+      {
+        "time": 101,
+        "ids": [
+          "1"
+        ],
+        "seed": 42
+      },
+      {
+        "time": 102,
+        "ids": [
+          "2"
+        ],
+        "seed": 42
+      },
+      {
+        "time": 103,
+        "ids": [
+          "4"
+        ],
+        "seed": 42
+      },
+      {
+        "time": 104,
+        "ids": [
+          "0"
+        ],
+        "seed": 42
+      },
+      {
+        "time": 105,
+        "ids": [
+          "5"
+        ],
+        "seed": 42
+      }
+    ],
+    "all_groups_covered": true,
+    "positive_seconds": 0.3852373000700027,
+    "negative_seconds": 0.4311949999537319,
+    "wall_seconds": 0.8531750999391079
+  },
+  "scale": {
+    "same_13_cases": true,
+    "same_api_environment": true,
+    "before_file_seconds": 1242.8646106550004,
+    "after_file_seconds": 58.689521674008574,
+    "before_junit_sha256": "d5cc7e718c3e29f980f6b0bcb82b581014e479eb56a456691a9453f8c58d922e",
+    "after_junit_sha256": "3b0e6319d5998c7841714da494d093f79a78e6c3763334ee54964fff68b194c3"
+  },
+  "image_equivalence": {
+    "original_id": "sha256:304a7e1dafb8a9d50941189db5556b99fca78f3fe053ccd40766655e9a421fb9",
+    "rebuilt_id": "sha256:bbaa562c5a86337e284a817cf7f50f562068acf26a364924271e3e02347728c7",
+    "same_layers": true,
+    "same_config": true,
+    "same_runtime_key": true
+  },
+  "first_candidate_refusal": {
+    "accepted": false,
+    "all_85_groups_executed": true,
+    "observed_error_code": "InvalidBucketName"
+  },
+  "deployment": {
+    "tc_in_master": false,
+    "tc_deployed": false,
+    "current_production_tag": "20261105-1310-15978aa",
+    "blocked_by": "Reference legacy apply force-recreates live API, web and tunnel; current installation contract requires candidate ready before stopping old instance."
+  },
+  "rotation": {
+    "owner": "installation",
+    "request": "REQ-3e1fce226fcaa37eec13a5b8",
+    "status": "prepared; delivery and execution not confirmed",
+    "dedicated_runner": "not required; cancelled"
+  }
+}
