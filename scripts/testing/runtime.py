@@ -227,14 +227,20 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             (self.root / 'api/tests', '/app/tests'), (self.root / 'manifest.reference.yaml', '/manifest.reference.yaml'),
             (self.root / 'manifest.reference.yaml', '/app/manifest.reference.yaml'),
             (self.root / 'scripts', '/app/scripts'),
-            (self.root / 'infra/stand/files', '/srv/reference/files'), (self.root / 'infra/stand/fixtures', '/srv/reference/fixtures'),
+            (self.root / 'infra/stand/fixtures', '/srv/reference/fixtures'),
         ]:
             flags += ['-v', f'{source}:{target}:ro']
+        # В чистом клоне models/dictionaries отсутствуют. Вложенный bind под
+        # read-only files требует mkdir и падает на Linux; монтируем соседей.
+        files = self.root / 'infra/stand/files'
+        assets = {source.name: source for source in files.iterdir()} if files.exists() else {}
         if self.data_root != self.root / 'infra/stand/files':
             for part in ['models', 'dictionaries']:
                 directory = self.data_root / part
                 if directory.exists():
-                    flags += ['-v', f'{directory}:/srv/reference/files/{part}:ro']
+                    assets[part] = directory
+        for part, source in sorted(assets.items()):
+            flags += ['-v', f'{source}:/srv/reference/files/{part}:ro']
         if self.derived:
             flags += ['-v',f'{self.derived}:/srv/reference/cache']
         return flags

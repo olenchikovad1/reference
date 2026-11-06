@@ -11,6 +11,29 @@ from scripts.testing.runtime import DockerRuntime, free_subnet, image_runtime
 
 
 class StrategyTests(unittest.TestCase):
+    def test_clean_checkout_mounts_cached_data_without_readonly_parent(self):
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            root = Path(directory)
+            files = root / 'infra/stand/files'
+            (files / 'products').mkdir(parents=True)
+            (files / 'products/frame.png').write_bytes(b'frame')
+            cache = root / 'state/model-files'
+            for part in ['models', 'dictionaries']:
+                (cache / part).mkdir(parents=True)
+            runtime = DockerRuntime(root, root / 'state', root / 'evidence', {})
+            runtime.data_root = cache
+            flags = runtime.api_flags()
+            mounts = [flags[i + 1].rsplit(':', 2) for i, flag in enumerate(flags) if flag == '-v']
+            targets = [target for _, target, _ in mounts]
+            self.assertNotIn('/srv/reference/files', targets)
+            for part in ['models', 'dictionaries']:
+                self.assertIn([str(cache / part), '/srv/reference/files/' + part, 'ro'], mounts)
+                self.assertFalse((files / part).exists(), 'Mount planning must not modify checkout')
+            self.assertIn([str(files / 'products'), '/srv/reference/files/products', 'ro'], mounts)
+            for target in targets:
+                self.assertFalse(any(target.startswith(other + '/') for other in targets if other != target),
+                                 'Nested mounts cannot create destinations below read-only data')
+
     def test_image_metadata_does_not_repeat_checks_but_runtime_changes_do(self):
         image = {'Id':'first', 'RootFS':{'Layers':['one']}, 'Config':{'Env':['MODE=test']}, 'Architecture':'amd64', 'Os':'linux'}
         self.assertEqual(image_runtime(image), image_runtime({**image,'Id':'second','Created':'other'}))
