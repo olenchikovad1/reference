@@ -1,0 +1,645 @@
+{
+  "adoption": "TC-ADOPT-012",
+  "request": "REQ-3e1fce226fcaa37eec13a5b8",
+  "contract_version": 1,
+  "source_commit": "88505b2e60354c3c166c3c601714b12dad7eb581",
+  "reported_failure": {
+    "run": 42180063773,
+    "attempt": 2,
+    "log": "api/output.log"
+  },
+  "cause": "Nested model/dictionary mounts require destination creation under read-only files parent on a clean Linux checkout.",
+  "fix": "Mount independent top-level asset paths read-only; cached models and dictionaries replace matching siblings without modifying checkout.",
+  "unit_regression": {
+    "failed_before_fix": true,
+    "passed_after_fix": true,
+    "strategy_tests": 12
+  },
+  "linux_mount_regression": {
+    "clean_linux_checkout": true,
+    "history_empty": true,
+    "before_exit_code": 125,
+    "before_error": "OCI mount destination mkdir: read-only file system",
+    "after_exit_code": 0,
+    "after_seconds": 1.057660400052555,
+    "reads": [
+      "products",
+      "models",
+      "dictionaries"
+    ],
+    "write_refused_errno": "EROFS",
+    "docker_socket_exposed": false
+  },
+  "raw_protocol_sha256": {
+    "linux_mount_regression": "1c29783c2d2fd4afe52c8e752a1361b6bc0873aaf56431c17238416f2b715f27",
+    "first_full_attempt": "bce4f36c5f5cdc31baff0ef4cdbe4401b46677f5ce60aca83a3e5dcdb493f6aa",
+    "accepted_resume": "89f66d00ebdd0c921728be60854f87047be3330410f0cb6d17430c772d7a67ba"
+  },
+  "full_profile": {
+    "status": "accepted",
+    "accepted": true,
+    "controller_os": "Windows",
+    "application_runtime": "Linux containers",
+    "source_commit": "88505b2e60354c3c166c3c601714b12dad7eb581",
+    "dirty": false,
+    "initial_result_history": "empty",
+    "prefetched_models": true,
+    "test_success_imported": false,
+    "groups": 85,
+    "tests_across_proven_groups": 527,
+    "skipped": 0,
+    "failed": 0,
+    "first_attempt": {
+      "accepted": false,
+      "executed": 82,
+      "skipped": 3,
+      "wall_seconds": 2443.439973700093,
+      "reason": "API batch reached unchanged 2400-second timeout; completed files have independent exit0 proof.",
+      "budget_exceeded": true
+    },
+    "resume": {
+      "accepted": true,
+      "executed": 3,
+      "reused": 82,
+      "skipped": 0,
+      "wall_seconds": 204.65069850010332,
+      "base": "4ec2d5a8b8469c42f6a22db06d92544f8e25965f",
+      "same_inputs_for_all_selected_ids": true
+    },
+    "results": [
+      {
+        "id": "REF-POLICY",
+        "status": "reused",
+        "proven_tests": 12
+      },
+      {
+        "id": "REF-WEB-app.sections",
+        "status": "reused",
+        "proven_tests": 4
+      },
+      {
+        "id": "REF-WEB-shared.api.plm",
+        "status": "reused",
+        "proven_tests": 5
+      },
+      {
+        "id": "REF-WEB-shared.checks",
+        "status": "reused",
+        "proven_tests": 11
+      },
+      {
+        "id": "REF-WEB-shared.collections",
+        "status": "reused",
+        "proven_tests": 12
+      },
+      {
+        "id": "REF-WEB-shared.composition",
+        "status": "reused",
+        "proven_tests": 8
+      },
+      {
+        "id": "REF-WEB-shared.composition.text",
+        "status": "reused",
+        "proven_tests": 5
+      },
+      {
+        "id": "REF-WEB-shared.contrast",
+        "status": "reused",
+        "proven_tests": 3
+      },
+      {
+        "id": "REF-WEB-shared.decisions",
+        "status": "reused",
+        "proven_tests": 8
+      },
+      {
+        "id": "REF-WEB-shared.draftWriter",
+        "status": "reused",
+        "proven_tests": 5
+      },
+      {
+        "id": "REF-WEB-shared.dropped",
+        "status": "reused",
+        "proven_tests": 3
+      },
+      {
+        "id": "REF-WEB-shared.fields",
+        "status": "reused",
+        "proven_tests": 4
+      },
+      {
+        "id": "REF-WEB-shared.filters",
+        "status": "reused",
+        "proven_tests": 4
+      },
+      {
+        "id": "REF-WEB-shared.geometry",
+        "status": "reused",
+        "proven_tests": 5
+      },
+      {
+        "id": "REF-WEB-shared.grading",
+        "status": "reused",
+        "proven_tests": 15
+      },
+      {
+        "id": "REF-WEB-shared.history",
+        "status": "reused",
+        "proven_tests": 11
+      },
+      {
+        "id": "REF-WEB-shared.keys.hint",
+        "status": "reused",
+        "proven_tests": 25
+      },
+      {
+        "id": "REF-WEB-shared.keys",
+        "status": "reused",
+        "proven_tests": 5
+      },
+      {
+        "id": "REF-WEB-shared.keys.window",
+        "status": "reused",
+        "proven_tests": 6
+      },
+      {
+        "id": "REF-WEB-shared.look.broken",
+        "status": "reused",
+        "proven_tests": 1
+      },
+      {
+        "id": "REF-WEB-shared.look.crop",
+        "status": "reused",
+        "proven_tests": 3
+      },
+      {
+        "id": "REF-WEB-shared.look.multi",
+        "status": "reused",
+        "proven_tests": 5
+      },
+      {
+        "id": "REF-WEB-shared.look",
+        "status": "reused",
+        "proven_tests": 4
+      },
+      {
+        "id": "REF-WEB-shared.luminance",
+        "status": "reused",
+        "proven_tests": 8
+      },
+      {
+        "id": "REF-WEB-shared.mask",
+        "status": "reused",
+        "proven_tests": 8
+      },
+      {
+        "id": "REF-WEB-shared.order",
+        "status": "reused",
+        "proven_tests": 6
+      },
+      {
+        "id": "REF-WEB-shared.percent",
+        "status": "reused",
+        "proven_tests": 1
+      },
+      {
+        "id": "REF-WEB-shared.plmCanvas",
+        "status": "reused",
+        "proven_tests": 5
+      },
+      {
+        "id": "REF-WEB-shared.season",
+        "status": "reused",
+        "proven_tests": 6
+      },
+      {
+        "id": "REF-WEB-shared.sheet",
+        "status": "reused",
+        "proven_tests": 6
+      },
+      {
+        "id": "REF-WEB-shared.sides",
+        "status": "reused",
+        "proven_tests": 10
+      },
+      {
+        "id": "REF-WEB-shared.torso",
+        "status": "reused",
+        "proven_tests": 11
+      },
+      {
+        "id": "REF-WEB-shared.tryOn",
+        "status": "reused",
+        "proven_tests": 1
+      },
+      {
+        "id": "REF-WEB-shared.versions.history",
+        "status": "reused",
+        "proven_tests": 3
+      },
+      {
+        "id": "REF-WEB-shared.versions",
+        "status": "reused",
+        "proven_tests": 8
+      },
+      {
+        "id": "REF-WEB-shared.zones.clip",
+        "status": "reused",
+        "proven_tests": 8
+      },
+      {
+        "id": "REF-WEB-shared.zones",
+        "status": "reused",
+        "proven_tests": 17
+      },
+      {
+        "id": "REF-API-agenda",
+        "status": "reused",
+        "proven_tests": 2,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-anime",
+        "status": "reused",
+        "proven_tests": 6,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-asset_client",
+        "status": "reused",
+        "proven_tests": 1,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-assets_api",
+        "status": "reused",
+        "proven_tests": 12,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-assistant",
+        "status": "reused",
+        "proven_tests": 8,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-bulk",
+        "status": "reused",
+        "proven_tests": 2,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-collections",
+        "status": "reused",
+        "proven_tests": 24,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-colours_api",
+        "status": "reused",
+        "proven_tests": 7,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-config",
+        "status": "reused",
+        "proven_tests": 7,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-drafts",
+        "status": "reused",
+        "proven_tests": 11,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-drop_board",
+        "status": "reused",
+        "proven_tests": 3,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-drop_edit",
+        "status": "reused",
+        "proven_tests": 5,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-drop_links",
+        "status": "reused",
+        "proven_tests": 4,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-drop_search",
+        "status": "reused",
+        "proven_tests": 4,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-drops_api",
+        "status": "reused",
+        "proven_tests": 6,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-example_transfer",
+        "status": "reused",
+        "proven_tests": 4,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-executor",
+        "status": "reused",
+        "proven_tests": 6,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-families",
+        "status": "reused",
+        "proven_tests": 1,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-kinds",
+        "status": "reused",
+        "proven_tests": 7,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-manifest",
+        "status": "reused",
+        "proven_tests": 5,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-models",
+        "status": "reused",
+        "proven_tests": 6,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-my_drafts",
+        "status": "reused",
+        "proven_tests": 3,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-names_api",
+        "status": "reused",
+        "proven_tests": 5,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-people",
+        "status": "reused",
+        "proven_tests": 5,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-plm_api",
+        "status": "reused",
+        "proven_tests": 2,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-plm_catalog",
+        "status": "reused",
+        "proven_tests": 2,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-plm_client",
+        "status": "reused",
+        "proven_tests": 6,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-plm_families",
+        "status": "reused",
+        "proven_tests": 1,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-prints_api",
+        "status": "reused",
+        "proven_tests": 5,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-products_api",
+        "status": "reused",
+        "proven_tests": 10,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-reference_list_loading",
+        "status": "reused",
+        "proven_tests": 1,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-reference_pages",
+        "status": "reused",
+        "proven_tests": 13,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-reference_tags",
+        "status": "reused",
+        "proven_tests": 4,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-references_api",
+        "status": "reused",
+        "proven_tests": 15,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-release_core",
+        "status": "reused",
+        "proven_tests": 1,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-remarks",
+        "status": "reused",
+        "proven_tests": 4,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-retag",
+        "status": "reused",
+        "proven_tests": 3,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-review",
+        "status": "reused",
+        "proven_tests": 8,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-rights",
+        "status": "reused",
+        "proven_tests": 8,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-search_api",
+        "status": "reused",
+        "proven_tests": 7,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-subject",
+        "status": "reused",
+        "proven_tests": 4,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-texts_api",
+        "status": "reused",
+        "proven_tests": 4,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-voice",
+        "status": "reused",
+        "proven_tests": 4,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-votes",
+        "status": "reused",
+        "proven_tests": 2,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-zashkvar",
+        "status": "reused",
+        "proven_tests": 3,
+        "source_per_file_exit_code": 0
+      },
+      {
+        "id": "REF-API-tags_api",
+        "status": "executed",
+        "tests": 7,
+        "test_seconds": 116.36800000000001,
+        "proven_tests": 7
+      },
+      {
+        "id": "REF-API-trash",
+        "status": "executed",
+        "tests": 6,
+        "test_seconds": 22.543,
+        "proven_tests": 6
+      },
+      {
+        "id": "REF-API-voice_model",
+        "status": "executed",
+        "tests": 1,
+        "test_seconds": 8.634,
+        "proven_tests": 1
+      }
+    ],
+    "input_hashes": {
+      "REF-POLICY": "8b3f2c4d337d26c5af394f4f0221d2e0c297aba39a03e5547caef01ab3999f70",
+      "REF-WEB-app.sections": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.api.plm": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.checks": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.collections": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.composition": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.composition.text": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.contrast": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.decisions": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.draftWriter": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.dropped": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.fields": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.filters": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.geometry": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.grading": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.history": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.keys.hint": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.keys": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.keys.window": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.look.broken": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.look.crop": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.look.multi": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.look": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.luminance": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.mask": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.order": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.percent": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.plmCanvas": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.season": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.sheet": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.sides": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.torso": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.tryOn": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.versions.history": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.versions": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.zones.clip": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-WEB-shared.zones": "3e10526ae59c4fc0378764a126f3ecef307c8b51d642c5763f02360722cb519b",
+      "REF-API-agenda": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-anime": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-asset_client": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-assets_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-assistant": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-bulk": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-collections": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-colours_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-config": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-drafts": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-drop_board": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-drop_edit": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-drop_links": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-drop_search": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-drops_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-example_transfer": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-executor": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-families": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-kinds": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-manifest": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-models": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-my_drafts": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-names_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-people": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-plm_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-plm_catalog": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-plm_client": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-plm_families": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-prints_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-products_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-reference_list_loading": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-reference_pages": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-reference_tags": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-references_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-release_core": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-remarks": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-retag": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-review": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-rights": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-search_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-subject": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-tags_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-texts_api": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-trash": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-voice": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-voice_model": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-votes": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26",
+      "REF-API-zashkvar": "b64343fc09e52494be7cfc9d77acbbd3cbc33419659eab2d0db9e4fdb8be5f26"
+    },
+    "commands": [
+      "docker build -t reference-tc-clean-api api",
+      "python3 scripts/testing/run.py --stage change --image api=reference-tc-clean-api --state-dir TEST_STATE --output FIRST",
+      "python3 scripts/testing/run.py --stage change --base 4ec2d5a8b8469c42f6a22db06d92544f8e25965f --image api=reference-tc-clean-api --state-dir TEST_STATE --output RESUMED"
+    ]
+  },
+  "installation_acceptance": {
+    "status": "pending rerun after master publication",
+    "required": "accepted=true without skipped on native Linux executor"
+  },
+  "production_test_writes": false
+}
