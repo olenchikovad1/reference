@@ -3522,7 +3522,7 @@
     "tc_in_master": false,
     "tc_deployed": false,
     "current_production_tag": "20261105-1310-15978aa",
-    "blocked_by": "Reference legacy apply force-recreates live API, web and tunnel; current installation contract requires candidate ready before stopping old instance."
+    "scope": "Snapshot before integration. TC adoption defines executable test selection and reuse; deployment lifecycle redesign is excluded by owner clarification on 2026-11-06."
   },
   "rotation": {
     "owner": "installation",
