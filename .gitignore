@@ -52,3 +52,7 @@ dist/
 /infra/sandbox.env
 /infra/hub.env
 /infra/tunnel-keys/
+
+# Машиночитаемые результаты TC-ADOPT-012 публикуются как CI artifacts,
+# история ротации находится вне checkout, не в Git приложения.
+/testing-evidence/

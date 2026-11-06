@@ -16,7 +16,7 @@ ENV PLATFORM_NPM_REGISTRY=${PLATFORM_NPM_REGISTRY}
 COPY package.json .npmrc ./
 RUN npm install
 
-COPY tsconfig.json vite.config.ts index.html ./
+COPY tsconfig.json vite.config.ts index.html testing-inputs.cjs ./
 COPY src ./src
 # Шрифты и прочее, что отдаётся как есть. Без этого они молча не грузятся, всё
 # падает в запасной шрифт, и на экране оказывается не то, что уйдёт в печать.
@@ -44,7 +44,7 @@ ARG VITE_PLATFORM_URL
 ARG VITE_WITHOUT_PLATFORM=false
 ENV VITE_PLATFORM_URL=${VITE_PLATFORM_URL} VITE_WITHOUT_PLATFORM=${VITE_WITHOUT_PLATFORM}
 RUN test -n "$VITE_PLATFORM_URL" || { echo "нет VITE_PLATFORM_URL — боевой адрес платформы" >&2; exit 1; }
-RUN npm run build
+RUN npm run build && node testing-inputs.cjs dist/build-inputs.json
 
 # Статика за nginx: порт и имя те же, что у стенда (reference-web:5173), — адрес
 # в манифесте один на стенд и бой. Запросы к сервису nginx отдаёт туннелю до
