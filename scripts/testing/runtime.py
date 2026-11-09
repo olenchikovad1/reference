@@ -12,9 +12,70 @@ import subprocess
 import time
 import uuid
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 
 from scripts.testing.policy import Group
 from scripts.testing.policy import fingerprint
+
+ROTATION_MEMORY = 2 * 1024 ** 3
+API_MEMORY = '1152m'
+MODEL_MEMORY = '1408m'
+
+
+@dataclass(frozen=True)
+class RotationEnvelope:
+    """Общая граница для контроллера и контейнеров одного Linux-хоста."""
+
+    member: Path
+    parent: str
+    version: str
+    memory: int
+
+    def contains(self, membership: str) -> bool:
+        controller = '' if self.version == '2' else 'memory'
+        for line in membership.splitlines():
+            _, controllers, path = line.split(':', 2)
+            if controller in controllers.split(','):
+                return Path(path).is_relative_to(self.member)
+        return False
+
+
+def rotation_envelope(root: Path) -> RotationEnvelope:
+    """Отказ до сборок, скачиваний и тестов, если ядро не ограничивает весь прогон."""
+    if os.environ.get('REFERENCE_ROTATION_ENABLED') != '1':
+        raise RuntimeError('Rotation paused: REFERENCE_ROTATION_ENABLED=1 requires a verified Linux cgroup')
+    if platform.system() != 'Linux':
+        raise RuntimeError('Rotation requires a local Linux Docker engine and a shared memory cgroup')
+    code, endpoint, _ = command(['docker', 'context', 'inspect', '--format', '{{.Endpoints.docker.Host}}'],
+                                cwd=root, timeout=10)
+    if code or os.environ.get('DOCKER_CONTEXT') or (
+            os.environ.get('DOCKER_HOST') or endpoint.strip()) != 'unix:///var/run/docker.sock':
+        raise RuntimeError('Rotation requires the local default Docker Unix socket')
+    code, driver, _ = command(['docker', 'info', '--format', '{{.CgroupVersion}}/{{.CgroupDriver}}'],
+                              cwd=root, timeout=10)
+    options = {
+        '2/systemd': ('2', '/reference.slice/reference-testing.slice', 'reference-testing.slice'),
+        '2/cgroupfs': ('2', '/reference-testing', '/reference-testing'),
+        '1/cgroupfs': ('1', '/reference-testing', '/reference-testing'),
+    }
+    if code or driver.strip() not in options:
+        raise RuntimeError('Rotation cannot verify the Docker memory cgroup driver')
+    version, member, parent = options[driver.strip()]
+    cgroup = Path('/sys/fs/cgroup') / ('memory' if version == '1' else '') / member.lstrip('/')
+    try:
+        memory = int((cgroup / ('memory.max' if version == '2' else 'memory.limit_in_bytes')).read_text())
+        if version == '2':
+            swap_disabled = (cgroup / 'memory.swap.max').read_text().strip() == '0'
+        else:
+            swap_disabled = (int((cgroup / 'memory.memsw.limit_in_bytes').read_text()) == memory
+                             and (cgroup / 'memory.swappiness').read_text().strip() == '0')
+        envelope = RotationEnvelope(Path(member), parent, version, memory)
+        inside = envelope.contains(Path('/proc/self/cgroup').read_text())
+    except (OSError, ValueError) as failure:
+        raise RuntimeError('Rotation memory/swap limits are absent or unlimited') from failure
+    if not inside or not swap_disabled or not 0 < memory <= ROTATION_MEMORY:
+        raise RuntimeError('Rotation requires the controller in the reference cgroup: RAM <= 2 GiB, swap = 0')
+    return envelope
 
 
 def image_runtime(image: dict) -> str:
@@ -51,12 +112,14 @@ def command(args: list[str], *, cwd: Path, timeout: int = 600) -> tuple[int, str
 
 
 class DockerRuntime:
-    def __init__(self, root: Path, state: Path, output: Path, images: dict[str, str]):
+    def __init__(self, root: Path, state: Path, output: Path, images: dict[str, str], *,
+                 models: bool = False, envelope: RotationEnvelope | None = None):
         self.root, self.state, self.output = root, state, output
         self.prefix = 'reference-tc-' + uuid.uuid4().hex[:12]
         self.images = images
         self.api_image = images.get('api', 'reference-tc-api')
-        self.web_image = 'reference-tc-web-tests'
+        self.web_image = images.get('web-test', 'reference-tc-web-tests')
+        self.models, self.envelope = models, envelope
         self.created: list[str] = []
         self.network_created = False
         self.preparation_seconds = 0.0
@@ -72,11 +135,19 @@ class DockerRuntime:
             'EMBEDDING_MODEL_PATH': '/srv/reference/files/models/clip-vit-base-patch32/vision_model_quantized.onnx',
             'WITHOUT_PLATFORM': 'true', 'PLATFORM_CORE_URL': '', 'PLATFORM_CREDENTIAL': '',
             'PLATFORM_NOTIFICATIONS_URL': '', 'PLM_BASE_URL': '', 'PLM_MACHINE_KEY': '', 'AMQP_URL': '',
+            'OMP_NUM_THREADS': '1', 'OPENBLAS_NUM_THREADS': '1',
         }
         self.data_root = root / 'infra/stand/files'
         self.web_flags = ['-e','VITE_WITHOUT_PLATFORM=false','-e','VITE_PLATFORM_URL=' + os.environ.get('REFERENCE_PLATFORM_URL','https://platform.toribrands.ru')]
         self.derived: Path | None = None
         self.derived_descriptor: dict = {}
+
+    def container(self, memory: str) -> list[str]:
+        """Суммарный потолок задаёт общий cgroup, дочерний ограничивает один сервис."""
+        args = ['docker', 'run', '--memory', memory, '--memory-swap', memory]
+        if self.envelope:
+            args += ['--pull=never', '--cgroup-parent', self.envelope.parent]
+        return args
 
     def checked(self, args: list[str], timeout: int = 600) -> str:
         code, text, _ = command(args, cwd=self.root, timeout=timeout)
@@ -87,6 +158,44 @@ class DockerRuntime:
 
     def prepare(self) -> None:
         started = time.monotonic()
+        if self.envelope:
+            self.prepare_rotation_images()
+        else:
+            self.build_test_images()
+        self.api_image = self.checked(['docker','image','inspect',self.api_image,'--format','{{.Id}}'])
+        if not self.models:
+            self.web_image = self.checked(['docker','image','inspect',self.web_image,'--format','{{.Id}}'])
+        self.images = {key:self.checked(['docker','image','inspect',value,'--format','{{.Id}}']) for key,value in self.images.items()}
+        self.prepare_image_inputs()
+        if self.models:
+            self.prepare_model_inputs()
+        else:
+            self.environments['api']['model_data'] = 'separate-model-profile'
+            fixtures = [f'infra/stand/files/{entry.name}' + ('/**' if entry.is_dir() else '')
+                        for entry in self.data_root.iterdir() if entry.name not in {'models', 'dictionaries'}]
+            self.environments['api']['test_data'] = fingerprint(self.root, fixtures, {'models': False})
+        for key, image in [('postgres_image','pgvector/pgvector:pg17'), ('s3_image','bitnamilegacy/minio:2025.4.22@sha256:50cec18ac4184af4671a78aedd5554942c8ae105d51a465fa82037949046da01')]:
+            code, _, _ = command(['docker', 'image', 'inspect', image], cwd=self.root, timeout=15)
+            if code:
+                if self.envelope:
+                    raise RuntimeError('Preload rotation dependency before enabling rotation: ' + image)
+                self.checked(['docker', 'pull', image], 600)
+            self.environments['api'][key] = self.checked(['docker', 'image', 'inspect', image, '--format', '{{.Id}}'])
+        self.preparation_seconds = time.monotonic() - started
+
+    def prepare_rotation_images(self) -> None:
+        required = {'api'} if self.models else {'api', 'web-test'}
+        if required - self.images.keys():
+            raise RuntimeError('Preload the test images and pass --image for: ' + ', '.join(sorted(required)))
+        # Проверяем реальное размещение дочернего контейнера до тестов, а не только флаг.
+        name = self.prefix + '-cgroup-probe'
+        self.created.append(name)
+        observed = self.checked([*self.container('64m'), '--rm', '--name', name, '--cgroupns=host',
+                                 '--network', 'none', '--entrypoint', 'cat', self.api_image, '/proc/self/cgroup'], 15)
+        if not self.envelope or not self.envelope.contains(observed):
+            raise RuntimeError('Docker did not place rotation containers in the controller memory cgroup')
+
+    def build_test_images(self) -> None:
         registry = os.environ.get('PLATFORM_NPM_REGISTRY')
         if not registry:
             for name in ['infra/.env', 'web/.env']:
@@ -101,15 +210,19 @@ class DockerRuntime:
             network = ['--network','host','--add-host','host.docker.internal:127.0.0.1'] if platform.system() == 'Linux' else []
             self.checked(['docker', 'build', '-q', *network, '-t', self.api_image, 'api'], 1200)
         network = ['--network','host','--add-host','host.docker.internal:127.0.0.1'] if platform.system() == 'Linux' else []
-        self.checked(['docker', 'build', '-q', *network, '--target', 'dev', '-t', self.web_image,
-                      '--build-arg', 'PLATFORM_NPM_REGISTRY=' + registry, 'web'], 1200)
-        self.api_image = self.checked(['docker','image','inspect',self.api_image,'--format','{{.Id}}'])
-        self.web_image = self.checked(['docker','image','inspect',self.web_image,'--format','{{.Id}}'])
-        self.images = {key:self.checked(['docker','image','inspect',value,'--format','{{.Id}}']) for key,value in self.images.items()}
-        self.environments['web'] = json.loads(self.checked(['docker', 'run', '--rm', *self.web_flags, self.web_image, 'node', '/app/testing-inputs.cjs']))
-        expected_web = fingerprint(self.root, ['web/src/**','web/public/**','web/package.json','web/tsconfig.json','web/vite.config.ts','web/index.html','web/testing-inputs.cjs','web/.npmrc'], {'source':'web-code-v1'})
-        if self.environments['web']['source'] != expected_web:
-            raise RuntimeError('Frontend image source differs from measured checkout')
+        if 'web-test' not in self.images:
+            self.checked(['docker', 'build', '-q', *network, '--target', 'dev', '-t', self.web_image,
+                          '--build-arg', 'PLATFORM_NPM_REGISTRY=' + registry, 'web'], 1200)
+
+    def prepare_image_inputs(self) -> None:
+        if not self.models:
+            name = self.prefix + '-web-inputs'
+            self.created.append(name)
+            self.environments['web'] = json.loads(self.checked([*self.container('768m'), '--rm', '--name', name,
+                '--network', 'none', *self.web_flags, self.web_image, 'node', '/app/testing-inputs.cjs']))
+            expected_web = fingerprint(self.root, ['web/src/**','web/public/**','web/package.json','web/tsconfig.json','web/vite.config.ts','web/index.html','web/testing-inputs.cjs','web/.npmrc'], {'source':'web-code-v1'})
+            if self.environments['web']['source'] != expected_web:
+                raise RuntimeError('Frontend image source differs from measured checkout')
         probe = '''import importlib.metadata as m,json,platform,hashlib,subprocess,pathlib
 root=pathlib.Path('/app')
 files=[p for pattern in ['reference_api/**','alembic/**','alembic.ini','pyproject.toml'] for p in root.glob(pattern) if p.is_file() and '__pycache__' not in p.parts and p.suffix not in {'.pyc','.pyo'} and p.name!='.env']
@@ -120,12 +233,18 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
 'machine':platform.machine(),'system':hashlib.sha256(subprocess.check_output(['dpkg-query','-W'])).hexdigest(),
 'dependency_records':hashlib.sha256(''.join(sorted((d.metadata['Name']+str(d.read_text('RECORD'))) for d in m.distributions())).encode()).hexdigest(),
 'dependencies':sorted((d.metadata['Name'],d.version) for d in m.distributions())}))'''
-        self.environments['api'] = json.loads(self.checked(['docker', 'run', '--rm', self.api_image, 'python', '-c', probe]))
+        name = self.prefix + '-api-inputs'
+        self.created.append(name)
+        self.environments['api'] = json.loads(self.checked([*self.container('256m'), '--rm', '--name', name,
+                                                          '--network', 'none', self.api_image, 'python', '-c', probe]))
         self.environments['api']['runtime'] = image_runtime(json.loads(self.checked(['docker','image','inspect',self.api_image]))[0])
         expected_api = fingerprint(self.root, ['api/reference_api/**','api/alembic/**','api/alembic.ini','api/pyproject.toml'], {'source':'api-code-v1'})
         if self.environments['api']['source'] != expected_api:
             raise RuntimeError('API image source differs from measured checkout')
-        self.environments['api']['configuration'] = 'isolated-tc-stand-v1:no-broker:no-external-plm:no-bell'
+        self.environments['api']['configuration'] = ('isolated-tc-stand-v2:no-broker:no-external-plm:no-bell:'
+                                                     f'models={self.models}:blas_threads=1')
+
+    def prepare_model_inputs(self) -> None:
         inventory = json.loads((self.root / 'infra/stand/fixtures/models.json').read_text(encoding='utf-8'))
         items = [item for model in inventory['models'] for item in model['files']]
         if not all((self.data_root / item['path']).exists() for item in items):
@@ -148,11 +267,6 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             verified.append([item['path'], digest.hexdigest()])
         self.environments['api']['model_data'] = hashlib.sha256(json.dumps(verified, sort_keys=True).encode()).hexdigest()
         self.environments['api']['test_data'] = fingerprint(self.root, ['infra/stand/files/**'], {'model_data': self.environments['api']['model_data']})
-        for key, image in [('postgres_image','pgvector/pgvector:pg17'), ('s3_image','bitnamilegacy/minio:2025.4.22@sha256:50cec18ac4184af4671a78aedd5554942c8ae105d51a465fa82037949046da01')]:
-            code, _, _ = command(['docker', 'image', 'inspect', image], cwd=self.root, timeout=15)
-            if code:
-                self.checked(['docker', 'pull', image], 600)
-            self.environments['api'][key] = self.checked(['docker', 'image', 'inspect', image, '--format', '{{.Id}}'])
         descriptor = {'api_runtime':self.environments['api']['runtime'], 'model_data':self.environments['api']['model_data'],
                       'dependencies':self.environments['api']['dependencies'], 'configuration':'word-vectors-v1',
                       'engine':self.checked(['docker','info','--format','{{.ID}}/{{.NCPU}}/{{.KernelVersion}}'])}
@@ -189,7 +303,6 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
                 (self.derived / name).write_bytes(data)
             receipt.write_text(json.dumps({'inputs':descriptor,'files':saved['files'],'producer':saved['producer'],
                                            'kind':'computation artifacts only; not reused test success'}), encoding='utf-8')
-        self.preparation_seconds = time.monotonic() - started
 
     def start_services(self) -> None:
         if self.network_created:
@@ -206,7 +319,9 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             (self.prefix + '-db', self.environments['api']['postgres_image'], ['-e', 'POSTGRES_USER=tc', '-e', 'POSTGRES_PASSWORD=synthetic-only', '-e', 'POSTGRES_DB=tc']),
             (self.prefix + '-s3', self.environments['api']['s3_image'], ['--entrypoint', 'minio', '-e', 'MINIO_ROOT_USER=synthetic', '-e', 'MINIO_ROOT_PASSWORD=synthetic-test-only']),
         ]:
-            args = ['docker', 'run', '-d', '--name', name, '--network', self.prefix, '--label', 'reference.testing=' + self.prefix] + flags + [image]
+            memory = '320m' if name.endswith('-db') else '256m'
+            args = [*self.container(memory), '-d', '--name', name, '--network', self.prefix,
+                    '--label', 'reference.testing=' + self.prefix, *flags, image]
             if name.endswith('-s3'):
                 args += ['server', '/bitnami/minio/data']
             self.created.append(name)
@@ -220,7 +335,7 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             raise RuntimeError('Isolated PostgreSQL did not become ready')
 
     def api_flags(self) -> list[str]:
-        flags = ['--network', self.prefix, '--memory', '4g']
+        flags = ['--network', self.prefix]
         for key, value in self.env.items():
             flags += ['-e', key + '=' + value]
         for source, target in [
@@ -234,6 +349,9 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
         # read-only files требует mkdir и падает на Linux; монтируем соседей.
         files = self.root / 'infra/stand/files'
         assets = {source.name: source for source in files.iterdir()} if files.exists() else {}
+        if not self.models:
+            for part in ['models', 'dictionaries']:
+                assets.pop(part, None)
         if self.data_root != self.root / 'infra/stand/files':
             for part in ['models', 'dictionaries']:
                 directory = self.data_root / part
@@ -256,15 +374,17 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             paths = [name.removeprefix('web/') for group in groups for name in group.tests]
             name = self.prefix + '-web-tests'
             self.created.append(name)
-            args = ['docker', 'run', '--rm', '--name', name, *self.web_flags, '--label', 'reference.testing=' + self.prefix, '-v', f'{destination}:/evidence', '-v', f'{self.root / "manifest.reference.yaml"}:/manifest.reference.yaml:ro',
-                    self.web_image, 'npm', 'test', '--', '--run', *paths, '--reporter=json', '--outputFile=/evidence/result.json']
+            args = [*self.container('768m'), '--rm', '--name', name, *self.web_flags, '--label', 'reference.testing=' + self.prefix, '-v', f'{destination}:/evidence', '-v', f'{self.root / "manifest.reference.yaml"}:/manifest.reference.yaml:ro',
+                    self.web_image, 'npm', 'test', '--', '--run', '--minWorkers=1', '--maxWorkers=1',
+                    *paths, '--reporter=json', '--outputFile=/evidence/result.json']
         else:
             self.start_services()
             ordered = sorted(groups, key=lambda group:(not group.core, group.category == 'compute', group.id))
             paths = [name.removeprefix('api/') for group in ordered for name in group.tests]
-            name = self.prefix + '-api-tests'
+            name = self.prefix + ('-model-tests' if self.models else '-api-tests')
             self.created.append(name)
-            args = ['docker', 'run', '--rm', '--name', name, '--label', 'reference.testing=' + self.prefix, *self.api_flags(), '-v', f'{destination}:/evidence',
+            args = [*self.container(MODEL_MEMORY if self.models else API_MEMORY), '--rm', '--name', name,
+                    '--label', 'reference.testing=' + self.prefix, *self.api_flags(), '-v', f'{destination}:/evidence',
                     self.api_image, 'python', '/app/scripts/testing/api_batch.py', *paths]
         code, log, elapsed = command(args, cwd=self.root, timeout=2400)
         (destination / 'output.log').write_text(log, encoding='utf-8')
@@ -312,17 +432,17 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
         started = time.monotonic()
         digests = {key:self.checked(['docker', 'image', 'inspect', value, '--format', '{{.Id}}']) for key, value in self.images.items()}
         # Схема и ведро только в одноразовом приватном контуре.
-        self.checked(['docker', 'run', '--rm', *self.api_flags(), self.api_image, 'alembic', 'upgrade', 'head'])
+        self.checked([*self.container(API_MEMORY), '--rm', *self.api_flags(), self.api_image, 'alembic', 'upgrade', 'head'])
         create_bucket = 'import boto3,os; boto3.client("s3",endpoint_url=os.environ["S3_ENDPOINT"],aws_access_key_id="synthetic",aws_secret_access_key="synthetic-test-only").create_bucket(Bucket=os.environ["S3_BUCKET"])'
-        self.checked(['docker', 'run', '--rm', *self.api_flags(), self.api_image, 'python', '-c', create_bucket])
+        self.checked([*self.container(API_MEMORY), '--rm', *self.api_flags(), self.api_image, 'python', '-c', create_bucket])
         api_name = self.prefix + '-api'
         self.created.append(api_name)
-        self.checked(['docker', 'run', '-d', '--name', api_name, '--network-alias', 'reference-tunnel',
+        self.checked([*self.container(API_MEMORY), '-d', '--name', api_name, '--network-alias', 'reference-tunnel',
                       '--label', 'reference.testing=' + self.prefix, *self.api_flags(), self.api_image,
                       'uvicorn', 'reference_api.app:app', '--host', '0.0.0.0', '--port', '8031'])
         web_name = self.prefix + '-web'
         self.created.append(web_name)
-        self.checked(['docker', 'run', '-d', '--name', web_name, '--network', self.prefix,
+        self.checked([*self.container('128m'), '-d', '--name', web_name, '--network', self.prefix,
                       '--label', 'reference.testing=' + self.prefix, self.images['web']])
         base = 'http://' + web_name + ':5173'
 
@@ -371,7 +491,7 @@ with urllib.request.urlopen(request,timeout=10) as response:
 
     def close(self) -> None:
         # Только имена, созданные этим объектом; никакие рабочие контейнеры не выбираются.
-        for name in reversed(self.created):
-            command(['docker', 'rm', '-f', name], cwd=self.root, timeout=30)
+        if self.created:
+            command(['docker', 'rm', '-f', *reversed(self.created)], cwd=self.root, timeout=8)
         if self.network_created:
-            command(['docker', 'network', 'rm', self.prefix], cwd=self.root, timeout=30)
+            command(['docker', 'network', 'rm', self.prefix], cwd=self.root, timeout=5)

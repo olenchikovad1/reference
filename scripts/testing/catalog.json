@@ -4,12 +4,13 @@
   "adoption": "TC-ADOPT-012",
   "profile": "standard",
   "max_age_seconds": 604800,
-  "budget_seconds": 1200,
+  "budget_seconds": 600,
   "rotation_schedule": "daily",
   "regressions": ["REF-POLICY", "REF-API-release_core", "REF-WEB-shared.plmCanvas"],
   "source": "https://github.com/Laretto-Team/installation/blob/main/TESTING-CONTRACT.md",
   "core": ["REF-POLICY", "REF-WEB-shared.draftWriter", "REF-WEB-shared.plmCanvas", "REF-WEB-shared.sides", "REF-API-config", "REF-API-rights", "REF-API-release_core"],
   "heavy_api": ["anime", "assets_api", "bulk", "example_transfer", "kinds", "models", "prints_api", "references_api", "retag", "search_api", "tags_api", "trash", "voice_model"],
+  "model_api": ["anime", "assets_api", "drop_board", "drop_links", "kinds", "models", "names_api", "reference_tags", "references_api", "retag", "search_api", "tags_api", "voice_model", "zashkvar"],
   "domains": {
     "web": {"tests": "web/src/**/*.test.*", "areas": ["web/src/**", "web/package.json", "web/tsconfig.json", "web/vite.config.ts", "web/Dockerfile", "web/testing-inputs.cjs", "web/.npmrc", "web/public/**"]},
     "api": {"tests": "api/tests/test_*.py", "areas": ["api/reference_api/**", "api/alembic/**", "api/alembic.ini", "api/pyproject.toml", "api/Dockerfile", "manifest.reference.yaml", "infra/stand/fixtures/**"]}

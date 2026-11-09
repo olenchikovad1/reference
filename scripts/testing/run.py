@@ -8,15 +8,16 @@ import hashlib
 import math
 import os
 from pathlib import Path
+import signal
 import sys
 import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from scripts.testing.catalog import load
+from scripts.testing.catalog import load, profile_groups
 from scripts.testing.policy import accepted, fingerprint, reusable, select, replay_selection
-from scripts.testing.runtime import DockerRuntime, command
+from scripts.testing.runtime import DockerRuntime, command, rotation_envelope
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -63,9 +64,14 @@ def source_files() -> dict[str, str]:
     return result
 
 
+def expire_test_window(_signum: int, _frame: object) -> None:
+    """Оставляем последние 15 секунд на удаление собственных контейнеров."""
+    raise TimeoutError('Reference test deadline exceeded (10 minutes including cleanup)')
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--stage', choices=['change', 'candidate', 'rotation'], default='change')
+    parser.add_argument('--stage', choices=['change', 'candidate', 'rotation', 'models'], default='change')
     parser.add_argument('--state-dir', type=Path, default=Path(os.environ.get('REFERENCE_TEST_STATE', str(Path.home() / '.cache/reference-testing'))))
     parser.add_argument('--output', type=Path)
     parser.add_argument('--changed', action='append', default=[])
@@ -74,26 +80,51 @@ def main() -> int:
     parser.add_argument('--budget', type=float)
     parser.add_argument('--seed', type=int, default=20261105)
     parser.add_argument('--replay', type=Path)
-    parser.add_argument('--image', action='append', default=[], metavar='api|web|tunnel=IMAGE')
+    parser.add_argument('--image', action='append', default=[], metavar='api|web|web-test|tunnel=IMAGE')
+    parser.add_argument('--model-group', help='One REF-API model group (required for --stage models)')
     args = parser.parse_args()
-    policy, groups = load(ROOT)
+    policy, catalog = load(ROOT)
+    groups = profile_groups(catalog, args.stage)
+    model_run = args.stage == 'models'
+    if model_run:
+        groups = [group for group in groups if group.id == args.model_group]
+        if not groups:
+            parser.error('--stage models requires one model group from scripts/testing/catalog.json')
+    elif args.model_group:
+        parser.error('--model-group requires --stage models')
+    budget = args.budget if args.budget is not None else policy['budget_seconds']
+    if not math.isfinite(budget) or not 0 <= budget <= policy['budget_seconds']:
+        parser.error('Budget must be between 0 and 600 seconds')
     run_id = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '-' + uuid.uuid4().hex[:8]
     state_dir = args.state_dir.resolve()
+    lock_path = state_dir / 'lock'
+    if model_run:
+        state_dir = state_dir / 'models'
     output = (args.output or state_dir / 'evidence' / run_id).resolve()
     if (output / 'evidence.json').exists():
         raise ValueError('Evidence immutable: choose a new output directory')
     output.mkdir(parents=True, exist_ok=True)
     images = dict(item.split('=', 1) for item in args.image)
-    if args.stage == 'candidate' and set(images) != {'api', 'web', 'tunnel'}:
+    if args.stage == 'candidate' and set(images) - {'web-test'} != {'api', 'web', 'tunnel'}:
         raise ValueError('Candidate requires exact api/web/tunnel images')
     started = time.monotonic()
     evidence = {'project': 'reference', 'contract': policy['contract'], 'contract_version': policy['version'],
                 'adoption': policy['adoption'], 'profile': policy['profile'], 'run_id': run_id,
                 'stage': args.stage, 'seed': args.seed, 'results': [], 'not_applicable': policy['not_applicable'],
+                'separate_model_groups': [group.id for group in catalog if group.category == 'model'],
                 'accepted': False, 'preparation_seconds': 0, 'execution_seconds': 0, 'errors': []}
-    runtime = DockerRuntime(ROOT, state_dir, output, images)
+    runtime = None
+    has_alarm = hasattr(signal, 'SIGALRM')
+    if has_alarm:
+        signal.signal(signal.SIGALRM, expire_test_window)
+        signal.alarm(policy['budget_seconds'] - 15)
     try:
-        with state_lock(state_dir / 'lock'):
+        envelope = rotation_envelope(ROOT) if args.stage in {'rotation', 'models'} else None
+        if envelope:
+            evidence['resource_envelope'] = {'cgroup': str(envelope.member), 'memory_bytes': envelope.memory,
+                                             'swap_bytes': 0, 'deadline_seconds': policy['budget_seconds']}
+        runtime = DockerRuntime(ROOT, state_dir, output, images, models=model_run, envelope=envelope)
+        with state_lock(lock_path):
             state_path = state_dir / 'history.json'
             state = json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {'groups': {}}
             groups = [replace(group, cost=max(0.001, state['groups'].get(group.id, {}).get('measured_test_seconds', group.cost))) for group in groups]
@@ -125,12 +156,10 @@ def main() -> int:
                     patterns += ['api/tests/**']
                 inputs[group.id] = fingerprint(ROOT, patterns, runtime.environments[group.runtime])
                 versions[group.id] = fingerprint(ROOT, group.tests, {'selector': '1.0.0'})
-            budget = args.budget if args.budget is not None else policy['budget_seconds']
-            if not math.isfinite(budget) or budget < 0:
-                raise ValueError('Budget must be nonnegative')
             now = time.time()
+            regressions = [args.model_group] if model_run else policy.get('regressions', []) + args.regression
             chosen = select(groups, changed, state['groups'], inputs, now=now, max_age=policy['max_age_seconds'],
-                            budget=budget, seed=args.seed, regressions=policy.get('regressions', []) + args.regression)
+                            budget=budget, seed=args.seed, regressions=regressions)
             if args.replay:
                 original = json.loads(args.replay.read_text(encoding='utf-8'))
                 chosen = replay_selection(chosen, original, inputs, args.seed)
@@ -143,9 +172,10 @@ def main() -> int:
             evidence['source_files'] = sources
             evidence['catalog'] = [{'id':group.id, 'tests':group.tests, 'category':group.category,
                                     'risk':group.risk, 'core':group.core} for group in groups]
-            evidence['computation_cache'] = {'inputs':runtime.derived_descriptor,
-                                             'receipt':str(runtime.derived / 'receipt.json'),
-                                             'boundary':'Model computation artifacts, never inferred test success.'}
+            if runtime.derived:
+                evidence['computation_cache'] = {'inputs':runtime.derived_descriptor,
+                                                 'receipt':str(runtime.derived / 'receipt.json'),
+                                                 'boundary':'Model computation artifacts, never inferred test success.'}
             pending = []
             for group in groups:
                 if group.id not in chosen:
@@ -156,7 +186,7 @@ def main() -> int:
                 proven = origin.get('inputs', {}).get(group.id) == inputs[group.id] and any(
                     row['id'] == group.id and row['status'] == 'executed' and row.get('tests', 0) > 0
                     for row in origin.get('results', []))
-                if proven and reusable(old, inputs[group.id], now=now, max_age=policy['max_age_seconds'], reasons=chosen[group.id]):
+                if not model_run and proven and reusable(old, inputs[group.id], now=now, max_age=policy['max_age_seconds'], reasons=chosen[group.id]):
                     evidence['results'].append({'id':group.id, 'status':'reused', 'source_evidence':old['evidence'],
                                                'last_success':old['last_success'], 'reason':'same content, resolved dependencies, tool environment, configuration and data; unexpired success',
                                                'duration_seconds':0})
@@ -203,9 +233,14 @@ def main() -> int:
         evidence['errors'].append(str(failure))
         evidence['accepted'] = False
     finally:
-        runtime.close()
+        if has_alarm:
+            signal.alarm(0)
+        if runtime:
+            runtime.close()
         evidence['wall_seconds'] = time.monotonic() - started
         evidence['budget_exceeded'] = evidence['wall_seconds'] > evidence.get('budget_seconds', policy['budget_seconds'])
+        if evidence['wall_seconds'] >= policy['budget_seconds']:
+            evidence['accepted'] = False
         evidence['budget_note'] = 'Mandatory groups were not trimmed; preparation is included.'
         write_json(output / 'evidence.json', evidence)
     print(json.dumps({'adoption':policy['adoption'], 'accepted':evidence['accepted'], 'evidence':str(output / 'evidence.json'),

@@ -8,12 +8,14 @@
 
 import io
 import pathlib
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest_asyncio
 from sqlalchemy import text
 
 from reference_api.app import create_app
+from reference_api.services import library
 from reference_api.services import people as people_service
 
 PRINTS = pathlib.Path("/srv/reference/files/prints")
@@ -26,9 +28,11 @@ GONE = "01GONE"
 
 
 @pytest_asyncio.fixture
-async def client():
+async def client(monkeypatch):
     from reference_api.db import engine
 
+    # Назначение исполнителя зависит от сохранённой карточки, а не от сходства картинок.
+    monkeypatch.setattr(library, "same_as", AsyncMock(return_value=[]))
     app = create_app()
     async with app.router.lifespan_context(app):
         async with engine.begin() as conn:

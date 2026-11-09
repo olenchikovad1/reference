@@ -6,23 +6,27 @@
 """
 
 import datetime
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from reference_api.app import create_app
+from reference_api.services import library
 from tests.test_assets_api import png, send
 from tests.test_references_api import WORK
 from tests.test_rights import FixedKeys, bearer
 
 
 @pytest_asyncio.fixture
-async def client():
+async def client(monkeypatch):
     from sqlalchemy import text
 
     from reference_api.db import engine
 
+    # Корзина проверяет сохранность карточек и файлов; поиск сходства проверяется отдельно.
+    monkeypatch.setattr(library, "same_as", AsyncMock(return_value=[]))
     app = create_app()
     async with app.router.lifespan_context(app):
         async with engine.begin() as conn:

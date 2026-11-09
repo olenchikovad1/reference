@@ -27,12 +27,22 @@ def load(root: Path) -> tuple[dict, list[Group]]:
                 heavy = False
                 command = ['npm', 'test', '--', '--run', relative.removeprefix('web/'), '--reporter=json', '--outputFile=/evidence/result.json']
             core = identity in policy['core']
+            category = ('model' if runtime == 'api' and name in policy['model_api'] else
+                        'compute' if heavy else 'scenario' if runtime == 'api' else 'unit')
             groups.append(Group(identity, [relative], domain['areas'] + ['scripts/testing/**'], core,
                                 180 if heavy else 15 if runtime == 'api' else 3,
-                                'compute' if heavy else 'scenario' if runtime == 'api' else 'unit', command, runtime, risk))
+                                category, command, runtime, risk))
     expected = set(policy['core']) - {group.id for group in groups}
     if expected:
         raise ValueError('Обязательные группы отсутствуют: ' + ', '.join(sorted(expected)))
     if len({group.id for group in groups}) != len(groups):
         raise ValueError('Повторные ID групп')
+    models = {group.id.removeprefix('REF-API-') for group in groups if group.category == 'model'}
+    if models != set(policy['model_api']) or any(group.core for group in groups if group.category == 'model'):
+        raise ValueError('Модельный профиль должен ссылаться на отдельные существующие группы')
     return policy, groups
+
+
+def profile_groups(groups: list[Group], stage: str) -> list[Group]:
+    """Настоящие модели проверяются только явно запрошенным профилем."""
+    return [group for group in groups if (group.category == 'model') == (stage == 'models')]

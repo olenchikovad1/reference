@@ -11,6 +11,35 @@ from scripts.testing.runtime import DockerRuntime, free_subnet, image_runtime
 
 
 class StrategyTests(unittest.TestCase):
+    def test_rotation_without_resource_envelope_stops_before_docker(self):
+        from scripts.testing.runtime import rotation_envelope
+
+        with patch.dict('os.environ', {}, clear=True), patch('scripts.testing.runtime.command') as docker:
+            with self.assertRaisesRegex(RuntimeError, 'REFERENCE_ROTATION_ENABLED'):
+                rotation_envelope(Path.cwd())
+            docker.assert_not_called()
+
+    def test_model_groups_are_separate_from_the_regular_profile(self):
+        from scripts.testing.catalog import load, profile_groups
+
+        policy, groups = load(Path.cwd())
+        regular = {group.id for group in profile_groups(groups, 'rotation')}
+        models = {group.id for group in profile_groups(groups, 'models')}
+        self.assertEqual(policy['budget_seconds'], 600)
+        self.assertFalse(regular & models)
+        self.assertIn('REF-API-release_core', regular)
+        self.assertIn('REF-API-voice_model', models)
+        self.assertIn('REF-API-names_api', models)
+
+    def test_container_must_share_the_exact_rotation_cgroup(self):
+        from scripts.testing.runtime import RotationEnvelope
+
+        envelope = RotationEnvelope(Path('/reference.slice/reference-testing.slice'),
+                                    'reference-testing.slice', '2', 2 * 1024 ** 3)
+        self.assertTrue(envelope.contains('0::/reference.slice/reference-testing.slice/docker-123.scope'))
+        self.assertFalse(envelope.contains('0::/reference.slice/reference-testing.slice-other/docker-123.scope'))
+        self.assertFalse(envelope.contains('0::/system.slice/docker-123.scope'))
+
     def test_clean_checkout_mounts_cached_data_without_readonly_parent(self):
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)
@@ -20,7 +49,7 @@ class StrategyTests(unittest.TestCase):
             cache = root / 'state/model-files'
             for part in ['models', 'dictionaries']:
                 (cache / part).mkdir(parents=True)
-            runtime = DockerRuntime(root, root / 'state', root / 'evidence', {})
+            runtime = DockerRuntime(root, root / 'state', root / 'evidence', {}, models=True)
             runtime.data_root = cache
             flags = runtime.api_flags()
             mounts = [flags[i + 1].rsplit(':', 2) for i, flag in enumerate(flags) if flag == '-v']
