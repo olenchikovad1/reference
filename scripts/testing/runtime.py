@@ -114,7 +114,10 @@ class DockerRuntime:
     def __init__(self, root: Path, state: Path, output: Path, images: dict[str, str], *,
                  models: bool = False, envelope: RotationEnvelope | None = None):
         self.root, self.state, self.output = root, state, output
-        self.prefix = 'reference-tc-' + uuid.uuid4().hex[:12]
+        rotation_prefix = os.environ.get('REFERENCE_ROTATION_RUN_PREFIX') if envelope and not models else None
+        if rotation_prefix is not None and not re.fullmatch(r'reference-tc-[0-9a-f]{32}', rotation_prefix):
+            raise ValueError('Invalid rotation container prefix')
+        self.prefix = rotation_prefix or 'reference-tc-' + uuid.uuid4().hex[:12]
         self.images = images
         self.api_image = images.get('api', 'reference-tc-api')
         self.web_image = images.get('web-test', 'reference-tc-web-tests')
