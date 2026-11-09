@@ -142,6 +142,8 @@ class Settings(BaseSettings):
 
     s3_region: str = "ru-central1"
     amqp_url: str | None = None
+    voice_consumer_in_api: bool = True
+    voice_cpu_threads: int = Field(default=4, ge=1, le=32)
     log_level: str = "INFO"
 
     # Префикс, под которым приложение живёт в платформе. В разработке он

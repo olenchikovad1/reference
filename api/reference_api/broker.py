@@ -50,7 +50,12 @@ async def publish(queue: str, body: dict) -> bool:
         return False
 
 
-async def consume(queue: str, handler: Callable[[dict], Awaitable[None]], prefetch: int = 1) -> None:
+async def consume(
+    queue: str,
+    handler: Callable[[dict], Awaitable[None]],
+    prefetch: int = 1,
+    readiness: Callable[[bool], None] | None = None,
+) -> None:
     """Разбирать очередь, пока сервис жив. Подтверждение — после handler:
     умерший на полпути процесс вернёт сообщение в очередь. Брокер недоступен
     — повтор подключения через 5 с, без конца: это не задача, а вход."""
@@ -61,11 +66,17 @@ async def consume(queue: str, handler: Callable[[dict], Awaitable[None]], prefet
                 channel = await connection.channel()
                 await channel.set_qos(prefetch_count=prefetch)
                 q = await channel.declare_queue(queue, durable=True)
-                log.info("очередь %s: разбор начат", queue)
                 async with q.iterator() as messages:
-                    async for message in messages:
-                        async with message.process(requeue=True):
-                            await handler(json.loads(message.body))
+                    log.info("очередь %s: разбор начат", queue)
+                    if readiness is not None:
+                        readiness(True)
+                    try:
+                        async for message in messages:
+                            async with message.process(requeue=True):
+                                await handler(json.loads(message.body))
+                    finally:
+                        if readiness is not None:
+                            readiness(False)
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001 — обрыв связи любого вида лечится одним: переподключиться

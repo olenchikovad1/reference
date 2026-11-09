@@ -61,7 +61,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Прерванная переразметка библиотеки продолжается сама (US-0629).
     tasks.append(asyncio.create_task(retag.resume_at_start()))
     # Расшифровка голосовых замечаний — вход из брокера (US-0512).
-    if settings().amqp_url:
+    if settings().amqp_url and settings().voice_consumer_in_api:
         tasks.append(asyncio.create_task(review_consumer.run()))
     cfg = settings()
     # Ключи ядра для токенов. Тест подставляет свои заранее — их не трогаем.

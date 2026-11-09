@@ -40,7 +40,7 @@ def transcribe(audio: bytes) -> tuple[str, float]:
         models.require(base / name)
     path = base
     with _lock:
-        model = WhisperModel(str(path), device="cpu", compute_type="int8", cpu_threads=4)
+        model = WhisperModel(str(path), device="cpu", compute_type="int8", cpu_threads=settings().voice_cpu_threads)
         try:
             try:
                 segments, info = model.transcribe(io.BytesIO(audio), language="ru", beam_size=5,

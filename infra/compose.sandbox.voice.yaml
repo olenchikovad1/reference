@@ -1,0 +1,32 @@
+# Опциональное наложение. Воркера обновляют отдельно после отключения потребителя в API.
+services:
+  api:
+    environment:
+      VOICE_CONSUMER_IN_API: "false"
+
+  voice:
+    image: reference-api:${REFERENCE_VOICE_TAG:-${REFERENCE_TAG:?}}
+    env_file:
+      - ${REFERENCE_VOICE_ENV_FILE:?нужен отдельный файл окружения воркера}
+    environment:
+      FILES_VOLUME_PATH: /srv/reference/files
+      FIXTURES_PATH: /srv/reference/fixtures
+      EMBEDDING_MODEL_PATH: /srv/reference/files/models/unavailable.onnx
+      VOICE_CPU_THREADS: ${REFERENCE_VOICE_CPU_THREADS:-2}
+    command: ["python", "-m", "reference_api.consumers.review"]
+    restart: unless-stopped
+    stop_grace_period: 90s
+    cpus: ${REFERENCE_VOICE_CPUS:-2}
+    mem_limit: ${REFERENCE_VOICE_MEMORY:-896m}
+    memswap_limit: ${REFERENCE_VOICE_MEMORY:-896m}
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      api: {condition: service_healthy}
+    volumes:
+      - "../infra/stand/files/models/faster-whisper-small:/srv/reference/files/models/faster-whisper-small:ro"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/reference-voice.ready"]
+      interval: 10s
+      timeout: 2s
+      retries: 6

@@ -5,9 +5,15 @@
 """
 
 import asyncio
+import signal
+from collections.abc import Callable
+from pathlib import Path
 
 from reference_api import broker
+from reference_api.config import settings
 from reference_api.services import review
+
+READY = Path("/tmp/reference-voice.ready")
 
 
 async def _handle(body: dict) -> None:
@@ -19,8 +25,37 @@ async def _handle(body: dict) -> None:
         await broker.publish(review.VOICE_QUEUE, {"remark_id": remark_id})
 
 
-async def run() -> None:
+async def run(readiness: Callable[[bool], None] | None = None) -> None:
     """Недошедшие — снова в очередь, затем разбор. Одна расшифровка за раз
     (prefetch 1): модель держит бюджет памяти одной расшифровкой."""
     await review.resume_voice()
-    await broker.consume(review.VOICE_QUEUE, _handle, prefetch=1)
+    await broker.consume(review.VOICE_QUEUE, _handle, prefetch=1, readiness=readiness)
+
+
+def _mark_ready(ready: bool) -> None:
+    """Docker проверяет готовность после регистрации потребителя RabbitMQ."""
+    if ready:
+        READY.touch()
+    else:
+        READY.unlink(missing_ok=True)
+
+
+async def _serve_worker() -> None:
+    """Отдельный процесс восстанавливает очередь и возвращает сообщение при остановке."""
+    _mark_ready(False)
+    if not settings().amqp_url:
+        raise RuntimeError("Для воркера расшифровки требуется AMQP_URL")
+    task = asyncio.create_task(run(_mark_ready))
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGTERM, task.cancel)
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+    finally:
+        loop.remove_signal_handler(signal.SIGTERM)
+        _mark_ready(False)
+
+
+if __name__ == "__main__":
+    asyncio.run(_serve_worker())
