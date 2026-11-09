@@ -15,7 +15,7 @@ test = "bash deploy/release/test.sh"
 build = "bash deploy/release/build.sh"
 ship = "bash deploy/release/ship-sandbox.sh {tag}"
 apply = "./deploy/server/apply-sandbox.sh {tag}"
-rollback = "./deploy/server/rollback-sandbox.sh"
+rollback = "./deploy/server/rollback-sandbox.sh {tag}"
 # Сервис слушает только 127.0.0.1:8031 на sandbox — проверка из сети хоста.
 ready = "http://127.0.0.1:8031/reference/api/health/live"
 ready_network = "host"

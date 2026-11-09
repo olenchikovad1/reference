@@ -9,7 +9,7 @@ tag="${1:?нужен тег — его печатает build.sh}"
 docker image inspect "reference-api:$tag" >/dev/null 2>&1 || { echo "образа reference-api:$tag нет — сначала build.sh" >&2; exit 1; }
 echo "==> отправляю описания служб, значения и файлы на sandbox"
 on_server "mkdir -p $target/images $target/infra $target/deploy/server $target/scripts/stand"
-send infra/ infra/compose.sandbox.yaml
+send infra/ infra/compose.sandbox.yaml infra/compose.sandbox.clip.yaml infra/compose.sandbox.voice.yaml
 send deploy/server/ deploy/server/apply-sandbox.sh deploy/server/rollback-sandbox.sh
 send scripts/stand/ scripts/stand/fetch_models.py
 send "" manifest.reference.yaml

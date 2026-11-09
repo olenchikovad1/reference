@@ -6,9 +6,14 @@ services:
 
   voice:
     image: reference-api:${REFERENCE_VOICE_TAG:-${REFERENCE_TAG:?}}
-    env_file:
-      - ${REFERENCE_VOICE_ENV_FILE:?нужен отдельный файл окружения воркера}
     environment:
+      DATABASE_URL: ${REFERENCE_VOICE_DATABASE_URL:-${DATABASE_URL:?}}
+      S3_ENDPOINT: ${REFERENCE_VOICE_S3_ENDPOINT:-${S3_ENDPOINT:?}}
+      S3_BUCKET: ${REFERENCE_VOICE_S3_BUCKET:-${S3_BUCKET:?}}
+      S3_ACCESS_KEY: ${REFERENCE_VOICE_S3_ACCESS_KEY:-${S3_ACCESS_KEY:?}}
+      S3_SECRET_KEY: ${REFERENCE_VOICE_S3_SECRET_KEY:-${S3_SECRET_KEY:?}}
+      S3_REGION: ${REFERENCE_VOICE_S3_REGION:-${S3_REGION:-ru-central1}}
+      AMQP_URL: ${REFERENCE_VOICE_AMQP_URL:-${AMQP_URL:?}}
       FILES_VOLUME_PATH: /srv/reference/files
       FIXTURES_PATH: /srv/reference/fixtures
       EMBEDDING_MODEL_PATH: /srv/reference/files/models/unavailable.onnx
