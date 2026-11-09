@@ -225,6 +225,11 @@ def main() -> int:
             evidence['accepted'] = accepted(evidence['results'], list(chosen))
             if args.stage == 'candidate' and not evidence.get('candidate', {}).get('accepted'):
                 evidence['accepted'] = False
+            cleanup_errors = runtime.close()
+            runtime = None
+            evidence['errors'].extend(cleanup_errors)
+            if cleanup_errors or time.monotonic() - started >= policy['budget_seconds']:
+                evidence['accepted'] = False
             if evidence['accepted'] and not evidence['dirty']:
                 state['accepted_commit'] = evidence['commit']
                 state['accepted_files'] = sources
@@ -236,7 +241,13 @@ def main() -> int:
         if has_alarm:
             signal.alarm(0)
         if runtime:
-            runtime.close()
+            try:
+                cleanup_errors = runtime.close()
+            except OSError as failure:
+                cleanup_errors = [str(failure)]
+            if cleanup_errors:
+                evidence['errors'].extend(cleanup_errors)
+                evidence['accepted'] = False
         evidence['wall_seconds'] = time.monotonic() - started
         evidence['budget_exceeded'] = evidence['wall_seconds'] > evidence.get('budget_seconds', policy['budget_seconds'])
         if evidence['wall_seconds'] >= policy['budget_seconds']:

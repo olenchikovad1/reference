@@ -1,7 +1,6 @@
 """Только временные тестовые контейнеры. Рабочие env/БД сюда не передаются."""
 import hashlib
 import base64
-import importlib.util
 import ipaddress
 import json
 import os
@@ -144,7 +143,8 @@ class DockerRuntime:
 
     def container(self, memory: str) -> list[str]:
         """Суммарный потолок задаёт общий cgroup, дочерний ограничивает один сервис."""
-        args = ['docker', 'run', '--memory', memory, '--memory-swap', memory]
+        args = ['docker', 'run', '--memory', memory, '--memory-swap', memory,
+                '--label', 'reference.testing=' + self.prefix]
         if self.envelope:
             args += ['--pull=never', '--cgroup-parent', self.envelope.parent]
         return args
@@ -249,12 +249,8 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
         items = [item for model in inventory['models'] for item in model['files']]
         if not all((self.data_root / item['path']).exists() for item in items):
             self.data_root = self.state / 'model-files'
-            spec = importlib.util.spec_from_file_location('tc_fetch_models', self.root / 'scripts/stand/fetch_models.py')
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            module.FILES = self.data_root
-            for item in module.inventory():
-                module.fetch(item)
+        if not all((self.data_root / item['path']).is_file() for item in items):
+            raise RuntimeError('Prepare model weights before testing: scripts/stand/fetch_models.py')
         verified = []
         for item in items:
             path = self.data_root / item['path']
@@ -320,8 +316,7 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             (self.prefix + '-s3', self.environments['api']['s3_image'], ['--entrypoint', 'minio', '-e', 'MINIO_ROOT_USER=synthetic', '-e', 'MINIO_ROOT_PASSWORD=synthetic-test-only']),
         ]:
             memory = '320m' if name.endswith('-db') else '256m'
-            args = [*self.container(memory), '-d', '--name', name, '--network', self.prefix,
-                    '--label', 'reference.testing=' + self.prefix, *flags, image]
+            args = [*self.container(memory), '-d', '--name', name, '--network', self.prefix, *flags, image]
             if name.endswith('-s3'):
                 args += ['server', '/bitnami/minio/data']
             self.created.append(name)
@@ -374,7 +369,7 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             paths = [name.removeprefix('web/') for group in groups for name in group.tests]
             name = self.prefix + '-web-tests'
             self.created.append(name)
-            args = [*self.container('768m'), '--rm', '--name', name, *self.web_flags, '--label', 'reference.testing=' + self.prefix, '-v', f'{destination}:/evidence', '-v', f'{self.root / "manifest.reference.yaml"}:/manifest.reference.yaml:ro',
+            args = [*self.container('768m'), '--rm', '--name', name, *self.web_flags, '-v', f'{destination}:/evidence', '-v', f'{self.root / "manifest.reference.yaml"}:/manifest.reference.yaml:ro',
                     self.web_image, 'npm', 'test', '--', '--run', '--minWorkers=1', '--maxWorkers=1',
                     *paths, '--reporter=json', '--outputFile=/evidence/result.json']
         else:
@@ -384,7 +379,7 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
             name = self.prefix + ('-model-tests' if self.models else '-api-tests')
             self.created.append(name)
             args = [*self.container(MODEL_MEMORY if self.models else API_MEMORY), '--rm', '--name', name,
-                    '--label', 'reference.testing=' + self.prefix, *self.api_flags(), '-v', f'{destination}:/evidence',
+                    *self.api_flags(), '-v', f'{destination}:/evidence',
                     self.api_image, 'python', '/app/scripts/testing/api_batch.py', *paths]
         code, log, elapsed = command(args, cwd=self.root, timeout=2400)
         (destination / 'output.log').write_text(log, encoding='utf-8')
@@ -438,7 +433,7 @@ print(json.dumps({'source':h.hexdigest(),'python':platform.python_version(),'pla
         api_name = self.prefix + '-api'
         self.created.append(api_name)
         self.checked([*self.container(API_MEMORY), '-d', '--name', api_name, '--network-alias', 'reference-tunnel',
-                      '--label', 'reference.testing=' + self.prefix, *self.api_flags(), self.api_image,
+                      *self.api_flags(), self.api_image,
                       'uvicorn', 'reference_api.app:app', '--host', '0.0.0.0', '--port', '8031'])
         web_name = self.prefix + '-web'
         self.created.append(web_name)
@@ -489,9 +484,20 @@ with urllib.request.urlopen(request,timeout=10) as response:
                             'manifest_at_root','save_and_reopen_work_v3_real_postgres','synthetic_data_only'],
                 'boundary':'Isolated HTTP contract, not a real cross-host SSH connection. Platform access is covered by separate server-side rights tests; no authenticated platform browser session is claimed.'}
 
-    def close(self) -> None:
-        # Только имена, созданные этим объектом; никакие рабочие контейнеры не выбираются.
+    def close(self) -> list[str]:
+        """Убираем контейнеры по метке конкретного запуска, в том числе после таймаута."""
+        failures = []
         if self.created:
-            command(['docker', 'rm', '-f', *reversed(self.created)], cwd=self.root, timeout=8)
+            code, listing, _ = command(['docker', 'ps', '-aq', '--filter', 'label=reference.testing=' + self.prefix],
+                                       cwd=self.root, timeout=3)
+            if code:
+                failures.append('Could not enumerate rotation containers for cleanup')
+            elif listing.strip():
+                code, _, _ = command(['docker', 'rm', '-f', *listing.split()], cwd=self.root, timeout=7)
+                if code:
+                    failures.append('Could not remove all rotation containers')
         if self.network_created:
-            command(['docker', 'network', 'rm', self.prefix], cwd=self.root, timeout=5)
+            code, _, _ = command(['docker', 'network', 'rm', self.prefix], cwd=self.root, timeout=3)
+            if code:
+                failures.append('Could not remove the rotation network')
+        return failures

@@ -15,6 +15,7 @@ import io
 import os
 import pathlib
 
+import pytest
 import pytest_asyncio
 
 _SUFFIX = "_test"
@@ -99,6 +100,18 @@ def _switch_to_test_bucket() -> None:
 _switch_to_test_database()
 _switch_to_test_bucket()
 _bring_schema_up()
+
+
+@pytest.fixture
+def image_embedding_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Сценариям карточек нужен вектор для записи, качество модели проверяется отдельно."""
+    from reference_api.services import embeddings
+
+    def embed_image(_content: bytes) -> embeddings.Embedding:
+        vector = [1.0] + [0.0] * (embeddings.DIM - 1)
+        return embeddings.Embedding(embeddings.MODEL_NAME, vector)
+
+    monkeypatch.setattr(embeddings, "embed", embed_image)
 
 
 # --- Набор стенда для поиска, дропов и тегов -------------------------------

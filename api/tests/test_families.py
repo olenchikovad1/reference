@@ -20,7 +20,7 @@ def as_(who: str) -> dict:
 
 
 @pytest_asyncio.fixture
-async def client():
+async def client(image_embedding_stub):
     from reference_api.db import engine
 
     app = create_app()

@@ -56,7 +56,8 @@ API/БД с неизменяемой первой версией.
 ## Предохранители ротации
 
 Контроллер и все его Docker-контейнеры принадлежат одному ограниченному
-cgroup. Для Docker с драйвером systemd это `reference-testing.slice`
+cgroup. Для Docker с драйвером systemd используется
+[`reference-testing.slice`](../deploy/testing/reference-testing.slice)
 (`MemoryMax=2G`, `MemorySwapMax=0`), для cgroupfs — `/reference-testing`
 с теми же ограничениями. Вход проверяет файлы лимитов ядра, членство
 контроллера и размещение пробного контейнера. Для cgroup v1 дополнительно
@@ -69,12 +70,18 @@ MinIO — 256 МиБ. Индивидуальные контейнеры тоже
 тестовых PostgreSQL/MinIO. Ротация использует локальный Docker Unix socket
 и не собирает и не скачивает образы. При несовпадении отпечатков образов,
 отсутствии лимита или неготовых образах она завершится с ошибкой до тестов.
-Включать вход следует на выделенном исполнителе вне боевого sandbox:
+Включать вход следует на выделенном исполнителе вне боевого sandbox.
+Его администратор устанавливает slice в `/etc/systemd/system/` и запускает
+контроллер внутри этой slice с правами пользователя runner. Для ручной
+приёмки на таком исполнителе:
 
 ```sh
 export REFERENCE_ROTATION_ENABLED=1
 export REFERENCE_TEST_STATE="$HOME/.cache/reference-testing"
-bash deploy/testing/rotation.sh --image api=reference-tc-api:TAG --image web-test=reference-tc-web-tests:TAG
+sudo systemd-run --wait --pipe --collect --slice=reference-testing.slice \
+  --uid="$(id -u)" --working-directory="$PWD" \
+  --setenv=REFERENCE_ROTATION_ENABLED=1 --setenv="REFERENCE_TEST_STATE=$REFERENCE_TEST_STATE" \
+  bash deploy/testing/rotation.sh --image api=reference-tc-api:TAG --image web-test=reference-tc-web-tests:TAG
 ```
 
 Предел ротации — 600 секунд вместе с подготовкой и уборкой. На 585-й секунде

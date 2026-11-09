@@ -13,20 +13,21 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from reference_api.app import create_app
-from reference_api.services import library
+from reference_api.services import drops, library
 from tests.test_assets_api import png, send
 from tests.test_references_api import WORK
 from tests.test_rights import FixedKeys, bearer
 
 
 @pytest_asyncio.fixture
-async def client(monkeypatch):
+async def client(image_embedding_stub, monkeypatch):
     from sqlalchemy import text
 
     from reference_api.db import engine
 
-    # Корзина проверяет сохранность карточек и файлов; поиск сходства проверяется отдельно.
-    monkeypatch.setattr(library, "same_as", AsyncMock(return_value=[]))
+    # Поиск по словам проверяет фильтр корзины без побочного поиска по смыслу.
+    monkeypatch.setattr(drops, "match_drops", AsyncMock(return_value=[]))
+    monkeypatch.setattr(library, "search", AsyncMock(return_value=[]))
     app = create_app()
     async with app.router.lifespan_context(app):
         async with engine.begin() as conn:

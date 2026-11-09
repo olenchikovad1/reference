@@ -1,0 +1,8 @@
+[Unit]
+Description=Ограничение памяти тестового прогона Reference
+
+[Slice]
+MemoryAccounting=yes
+MemoryHigh=1792M
+MemoryMax=2G
+MemorySwapMax=0
