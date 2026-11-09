@@ -7,7 +7,7 @@
 
 from functools import lru_cache
 
-from pydantic import Field, model_validator
+from pydantic import Field, FilePath, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     #: том на запись — том файлов только на чтение.
     cache_path: str = "/srv/reference/cache"
     embedding_model_path: str
+    image_embedding_socket: str | None = None
     #: Автотеги (US-0482): слова — первые `tag_words` существительных
     #: частотного словаря по частоте, каждое в фразе `tag_template`. Замер
     #: (prints.yaml, measured_words), предварительно: на всём словаре первой
@@ -178,3 +179,13 @@ class Settings(BaseSettings):
 def settings() -> Settings:
     """Один экземпляр на процесс. Чтение окружения — не то, что делают в цикле."""
     return Settings()
+
+
+class ImageEncoderSettings(BaseSettings):
+    """Настройки контейнера CLIP, которому нужны только веса и их опись."""
+
+    model_config = SettingsConfigDict(extra="ignore", hide_input_in_errors=True)
+
+    encoder_weights_path: FilePath
+    encoder_inventory_path: FilePath
+    encoder_threads: int = Field(default=2, ge=1, le=16)

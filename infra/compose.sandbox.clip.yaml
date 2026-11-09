@@ -1,0 +1,40 @@
+# Сокет разделяют только API и CLIP. Воркера можно обновить отдельным тегом.
+services:
+  api:
+    environment:
+      IMAGE_EMBEDDING_SOCKET: /srv/reference/inference/clip.sock
+    volumes:
+      - clip-socket:/srv/reference/inference:ro
+    depends_on:
+      clip: {condition: service_healthy}
+
+  clip:
+    image: reference-api:${REFERENCE_CLIP_TAG:-${REFERENCE_TAG:?}}
+    environment:
+      ENCODER_WEIGHTS_PATH: /srv/reference/weights/vision_model_quantized.onnx
+      ENCODER_INVENTORY_PATH: /srv/reference/fixtures/models.json
+      ENCODER_THREADS: ${REFERENCE_CLIP_THREADS:-2}
+    command:
+      - uvicorn
+      - reference_api.api.image_encoder:app
+      - --uds
+      - /srv/reference/inference/clip.sock
+      - --limit-concurrency
+      - "2"
+    network_mode: none
+    restart: unless-stopped
+    cpus: ${REFERENCE_CLIP_CPUS:-2}
+    mem_limit: ${REFERENCE_CLIP_MEMORY:-640m}
+    memswap_limit: ${REFERENCE_CLIP_MEMORY:-640m}
+    volumes:
+      - clip-socket:/srv/reference/inference
+      - "../infra/stand/files/models/clip-vit-base-patch32/vision_model_quantized.onnx:/srv/reference/weights/vision_model_quantized.onnx:ro"
+      - "../infra/stand/fixtures/models.json:/srv/reference/fixtures/models.json:ro"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(socket.AF_UNIX); s.connect('/srv/reference/inference/clip.sock'); s.close()"]
+      interval: 10s
+      timeout: 2s
+      retries: 6
+
+volumes:
+  clip-socket:

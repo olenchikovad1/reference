@@ -29,7 +29,9 @@ RUN useradd --create-home --uid 10001 app && chown -R app:app /app
 # Каталог производных создаётся в образе и отдаётся процессу: именованный том,
 # смонтированный сюда, берёт владельца у каталога образа. Без этой строки том
 # принадлежит суперпользователю, и записать в него нельзя.
-RUN mkdir -p /srv/reference/cache && chown app:app /srv/reference/cache
+RUN mkdir -p /srv/reference/cache /srv/reference/inference && \
+    touch /srv/reference/inference/.keep && \
+    chown -R app:app /srv/reference/cache /srv/reference/inference
 USER app
 
 EXPOSE 8000

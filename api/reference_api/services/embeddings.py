@@ -10,8 +10,12 @@
 """
 
 import io
+import json
+import math
+import socket
 import threading
 from dataclasses import dataclass
+from http.client import HTTPConnection, HTTPException
 
 import numpy as np
 import onnxruntime as ort
@@ -28,6 +32,12 @@ DIM = 512
 # Предобработка ровно та, на которой модель училась. Числа не наши и подгонке
 # не подлежат: изменить их значит считать не то, что модель понимает.
 SIDE = 224
+INPUT_SHAPE = (1, 3, SIDE, SIDE)
+INPUT_DTYPE = np.dtype("<f4")
+INPUT_BYTES = math.prod(INPUT_SHAPE) * INPUT_DTYPE.itemsize
+ENCODE_PATH = "/v1/encode"
+_WORKER_TIMEOUT_SECONDS = 15
+_RESPONSE_LIMIT = 32 * 1024
 MEAN = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
 STD = np.array([0.26862954, 0.26130258, 0.27577711], dtype=np.float32)
 
@@ -75,10 +85,56 @@ def embed(content: bytes) -> Embedding:
     Нормирование делает косинусное расстояние обычным скалярным произведением,
     и сравнение перестаёт зависеть от яркости картинки.
     """
-    out = session().run(None, {"pixel_values": preprocess(content)})
+    pixels = preprocess(content)
+    if socket_path := settings().image_embedding_socket:
+        return _worker_embedding(socket_path, pixels)
+    return encode(session(), pixels)
+
+
+def encode(encoder: ort.InferenceSession, pixels: np.ndarray) -> Embedding:
+    """Общая нормировка локальной модели и отдельного процесса CLIP."""
+    out = encoder.run(None, {"pixel_values": pixels})
     vec = np.asarray(out[0], dtype=np.float32).reshape(-1)[:DIM]
     norm = float(np.linalg.norm(vec)) or 1.0
     return Embedding(MODEL_NAME, (vec / norm).tolist())
+
+
+class _EncoderConnection(HTTPConnection):
+    """Канал доступен только контейнерам с общим томом сокета."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__("localhost", timeout=_WORKER_TIMEOUT_SECONDS)
+        self.path = path
+
+    def connect(self) -> None:
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.settimeout(_WORKER_TIMEOUT_SECONDS)
+        self.sock.connect(self.path)
+
+
+def _worker_embedding(path: str, pixels: np.ndarray) -> Embedding:
+    connection = _EncoderConnection(path)
+    try:
+        connection.request("POST", ENCODE_PATH, body=pixels.astype(INPUT_DTYPE, copy=False).tobytes(),
+                           headers={"Content-Type": "application/octet-stream"})
+        response = connection.getresponse()
+        if response.status != 200:
+            raise ValueError(f"encoder returned {response.status}")
+        body = response.read(_RESPONSE_LIMIT + 1)
+        if len(body) > _RESPONSE_LIMIT:
+            raise ValueError("encoder response exceeded size limit")
+        data = json.loads(body)
+        vector = data["vector"]
+        if data["model"] != MODEL_NAME or not isinstance(vector, list) or len(vector) != DIM or any(
+            not isinstance(value, (int, float)) or not math.isfinite(value) for value in vector
+        ):
+            raise ValueError("encoder model or vector does not match the contract")
+        return Embedding(MODEL_NAME, vector)
+    except (OSError, HTTPException, ValueError, KeyError, TypeError, OverflowError) as failure:
+        # Возврат к локальной модели здесь снова выделил бы её память внутри API.
+        raise models.ModelMissing("сервис эмбеддингов изображений недоступен") from failure
+    finally:
+        connection.close()
 
 
 def similarity(a: list[float], b: list[float]) -> float:
