@@ -6,7 +6,7 @@ name: reference
 services:
   web:
     image: reference-web:${REFERENCE_TAG:?тег сборки не задан}
-    restart: unless-stopped
+    restart: always
     networks:
       default: {}
       platform:
@@ -15,7 +15,7 @@ services:
 
   reference-tunnel:
     image: reference-tunnel:${REFERENCE_TAG:?тег сборки не задан}
-    restart: unless-stopped
+    restart: always
     environment:
       TUNNEL_HOST: ${REFERENCE_TUNNEL_HOST:?}
       TUNNEL_USER: ${REFERENCE_TUNNEL_USER:-reference-tunnel}

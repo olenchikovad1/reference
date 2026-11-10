@@ -1,6 +1,6 @@
 ---
 name: process-git
-description: Keep permanent branches meaning what they say and make history answer why — main as what runs in production, all work in task branches pushed as soon as they are committed, no direct pushes to shared branches without explicit approval, and commits grouped by completed logic with a body that explains the reason rather than restating the diff. Use when starting work, before committing or pushing, when a hotfix is needed, when merging a task branch, and when writing a commit message.
+description: Keep permanent branches meaning what they say and make history answer why — main as what runs in production, all work in task branches pushed as soon as they are committed, reviewed integration into shared branches through a local merge or pull request, and commits grouped by completed logic with a body that explains the reason rather than restating the diff. Use when starting work, before committing or pushing, when a hotfix is needed, when merging a task branch, and when writing a commit message.
 source: projects_skills/skills/process/git
 hooks: [guard_shared_branch_push.py, push_task_branch.py, guard_commit_trailers.py]
 adapted: 2026-09-23
@@ -21,8 +21,8 @@ adapted: 2026-09-23
 - **У каждой постоянной ветки один смысл:** `main` — то, что работает в бою.
   Не «почти готово».
 - **Любая работа идёт в отдельной ветке,** заведённой от названной базовой.
-- **Прямой коммит и пуш в общую ветку запрещены** — только слиянием и только с
-  явного разрешения человека.
+- **В общую ветку входит проверенный результат ветки задачи.**
+  Интеграция выполняется локальным слиянием или PR по правилам сервера.
 - **Ветка задачи отправляется сразу после коммита.** Коммит, лежащий на одной
   машине, работой не считается: его теряют вместе с машиной.
 - **Срочное исправление ветвится от боевой ветки,** а не от ветки разработки.
@@ -50,36 +50,3 @@ adapted: 2026-09-23
 - `quality-verification` — почему «готово» перед пушем требует прогона.
 - `process-repo-service-files` — стратегия отправки и то, что вообще попадает
   в историю.
-
----
-
-## Отступления в этом проекте
-
-### К «вся работа в ветках задачи» и «нет прямых пушей в общие ветки» — 23.09.2026
-
-**Отступаем:** работа идёт прямо в `master`, пуш без спроса. Ветки задачи нет.
-`shared_branches` в `.claude/rails.json` пуст, поэтому `guard_shared_branch_push`
-не срабатывает.
-
-**Потому что:** проверяется гипотеза, с репозиторием работает один человек,
-ревью не бывает, и всё восстанавливается по истории. Ветка задачи существует
-ради ревью и ради чужой незаконченной работы — ни того, ни другого здесь нет.
-Пересматривается, когда над репозиторием станет работать второй человек.
-Подробно — [решение 0007](../../../docs/decisions/0007-work-goes-straight-to-master.md).
-
-Правило перенесено из общей библиотеки. Если проекту оно подходит не целиком,
-текст правила **не режется** — отступление записывается сюда, отдельным
-блоком:
-
-    ### <к какому пункту правила> — <дата>
-
-    **Отступаем:** что делается иначе.
-    **Потому что:** причина. Без причины отступление не действует — оно
-    неотличимо от забытой правки.
-
-Отступление читается как часть правила: код, соответствующий ему, находкой не
-считается. Наверх, в библиотеку, оно не поднимается — это специфика проекта, а
-не общее правило.
-
-Больше трёх отступлений здесь означают, что правило проекту не подходит
-целиком: это повод пересмотреть его, а не дописать четвёртое.
